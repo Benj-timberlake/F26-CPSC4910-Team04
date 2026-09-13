@@ -1,0 +1,213 @@
+@page "/products"
+@using System.Net.Http
+@using System.Net.Http.Json
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject IHttpClientFactory HttpClientFactory
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Environment
+
+<PageTitle>Product Catalog</PageTitle>
+
+<div class="catalog">
+    <h1>Product Catalog</h1>
+
+    <form class="search-bar"
+          @onsubmit="SearchProducts"
+          @onsubmit:preventDefault="true">
+
+        <input @bind="search"
+               placeholder="Search products..."
+               aria-label="Search products" />
+
+        <button type="submit" disabled="@loading">
+            @(loading ? "Searching..." : "Search")
+        </button>
+    </form>
+
+    @if (loading)
+    {
+        <p role="status">Loading products...</p>
+    }
+    else if (!string.IsNullOrEmpty(error))
+    {
+        <p role="alert" class="error">@error</p>
+    }
+    else if (products.Count == 0)
+    {
+        <p>No products found. Try another search.</p>
+    }
+    else
+    {
+        <div class="product-grid">
+            @foreach (var product in products)
+            {
+                <article class="product-card">
+                    @if (!string.IsNullOrWhiteSpace(product.Image?.ImageUrl))
+                    {
+                        <img src="@product.Image.ImageUrl"
+                             alt="@product.Title"
+                             loading="lazy" />
+                    }
+                    else
+                    {
+                        <div class="no-image">No image available</div>
+                    }
+
+                    <h2>@product.Title</h2>
+                </article>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .catalog {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+
+    .search-bar {
+        display: flex;
+        gap: 10px;
+        margin: 24px 0;
+    }
+
+    .search-bar input {
+        flex: 1;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 16px;
+    }
+
+    .search-bar button {
+        padding: 12px 20px;
+        background: #2455a4;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .search-bar button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+    }
+
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+        gap: 20px;
+    }
+
+    .product-card {
+        padding: 16px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: white;
+    }
+
+    .product-card img {
+        width: 100%;
+        height: 200px;
+        object-fit: contain;
+    }
+
+    .product-card h2 {
+        margin: 16px 0 0;
+        font-size: 16px;
+        line-height: 1.5;
+        color: #222;
+        overflow-wrap: anywhere;
+    }
+
+    .no-image {
+        height: 200px;
+        display: grid;
+        place-items: center;
+        background: #f3f3f3;
+        color: #666;
+    }
+
+    .error {
+        color: #b42318;
+    }
+</style>
+
+@code {
+    private string search = "";
+    private bool loading;
+    private string? error;
+    private List<Product> products = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SearchProducts();
+    }
+
+    private async Task SearchProducts()
+    {
+        if (loading)
+            return;
+
+        loading = true;
+        error = null;
+        products.Clear();
+
+        try
+        {
+            var path = System.IO.Path.Combine(
+                Environment.WebRootPath,
+                "sample-products.json");
+
+            var json = await System.IO.File.ReadAllTextAsync(path);
+
+            var result =
+                JsonSerializer.Deserialize<ProductSearchResponse>(json);
+
+            var allProducts = result?.Items ?? new List<Product>();
+
+            products = allProducts
+                .Where(product =>
+                    string.IsNullOrWhiteSpace(search) ||
+                    product.Title.Contains(
+                        search.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        catch (System.IO.IOException ex)
+        {
+            error = $"Could not read file: {System.IO.Path.Combine(Environment.WebRootPath, "sample-products.json")}. {ex.Message}";
+        }
+        catch (JsonException)
+        {
+            error = "The sample JSON is not formatted correctly.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+    public class ProductSearchResponse
+    {
+        [JsonPropertyName("itemSummaries")]
+        public List<Product>? Items { get; set; }
+    }
+
+    public class Product
+    {
+        [JsonPropertyName("title")]
+        public string Title { get; set; } = "";
+
+        [JsonPropertyName("image")]
+        public ProductImage? Image { get; set; }
+    }
+
+    public class ProductImage
+    {
+        [JsonPropertyName("imageUrl")]
+        public string ImageUrl { get; set; } = "";
+    }
+}

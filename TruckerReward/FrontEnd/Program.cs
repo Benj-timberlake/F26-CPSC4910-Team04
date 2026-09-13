@@ -3,7 +3,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
-// Connect the frontend to your backend.
 builder.Services.AddHttpClient("Backend", client =>
 {
     var url = builder.Configuration["BACKEND_URL"]
@@ -23,6 +22,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
