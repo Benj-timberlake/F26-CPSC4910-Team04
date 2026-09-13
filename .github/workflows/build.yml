@@ -17,8 +17,8 @@ jobs:
       fail-fast: false
       matrix:
         project:
-          - SampleApp/BackEnd/BackEnd.csproj
-          - SampleApp/FrontEnd/FrontEnd.csproj
+          - TruckerReward/BackEnd/BackEnd.csproj
+          - TruckerReward/FrontEnd/FrontEnd.csproj
 
     steps:
       - name: Checkout repository
