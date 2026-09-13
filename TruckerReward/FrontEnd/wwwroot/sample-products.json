@@ -1,0 +1,70 @@
+{
+  "itemSummaries": [
+    {
+      "itemId": "sample-1",
+      "title": "Wireless Headphones",
+      "price": {
+        "value": "49.99",
+        "currency": "USD"
+      },
+      "image": {
+        "imageUrl": "https://placehold.co/400x300/png?text=Headphones"
+      }
+    },
+    {
+      "itemId": "sample-2",
+      "title": "Insulated Travel Mug",
+      "price": {
+        "value": "24.99",
+        "currency": "USD"
+      },
+      "image": {
+        "imageUrl": "https://placehold.co/400x300/png?text=Travel+Mug"
+      }
+    },
+    {
+      "itemId": "sample-3",
+      "title": "Portable Bluetooth Speaker",
+      "price": {
+        "value": "39.99",
+        "currency": "USD"
+      },
+      "image": {
+        "imageUrl": "https://placehold.co/400x300/png?text=Speaker"
+      }
+    },
+    {
+      "itemId": "sample-4",
+      "title": "Truck Phone Mount",
+      "price": {
+        "value": "19.99",
+        "currency": "USD"
+      },
+      "image": {
+        "imageUrl": "https://placehold.co/400x300/png?text=Phone+Mount"
+      }
+    },
+    {
+      "itemId": "sample-5",
+      "title": "Portable Power Bank",
+      "price": {
+        "value": "34.99",
+        "currency": "USD"
+      },
+      "image": {
+        "imageUrl": "https://placehold.co/400x300/png?text=Power+Bank"
+      }
+    },
+    {
+      "itemId": "sample-6",
+      "title": "LED Flashlight",
+      "price": {
+        "value": "14.99",
+        "currency": "USD"
+      },
+      "image": {
+        "imageUrl": "https://placehold.co/400x300/png?text=Flashlight"
+      }
+    }
+  ]
+}
