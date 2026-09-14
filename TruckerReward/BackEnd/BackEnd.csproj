@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>BackEnd-Development</UserSecretsId>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
@@ -13,7 +14,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    <PackageReference Include="MySql.EntityFrameworkCore" Version="10.0.9" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.*" />
   </ItemGroup>
 
