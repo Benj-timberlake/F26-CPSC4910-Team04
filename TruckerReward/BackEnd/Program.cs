@@ -1,8 +1,16 @@
 using Scalar.AspNetCore;
+using BackEnd.Models;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseMySQL(connectionString));
 
 var app = builder.Build();
 
@@ -18,36 +26,27 @@ app.MapGet("/", () => Results.Ok(new
     dashboard = "/dashboard"
 }));
 
-app.MapGet("/dashboard", () =>
+app.MapGet("/dashboard", async (AppDbContext db) =>
 {
-    var dashboard = new TruckerDashboard(
-        new Trucker(
-            "Jordan Miles",
-            "TR-10482",
-            "jordan.miles@example.com",
-            "+1 (555) 013-9082",
-            "Charlotte, NC"),
-        new Points(
-            2_450,
-            550,
-            "Gold",
-            "Reach 3,000 points to unlock Platinum status."),
-        new Sponsor(
-            "Roadway Fuel & Travel",
-            "Fuel Rewards Partner",
-            "Earn 5 points per gallon at participating locations.",
-            "support@roadwayfuel.example"));
+    var driver = await db.Users
+        .AsNoTracking()
+        .Where(user => user.UserType == "driver")
+        .OrderBy(user => user.Id)
+        .Select(user => new UserProfile(
+            user.Id,
+            user.UserType,
+            user.Username,
+            user.Email,
+            user.PhoneNumber,
+            user.Address))
+        .FirstOrDefaultAsync();
 
-    return Results.Ok(dashboard);
+    return driver is null
+        ? Results.NotFound(new { message = "No driver user was found." })
+        : Results.Ok(driver);
 })
-.WithName("GetTruckerDashboard");
+.WithName("GetDriverDashboard");
 
 app.Run();
 
-record TruckerDashboard(Trucker Trucker, Points Points, Sponsor Sponsor);
-
-record Trucker(string Name, string DriverId, string Email, string Phone, string HomeTerminal);
-
-record Points(int CurrentBalance, int PointsToNextTier, string Tier, string NextMilestone);
-
-record Sponsor(string Name, string Program, string Benefit, string ContactEmail);
+record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address);

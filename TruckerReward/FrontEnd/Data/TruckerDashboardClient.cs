@@ -9,14 +9,14 @@ public class TruckerDashboardClient
         _httpClient = httpClient;
     }
 
-    public async Task<TruckerDashboard?> GetDashboardAsync()
-        => await _httpClient.GetFromJsonAsync<TruckerDashboard>("dashboard");
+    public async Task<UserProfile?> GetDashboardAsync()
+        => await _httpClient.GetFromJsonAsync<UserProfile>("dashboard");
 }
 
-public record TruckerDashboard(Trucker Trucker, Points Points, Sponsor Sponsor);
-
-public record Trucker(string Name, string DriverId, string Email, string Phone, string HomeTerminal);
-
-public record Points(int CurrentBalance, int PointsToNextTier, string Tier, string NextMilestone);
-
-public record Sponsor(string Name, string Program, string Benefit, string ContactEmail);
+public record UserProfile(
+    int Id,
+    string UserType,
+    string Username,
+    string Email,
+    string PhoneNumber,
+    string Address);

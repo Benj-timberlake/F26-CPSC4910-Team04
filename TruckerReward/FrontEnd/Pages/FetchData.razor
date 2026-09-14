@@ -6,7 +6,7 @@
 
 <h1>My TruckerReward Dashboard</h1>
 
-<p>Review your profile, points, and sponsor rewards.</p>
+<p>Review your driver profile.</p>
 
 @if (dashboard == null)
 {
@@ -14,29 +14,18 @@
 }
 else
 {
-    <section class="mb-4">
-        <h2>Driver information</h2>
-        <p><strong>@dashboard.Trucker.Name</strong> · Driver ID: @dashboard.Trucker.DriverId</p>
-        <p>@dashboard.Trucker.Email · @dashboard.Trucker.Phone</p>
-        <p>Home terminal: @dashboard.Trucker.HomeTerminal</p>
-    </section>
-
-    <section class="mb-4">
-        <h2>My points</h2>
-        <p><strong>@dashboard.Points.CurrentBalance points</strong> · @dashboard.Points.Tier status</p>
-        <p>@dashboard.Points.NextMilestone</p>
-    </section>
-
     <section>
-        <h2>My sponsor</h2>
-        <p><strong>@dashboard.Sponsor.Name</strong> · @dashboard.Sponsor.Program</p>
-        <p>@dashboard.Sponsor.Benefit</p>
-        <p>Contact: @dashboard.Sponsor.ContactEmail</p>
+        <h2>Driver information</h2>
+        <p><strong>@dashboard.Username</strong> · User ID: @dashboard.Id</p>
+        <p>Account type: @dashboard.UserType</p>
+        <p>Email: @dashboard.Email</p>
+        <p>Phone: @dashboard.PhoneNumber</p>
+        <p>Address: @dashboard.Address</p>
     </section>
 }
 
 @code {
-    private TruckerDashboard? dashboard;
+    private UserProfile? dashboard;
 
     protected override async Task OnInitializedAsync()
     {
