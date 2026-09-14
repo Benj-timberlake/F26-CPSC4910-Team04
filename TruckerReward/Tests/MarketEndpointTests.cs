@@ -18,6 +18,7 @@ public sealed class MarketEndpointTests
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Ebay:AccessToken"] = token });
         builder.Services.AddSingleton<IHttpClientFactory>(new StubClientFactory(handler));
+        builder.Services.AddSingleton<EbayClient>();
         var app = builder.Build();
         app.MapMarketEndpoints();
         await app.StartAsync();
@@ -57,7 +58,7 @@ public sealed class MarketEndpointTests
         using var response = await client.GetAsync("/api/products?q=truck");
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("The eBay access token is not configured.", problem.RootElement.GetProperty("detail").GetString());
+        Assert.Equal("Check the backend eBay App ID, Cert ID, and environment configuration.", problem.RootElement.GetProperty("detail").GetString());
         Assert.Equal(0, handler.Calls);
     }
 
@@ -91,7 +92,50 @@ public sealed class MarketEndpointTests
         Assert.Equal(0, handler.Calls);
     }
 
-    private sealed class StubClientFactory(StubHandler handler) : IHttpClientFactory
+    [Theory]
+    [InlineData("Production", "api.ebay.com")]
+    [InlineData("Sandbox", "api.sandbox.ebay.com")]
+    public async Task CredentialsObtainAndReuseToken(string environment, string host)
+    {
+        using var handler = new OAuthHandler(host);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Ebay:ClientId"] = "client-id",
+            ["Ebay:ClientSecret"] = "client-secret",
+            ["Ebay:Environment"] = environment
+        }).Build();
+        using var ebay = new EbayClient(new StubClientFactory(handler), configuration);
+        Assert.Equal("{}", await ebay.SearchAsync("truck", default));
+        Assert.Equal("{}", await ebay.SearchAsync("gps", default));
+        Assert.Equal(1, handler.TokenCalls);
+        Assert.Equal(2, handler.SearchCalls);
+    }
+
+    private sealed class OAuthHandler(string host) : HttpMessageHandler
+    {
+        public int TokenCalls { get; private set; }
+        public int SearchCalls { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal(host, request.RequestUri!.Host);
+            if (request.RequestUri.AbsolutePath == "/identity/v1/oauth2/token")
+            {
+                TokenCalls++;
+                Assert.Equal(HttpMethod.Post, request.Method);
+                Assert.Equal("Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("client-id:client-secret")), request.Headers.Authorization!.ToString());
+                Assert.Equal("application/x-www-form-urlencoded", request.Content!.Headers.ContentType!.MediaType);
+                var body = await request.Content.ReadAsStringAsync(cancellationToken);
+                Assert.Contains("grant_type=client_credentials", body);
+                Assert.Contains("scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope", body);
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"access_token":"generated-token","expires_in":7200}""") };
+            }
+            SearchCalls++;
+            Assert.Equal("Bearer generated-token", request.Headers.Authorization!.ToString());
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+        }
+    }
+
+    private sealed class StubClientFactory(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }

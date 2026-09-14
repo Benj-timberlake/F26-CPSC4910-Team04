@@ -2,6 +2,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Allow endpoints to make HTTP requests to eBay.
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<EbayClient>();
 
 var app = builder.Build();
 

@@ -1,31 +1,29 @@
 using Bunit;
 using FrontEnd.Pages;
-using Microsoft.AspNetCore.Hosting;
+using System.Net;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
+using System.Text;
 using Xunit;
 
 namespace TruckerReward.Tests;
 
 public sealed class ProductGridTests : TestContext
 {
-    private readonly string root = Path.Combine(Path.GetTempPath(), "product-grid-tests", Guid.NewGuid().ToString());
+    private readonly StubHandler handler = new();
 
     public ProductGridTests()
     {
-        Directory.CreateDirectory(root);
-        Services.AddHttpClient();
-        Services.AddSingleton<IWebHostEnvironment>(new TestEnvironment { WebRootPath = root });
+        Services.AddHttpClient("Backend", client => client.BaseAddress = new Uri("http://backend/"))
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
     }
 
     private IRenderedComponent<Products> RenderCatalog(string json)
     {
-        File.WriteAllText(Path.Combine(root, "sample-products.json"), json);
+        handler.Body = json;
         var component = RenderComponent<Products>();
         component.WaitForAssertion(() => Assert.Empty(component.FindAll("[role=status]")));
         return component;
     }
-
     [Fact]
     public void GridRendersTitlesImagesAndMissingImageFallbacks()
     {
@@ -48,28 +46,22 @@ public sealed class ProductGridTests : TestContext
     }
 
     [Theory]
-    [InlineData(" gps ", 1)]
-    [InlineData("TRUCK", 2)]
-    [InlineData("   ", 2)]
-    [InlineData("unmatched", 0)]
-    public void SearchFiltersTitlesIgnoringCaseAndSurroundingWhitespace(string query, int count)
+    [InlineData(" gps ", "gps")]
+    [InlineData("tools & parts/+?=雪", "tools & parts/+?=雪")]
+    [InlineData("   ", "truck")]
+    public void SearchRequestsBackendWithEncodedQuery(string query, string expected)
     {
-        var component = RenderCatalog("""
-            {"itemSummaries":[{"title":"Truck GPS"},{"title":"Truck gloves"}]}
-            """);
+        var component = RenderCatalog("""{"itemSummaries":[{"title":"Initial"}]}""");
+        handler.Body = """{"itemSummaries":[{"title":"Live result"}]}""";
         component.Find("input").Change(query);
         component.Find("form").Submit();
-
         component.WaitForAssertion(() =>
         {
-            Assert.Empty(component.FindAll("[role=status]"));
-            Assert.Equal(count, component.FindAll(".product-card").Count);
+            Assert.Equal("http://backend/api/products?q=" + Uri.EscapeDataString(expected), handler.Url);
+            Assert.Equal("Live result", component.Find(".product-card h2").TextContent);
             Assert.False(component.Find("button").HasAttribute("disabled"));
-            if (count == 0)
-                Assert.Contains("No products found", component.Markup);
         });
     }
-
     [Theory]
     [InlineData("{}")]
     [InlineData("null")]
@@ -87,8 +79,8 @@ public sealed class ProductGridTests : TestContext
     public void InvalidJsonShowsErrorAndAllowsRetry()
     {
         var component = RenderCatalog("invalid JSON");
-        Assert.Equal("The sample JSON is not formatted correctly.", component.Find("[role=alert]").TextContent);
-        File.WriteAllText(Path.Combine(root, "sample-products.json"), """{"itemSummaries":[{"title":"Recovered"}]}""");
+        Assert.Equal("The product service returned an invalid response. Please try again.", component.Find("[role=alert]").TextContent);
+        handler.Body = """{"itemSummaries":[{"title":"Recovered"}]}""";
         component.Find("form").Submit();
         component.WaitForAssertion(() =>
         {
@@ -98,28 +90,27 @@ public sealed class ProductGridTests : TestContext
     }
 
     [Fact]
-    public void MissingFileShowsReadError()
+    public void BackendFailureShowsError()
     {
-        var component = RenderComponent<Products>();
-        component.WaitForAssertion(() => Assert.Contains("Could not read file:", component.Find("[role=alert]").TextContent));
+        handler.Status = HttpStatusCode.BadGateway;
+        var component = RenderCatalog("{}");
+        Assert.Contains("Could not load eBay products", component.Find("[role=alert]").TextContent);
         Assert.False(component.Find("button").HasAttribute("disabled"));
         Assert.Empty(component.FindAll(".product-grid"));
     }
 
-    protected override void Dispose(bool disposing)
+    private sealed class StubHandler : HttpMessageHandler
     {
-        base.Dispose(disposing);
-        if (disposing)
-            Directory.Delete(root, recursive: true);
-    }
-
-    private sealed class TestEnvironment : IWebHostEnvironment
-    {
-        public string WebRootPath { get; set; } = "";
-        public string EnvironmentName { get; set; } = "Testing";
-        public string ApplicationName { get; set; } = "FrontEnd";
-        public string ContentRootPath { get; set; } = "";
-        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        public string Body { get; set; } = "{}";
+        public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
+        public string? Url { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Url = request.RequestUri!.AbsoluteUri;
+            return Task.FromResult(new HttpResponseMessage(Status)
+            {
+                Content = new StringContent(Body, Encoding.UTF8, "application/json")
+            });
+        }
     }
 }

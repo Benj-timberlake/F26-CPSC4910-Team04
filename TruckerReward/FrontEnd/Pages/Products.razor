@@ -4,7 +4,7 @@
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @inject IHttpClientFactory HttpClientFactory
-@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Environment
+
 
 <PageTitle>Product Catalog</PageTitle>
 
@@ -137,7 +137,7 @@
 </style>
 
 @code {
-    private string search = "";
+    private string search = "truck";
     private bool loading;
     private string? error;
     private List<Product> products = new();
@@ -158,32 +158,30 @@
 
         try
         {
-            var path = System.IO.Path.Combine(
-                Environment.WebRootPath,
-                "sample-products.json");
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var query = string.IsNullOrWhiteSpace(search) ? "truck" : search.Trim();
+            using var response = await client.GetAsync("api/products?q=" + Uri.EscapeDataString(query));
+            if (!response.IsSuccessStatusCode)
+            {
+                error = "Could not load eBay products. Please try again.";
+                return;
+            }
 
-            var json = await System.IO.File.ReadAllTextAsync(path);
-
-            var result =
-                JsonSerializer.Deserialize<ProductSearchResponse>(json);
-
-            var allProducts = result?.Items ?? new List<Product>();
-
-            products = allProducts
-                .Where(product =>
-                    string.IsNullOrWhiteSpace(search) ||
-                    product.Title.Contains(
-                        search.Trim(),
-                        StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ProductSearchResponse>(json);
+            products = result?.Items ?? new List<Product>();
         }
-        catch (System.IO.IOException ex)
+        catch (HttpRequestException)
         {
-            error = $"Could not read file: {System.IO.Path.Combine(Environment.WebRootPath, "sample-products.json")}. {ex.Message}";
+            error = "Could not connect to the product service. Please try again.";
+        }
+        catch (OperationCanceledException)
+        {
+            error = "The product search timed out. Please try again.";
         }
         catch (JsonException)
         {
-            error = "The sample JSON is not formatted correctly.";
+            error = "The product service returned an invalid response. Please try again.";
         }
         finally
         {
