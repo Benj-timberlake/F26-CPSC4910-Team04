@@ -1,48 +1,39 @@
-using System.Net.Http.Headers;
+using System.Text.Json;
 
 public static class MarketEndpoints
 {
     public static void MapMarketEndpoints(this WebApplication app)
     {
         app.MapGet("/api/products", async Task<IResult> (
-            string q,
-            IHttpClientFactory httpClientFactory,
-            IConfiguration config) =>
+            string q, EbayClient ebay, CancellationToken cancellationToken) =>
         {
-            var token = config["Ebay:AccessToken"];
-
-            if (string.IsNullOrWhiteSpace(token))
+            if (string.IsNullOrWhiteSpace(q))
+                return Results.BadRequest(new { detail = "Enter a product search." });
+            try
             {
-                return Results.Problem(
-                    "The eBay access token is not configured.");
+                var json = await ebay.SearchAsync(q.Trim(), cancellationToken);
+                return Results.Content(json, "application/json");
             }
-
-            var client = httpClientFactory.CreateClient();
-
-            var url =
-                "https://api.ebay.com/buy/browse/v1/item_summary/search" +
-                $"?q={Uri.EscapeDataString(q)}&limit=10";
-
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-
-            request.Headers.Authorization =
-                new AuthenticationHeaderValue("Bearer", token);
-
-            request.Headers.Add(
-                "X-EBAY-C-MARKETPLACE-ID", "EBAY_US");
-
-            using var response = await client.SendAsync(request);
-
-            if (!response.IsSuccessStatusCode)
+            catch (InvalidOperationException)
             {
-                return Results.Problem(
-                    detail: $"eBay returned status {(int)response.StatusCode}.",
-                    statusCode: 502);
+                return Results.Problem("Check the backend eBay App ID, Cert ID, and environment configuration.");
             }
-
-            var json = await response.Content.ReadAsStringAsync();
-
-            return Results.Content(json, "application/json");
+            catch (EbayException ex)
+            {
+                return Results.Problem(detail: ex.Message, statusCode: 502);
+            }
+            catch (HttpRequestException)
+            {
+                return Results.Problem(detail: "Could not connect to eBay. Try again later.", statusCode: 502);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Results.Problem(detail: "eBay took too long to respond. Try again.", statusCode: 504);
+            }
+            catch (JsonException)
+            {
+                return Results.Problem(detail: "eBay returned an invalid response.", statusCode: 502);
+            }
         });
     }
 }
