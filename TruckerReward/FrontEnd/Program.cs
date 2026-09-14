@@ -5,10 +5,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
-builder.Services.AddHttpClient<WeatherForecastClient>(c =>
+builder.Services.AddHttpClient<TruckerDashboardClient>(c =>
 {
-    var url = builder.Configuration["WEATHER_URL"] 
-        ?? throw new InvalidOperationException("WEATHER_URL is not set");
+    var url = builder.Configuration["BACKEND_URL"]
+        ?? throw new InvalidOperationException("BACKEND_URL is not set");
 
     c.BaseAddress = new(url);
 });
