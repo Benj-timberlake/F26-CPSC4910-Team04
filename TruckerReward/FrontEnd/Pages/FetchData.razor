@@ -1,47 +1,45 @@
 ﻿@page "/"
 @using FrontEnd.Data
-@inject WeatherForecastClient ForecastClient
+@inject TruckerDashboardClient DashboardClient
 
-<PageTitle>Weather forecast</PageTitle>
+<PageTitle>TruckerReward Dashboard</PageTitle>
 
-<h1>Weather forecast</h1>
+<h1>My TruckerReward Dashboard</h1>
 
-<p>This component demonstrates fetching data from a service.</p>
+<p>Review your profile, points, and sponsor rewards.</p>
 
-@if (forecasts == null)
+@if (dashboard == null)
 {
     <p><em>Loading...</em></p>
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Temp. (C)</th>
-                <th>Temp. (F)</th>
-                <th>Summary</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var forecast in forecasts)
-            {
-                <tr>
-                    <td>@forecast.Date.ToShortDateString()</td>
-                    <td>@forecast.TemperatureC</td>
-                    <td>@forecast.TemperatureF</td>
-                    <td>@forecast.Summary</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <section class="mb-4">
+        <h2>Driver information</h2>
+        <p><strong>@dashboard.Trucker.Name</strong> · Driver ID: @dashboard.Trucker.DriverId</p>
+        <p>@dashboard.Trucker.Email · @dashboard.Trucker.Phone</p>
+        <p>Home terminal: @dashboard.Trucker.HomeTerminal</p>
+    </section>
+
+    <section class="mb-4">
+        <h2>My points</h2>
+        <p><strong>@dashboard.Points.CurrentBalance points</strong> · @dashboard.Points.Tier status</p>
+        <p>@dashboard.Points.NextMilestone</p>
+    </section>
+
+    <section>
+        <h2>My sponsor</h2>
+        <p><strong>@dashboard.Sponsor.Name</strong> · @dashboard.Sponsor.Program</p>
+        <p>@dashboard.Sponsor.Benefit</p>
+        <p>Contact: @dashboard.Sponsor.ContactEmail</p>
+    </section>
 }
 
 @code {
-    private WeatherForecast[]? forecasts;
+    private TruckerDashboard? dashboard;
 
     protected override async Task OnInitializedAsync()
     {
-        forecasts = await ForecastClient.GetForecastAsync(DateTime.Now);
+        dashboard = await DashboardClient.GetDashboardAsync();
     }
 }
