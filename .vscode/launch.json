@@ -19,9 +19,9 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build backend",
-            "program": "${workspaceFolder}/SampleApp/BackEnd/bin/Debug/net10.0/BackEnd.dll",
+            "program": "${workspaceFolder}/TruckerReward/BackEnd/bin/Debug/net10.0/BackEnd.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/SampleApp/BackEnd",
+            "cwd": "${workspaceFolder}/TruckerReward/BackEnd",
             "stopAtEntry": false,
             "serverReadyAction": {
                 "action": "openExternally",
@@ -29,7 +29,8 @@
                 "uriFormat": "%s/scalar"
             },
             "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development"
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:8080"
             },
             "sourceFileMap": {
                 "/Views": "${workspaceFolder}/Views"
@@ -40,9 +41,9 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build frontend",
-            "program": "${workspaceFolder}/SampleApp/FrontEnd/bin/Debug/net10.0/FrontEnd.dll",
+            "program": "${workspaceFolder}/TruckerReward/FrontEnd/bin/Debug/net10.0/FrontEnd.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/SampleApp/FrontEnd",
+            "cwd": "${workspaceFolder}/TruckerReward/FrontEnd",
             "stopAtEntry": false,
             "serverReadyAction": {
                 "action": "openExternally",
@@ -50,7 +51,8 @@
                 "uriFormat": "%s/"
             },
             "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development"
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:8081"
             },
             "sourceFileMap": {
                 "/Views": "${workspaceFolder}/Views"
