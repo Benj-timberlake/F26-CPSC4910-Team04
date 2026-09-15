@@ -15,10 +15,10 @@
         <label for="userType">I am a</label>
         <select id="userType" name="userType" @bind="userType">
             <option value="driver">Driver</option>
-            <option value="sponser">Sponsor</option>
+            <option value="sponsor">Sponsor</option>
         </select>
 
-        @if (userType == "sponser")
+        @if (userType == "sponsor")
         {
             <label for="companyName">Company name</label>
             <input id="companyName" name="companyName" required />

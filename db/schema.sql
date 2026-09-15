@@ -2,7 +2,7 @@
 -- password holds the salted hash, never the plain password
 CREATE TABLE IF NOT EXISTS users (
     id INT NOT NULL AUTO_INCREMENT,
-    user_type ENUM('admin','sponser','driver') NOT NULL,
+    user_type ENUM('admin','sponsor','driver') NOT NULL,
     username VARCHAR(255) NOT NULL,
     password VARCHAR(255) NULL,
     email VARCHAR(255) NOT NULL,

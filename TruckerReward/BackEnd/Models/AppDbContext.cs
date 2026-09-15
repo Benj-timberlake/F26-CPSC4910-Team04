@@ -39,7 +39,7 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(20)
                 .HasColumnName("phone_number");
             entity.Property(e => e.UserType)
-                .HasColumnType("enum('admin','sponser','driver')")
+                .HasColumnType("enum('admin','sponsor','driver')")
                 .HasColumnName("user_type");
             entity.Property(e => e.Username)
                 .HasMaxLength(255)

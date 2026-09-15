@@ -16,7 +16,7 @@
     else
     {
         <section>
-            <h2>@(account.UserType == "sponser" ? "Sponsor information" : "Driver information")</h2>
+            <h2>@(account.UserType == "sponsor" ? "Sponsor information" : "Driver information")</h2>
             <p><strong>@account.Username</strong> · User ID: @account.Id</p>
             @if (!string.IsNullOrEmpty(account.CompanyName))
             {
