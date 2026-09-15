@@ -12,6 +12,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySQL(connectionString));
 
+// Allow endpoints to make HTTP requests to eBay.
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<EbayClient>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -46,6 +50,9 @@ app.MapGet("/dashboard", async (AppDbContext db) =>
         : Results.Ok(driver);
 })
 .WithName("GetDriverDashboard");
+
+// Register the endpoint defined in src/endpoints/market.cs.
+app.MapMarketEndpoints();
 
 app.Run();
 
