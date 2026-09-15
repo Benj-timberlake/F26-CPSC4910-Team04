@@ -1,0 +1,84 @@
+@page "/admin/login-attempts"
+@attribute [Authorize(Roles = "admin")]
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Login attempts</PageTitle>
+
+<div class="attempts">
+    <h1>Login attempts</h1>
+
+    <label>
+        <input type="checkbox" @bind="failedOnly" @bind:after="Load" />
+        Failed only
+    </label>
+
+    @if (attempts == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (attempts.Count == 0)
+    {
+        <p>Nothing logged yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>When (UTC)</th>
+                    <th>Username</th>
+                    <th>User ID</th>
+                    <th>Result</th>
+                    <th>IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in attempts)
+                {
+                    <tr class="@(a.Succeeded ? "" : "table-danger")">
+                        <td>@a.AttemptedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                        <td>@a.Username</td>
+                        <td>@(a.UserId?.ToString() ?? "unknown user")</td>
+                        <td>@(a.Succeeded ? "ok" : "failed")</td>
+                        <td>@a.IpAddress</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<style>
+    .attempts {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+
+    .attempts label {
+        display: block;
+        margin: 16px 0;
+    }
+</style>
+
+@code {
+    private bool failedOnly = true;
+    private List<Attempt>? attempts;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        using var client = HttpClientFactory.CreateClient("Backend");
+        attempts = await client.GetFromJsonAsync<List<Attempt>>($"admin/login-attempts?failedOnly={failedOnly}");
+    }
+
+    private class Attempt
+    {
+        public string Username { get; set; } = "";
+        public int? UserId { get; set; }
+        public bool Succeeded { get; set; }
+        public string? IpAddress { get; set; }
+        public DateTime AttemptedAt { get; set; }
+    }
+}

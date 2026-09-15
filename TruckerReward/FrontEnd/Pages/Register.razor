@@ -1,0 +1,102 @@
+@page "/register"
+@inject NavigationManager Nav
+
+<PageTitle>Create account</PageTitle>
+
+<div class="account-form">
+    <h1>Create account</h1>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <p role="alert" class="error">@error</p>
+    }
+
+    <form method="post" action="account/register">
+        <label for="userType">I am a</label>
+        <select id="userType" name="userType" @bind="userType">
+            <option value="driver">Driver</option>
+            <option value="sponser">Sponsor</option>
+        </select>
+
+        @if (userType == "sponser")
+        {
+            <label for="companyName">Company name</label>
+            <input id="companyName" name="companyName" required />
+        }
+
+        <label for="username">Username</label>
+        <input id="username" name="username" required autocomplete="username" />
+
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="email" />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" />
+
+        <label for="phoneNumber">Phone</label>
+        <input id="phoneNumber" name="phoneNumber" type="tel" autocomplete="tel" />
+
+        <label for="address">Address</label>
+        <input id="address" name="address" autocomplete="street-address" />
+
+        <button type="submit">Create account</button>
+    </form>
+
+    <p class="alt">Already have an account? <a href="login">Log in</a></p>
+</div>
+
+<style>
+    .account-form {
+        max-width: 420px;
+        margin: 48px auto;
+        padding: 24px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: white;
+    }
+
+    .account-form label {
+        display: block;
+        margin-top: 14px;
+        font-weight: 600;
+    }
+
+    .account-form input, .account-form select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 16px;
+    }
+
+    .account-form button {
+        width: 100%;
+        margin-top: 20px;
+        padding: 12px;
+        background: #2455a4;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+
+    .alt {
+        margin-top: 20px;
+        text-align: center;
+    }
+
+    .error {
+        color: #b42318;
+    }
+</style>
+
+@code {
+    private string userType = "driver";
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        error = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["error"];
+    }
+}
