@@ -30,7 +30,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         {
             // the mysql enum column type isn't valid in sqlite
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var script = db.Database.GenerateCreateScript().Replace("enum('admin','sponser','driver')", "TEXT");
+            var script = db.Database.GenerateCreateScript().Replace("enum('admin','sponsor','driver')", "TEXT");
             await db.Database.ExecuteSqlRawAsync(script);
         }
         await app.StartAsync();
@@ -95,7 +95,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
             username = "acme",
             email = "acme@example.com",
             password = "hunter22",
-            userType = "sponser",
+            userType = "sponsor",
             companyName = "Acme Freight"
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -103,7 +103,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         var sponsor = await Db().Sponsors.Include(s => s.User).SingleAsync();
         Assert.Equal("Acme Freight", sponsor.CompanyName);
         Assert.Equal("acme", sponsor.User.Username);
-        Assert.Equal("sponser", sponsor.User.UserType);
+        Assert.Equal("sponsor", sponsor.User.UserType);
 
         using var details = JsonDocument.Parse(await client.GetStringAsync($"/users/{sponsor.UserId}"));
         Assert.Equal("Acme Freight", details.RootElement.GetProperty("companyName").GetString());
@@ -118,7 +118,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
             username = "acme",
             email = "acme@example.com",
             password = "hunter22",
-            userType = "sponser"
+            userType = "sponsor"
         });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }

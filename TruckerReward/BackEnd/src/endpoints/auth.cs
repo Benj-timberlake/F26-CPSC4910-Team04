@@ -6,7 +6,7 @@ public static class AuthEndpoints
 {
     // values in the users.user_type enum
     public const string Driver = "driver";
-    public const string Sponsor = "sponser";
+    public const string Sponsor = "sponsor";
     public const string Admin = "admin";
 
     // PBKDF2 with a random salt per user, built into asp.net
