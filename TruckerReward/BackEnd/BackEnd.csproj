@@ -1,11 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>BackEnd-Development</UserSecretsId>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <UserSecretsId>a3d241f0-5ffb-4587-8c7d-3e8fb20a3958</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

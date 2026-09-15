@@ -13,6 +13,14 @@ builder.Services.AddHttpClient<TruckerDashboardClient>(c =>
     c.BaseAddress = new(url);
 });
 
+builder.Services.AddHttpClient("Backend", client =>
+{
+    var url = builder.Configuration["BACKEND_URL"]
+        ?? throw new InvalidOperationException("BACKEND_URL is not set");
+
+    client.BaseAddress = new Uri(url);
+});
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
@@ -24,6 +32,8 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
+
 app.Run();
