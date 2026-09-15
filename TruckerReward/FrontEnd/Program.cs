@@ -1,17 +1,20 @@
+using FrontEnd.Data;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
-builder.Services.AddHttpClient<TruckerDashboardClient>(c =>
+void ConfigureBackendClient(HttpClient client)
 {
-    var url = builder.Configuration["BACKEND_URL"]
-        ?? throw new InvalidOperationException("BACKEND_URL is not set");
     var url = builder.Configuration["BACKEND_URL"]
         ?? throw new InvalidOperationException("BACKEND_URL is not set");
 
     client.BaseAddress = new Uri(url);
-});
+}
+
+builder.Services.AddHttpClient<TruckerDashboardClient>(ConfigureBackendClient);
+builder.Services.AddHttpClient("Backend", ConfigureBackendClient);
 
 var app = builder.Build();
 

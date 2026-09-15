@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<EbayClient>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
@@ -46,6 +48,8 @@ app.MapGet("/dashboard", async (AppDbContext db) =>
         : Results.Ok(driver);
 })
 .WithName("GetDriverDashboard");
+
+app.MapMarketEndpoints();
 
 app.Run();
 
