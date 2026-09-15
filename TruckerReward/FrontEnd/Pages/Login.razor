@@ -1,0 +1,123 @@
+@page "/login"
+@using Microsoft.AspNetCore.Authentication
+@inject IAuthenticationSchemeProvider Schemes
+@inject NavigationManager Nav
+
+<PageTitle>Log in</PageTitle>
+
+<div class="account-form">
+    <h1>Log in</h1>
+
+    @if (error == "1")
+    {
+        <p role="alert" class="error">Wrong username or password.</p>
+    }
+    else if (error == "sso")
+    {
+        <p role="alert" class="error">Sign in with that provider didn't work. Try again or use a password.</p>
+    }
+
+    <form method="post" action="account/login">
+        <input type="hidden" name="returnUrl" value="@returnUrl" />
+
+        <label for="username">Username</label>
+        <input id="username" name="username" required autocomplete="username" />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required autocomplete="current-password" />
+
+        <button type="submit">Log in</button>
+    </form>
+
+    @if (providers.Count > 0)
+    {
+        <div class="sso">
+            <p>or sign in with</p>
+            @foreach (var p in providers)
+            {
+                <a class="sso-btn" href="account/external/@p.Name?returnUrl=@Uri.EscapeDataString(returnUrl ?? "")">@p.DisplayName</a>
+            }
+        </div>
+    }
+
+    <p class="alt">No account yet? <a href="register">Create one</a></p>
+</div>
+
+<style>
+    .account-form {
+        max-width: 420px;
+        margin: 48px auto;
+        padding: 24px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: white;
+    }
+
+    .account-form label {
+        display: block;
+        margin-top: 14px;
+        font-weight: 600;
+    }
+
+    .account-form input, .account-form select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 16px;
+    }
+
+    .account-form button {
+        width: 100%;
+        margin-top: 20px;
+        padding: 12px;
+        background: #2455a4;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+
+    .sso {
+        margin-top: 20px;
+        text-align: center;
+    }
+
+    .sso-btn {
+        display: block;
+        margin-top: 8px;
+        padding: 10px;
+        border: 1px solid #2455a4;
+        border-radius: 6px;
+        color: #2455a4;
+        text-decoration: none;
+    }
+
+    .alt {
+        margin-top: 20px;
+        text-align: center;
+    }
+
+    .error {
+        color: #b42318;
+    }
+</style>
+
+@code {
+    private string? error;
+    private string? returnUrl;
+    private List<AuthenticationScheme> providers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        error = query["error"];
+        returnUrl = query["returnUrl"];
+
+        // only google/microsoft have a display name, the cookie schemes don't
+        providers = (await Schemes.GetAllSchemesAsync())
+            .Where(s => !string.IsNullOrEmpty(s.DisplayName))
+            .ToList();
+    }
+}

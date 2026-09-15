@@ -1,0 +1,53 @@
+@namespace FrontEnd.Shared
+
+<nav class="account-bar">
+    <a href="">Home</a>
+    <a href="products">Products</a>
+    <AuthorizeView>
+        <Authorized>
+            <a href="dashboard">Dashboard</a>
+            <AuthorizeView Roles="admin" Context="admin">
+                <a href="admin/login-attempts">Login attempts</a>
+            </AuthorizeView>
+            <span class="spacer"></span>
+            <span>@context.User.Identity?.Name</span>
+            <form method="post" action="account/logout">
+                <button type="submit">Log out</button>
+            </form>
+        </Authorized>
+        <NotAuthorized>
+            <span class="spacer"></span>
+            <a href="login">Log in</a>
+            <a href="register">Create account</a>
+        </NotAuthorized>
+    </AuthorizeView>
+</nav>
+
+<style>
+    .account-bar {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 12px 24px;
+        background: #2455a4;
+        color: white;
+    }
+
+    .account-bar a {
+        color: white;
+        text-decoration: none;
+    }
+
+    .account-bar .spacer {
+        flex: 1;
+    }
+
+    .account-bar button {
+        padding: 6px 12px;
+        background: transparent;
+        color: white;
+        border: 1px solid white;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+</style>
