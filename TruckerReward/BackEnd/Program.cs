@@ -54,6 +54,9 @@ app.MapGet("/dashboard", async (AppDbContext db) =>
 // Register the endpoint defined in src/endpoints/market.cs.
 app.MapMarketEndpoints();
 
+// login, register and the failed login log, see src/endpoints/auth.cs
+app.MapAuthEndpoints();
+
 app.Run();
 
 record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address);
