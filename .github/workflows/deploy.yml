@@ -1,0 +1,155 @@
+name: Deploy to Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  APPLICATION_NAME: BEANSTALK-04
+  ENVIRONMENT_NAME: BEANSTALK-04-env
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ---------------------------------------------------
+      # 1. GET CODE FROM GITHUB
+      # ---------------------------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ---------------------------------------------------
+      # 2. INSTALL .NET 10
+      # ---------------------------------------------------
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+
+      # ---------------------------------------------------
+      # 3. RESTORE DEPENDENCIES
+      # ---------------------------------------------------
+
+      - name: Restore dependencies
+        run: dotnet restore TruckerReward/SampleApp.sln
+
+
+      # ---------------------------------------------------
+      # 4. BUILD PROJECT
+      # ---------------------------------------------------
+
+      - name: Build solution
+        run: |
+          dotnet build TruckerReward/SampleApp.sln \
+            --configuration Release \
+            --no-restore
+
+
+      # ---------------------------------------------------
+      # 5. CREATE DEPLOYMENT FOLDERS
+      # ---------------------------------------------------
+
+      - name: Create deployment bundle
+        run: |
+          rm -rf bundle
+          mkdir -p bundle/FrontEnd
+          mkdir -p bundle/BackEnd
+
+
+      # ---------------------------------------------------
+      # 6. PUBLISH FRONTEND
+      # ---------------------------------------------------
+
+      - name: Publish FrontEnd
+        run: |
+          dotnet publish TruckerReward/FrontEnd/FrontEnd.csproj \
+            --configuration Release \
+            --no-restore \
+            --output bundle/FrontEnd
+
+
+      # ---------------------------------------------------
+      # 7. PUBLISH BACKEND
+      # ---------------------------------------------------
+
+      - name: Publish BackEnd
+        run: |
+          dotnet publish TruckerReward/BackEnd/BackEnd.csproj \
+            --configuration Release \
+            --no-restore \
+            --output bundle/BackEnd
+
+
+      # ---------------------------------------------------
+      # 8. TELL BEANSTALK HOW TO RUN BOTH APPS
+      # ---------------------------------------------------
+
+      - name: Create Procfile
+        run: |
+          cat > bundle/Procfile <<'EOF'
+          web: dotnet ./FrontEnd/FrontEnd.dll --urls http://0.0.0.0:5000
+          backend: dotnet ./BackEnd/BackEnd.dll --urls http://127.0.0.1:5100
+          EOF
+
+
+      # ---------------------------------------------------
+      # 9. CREATE ZIP FILE
+      # ---------------------------------------------------
+
+      - name: Create deployment ZIP
+        run: |
+          cd bundle
+          zip -r ../deploy.zip .
+          cd ..
+
+
+      # ---------------------------------------------------
+      # 10. CONNECT GITHUB TO AWS USING YOUR ACCESS KEYS
+      # ---------------------------------------------------
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+
+      # ---------------------------------------------------
+      # 11. VERIFY THAT THE AWS CREDENTIALS WORK
+      # ---------------------------------------------------
+
+      - name: Verify AWS connection
+        run: aws sts get-caller-identity
+
+
+      # ---------------------------------------------------
+      # 12. DEPLOY TO ELASTIC BEANSTALK
+      # ---------------------------------------------------
+
+      - name: Deploy to Elastic Beanstalk
+        uses: aws-actions/aws-elasticbeanstalk-deploy@v1
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          application-name: ${{ env.APPLICATION_NAME }}
+          environment-name: ${{ env.ENVIRONMENT_NAME }}
+          version-label: github-${{ github.sha }}
+          deployment-package-path: deploy.zip
+          create-application-if-not-exists: false
+          create-environment-if-not-exists: false
+          wait-for-deployment: true
+          wait-for-environment-recovery: true
