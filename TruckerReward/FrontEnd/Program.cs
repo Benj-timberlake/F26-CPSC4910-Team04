@@ -1,9 +1,11 @@
+using FrontEnd.Auth;
 using FrontEnd.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
+builder.AddTruckerAuthentication();
 
 void ConfigureBackendClient(HttpClient client)
 {
@@ -27,7 +29,10 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseAuthentication();
+app.UseAuthorization();
 
+app.MapAccountEndpoints();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 

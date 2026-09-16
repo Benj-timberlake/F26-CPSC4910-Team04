@@ -1,6 +1,28 @@
 # F26-CPSC4910-Team04
 4910 Project
 
+## Running locally
+
+1. `docker compose up -d` from the repo root to start MySQL (see `db/README.md`)
+2. run BackEnd (port 8080) and FrontEnd (port 8081), or use Run All in VS Code
+3. go to http://localhost:8081/register to make a driver or sponsor account
+
+Admins are made by setting `user_type = 'admin'` on the user row directly.
+
+Google / Microsoft sign in only show up on the login page when their keys are set.
+Locally put them in user secrets for the FrontEnd project:
+
+```
+cd TruckerReward/FrontEnd
+dotnet user-secrets set "Authentication:Google:ClientId" "..."
+dotnet user-secrets set "Authentication:Google:ClientSecret" "..."
+dotnet user-secrets set "Authentication:Microsoft:ClientId" "..."
+dotnet user-secrets set "Authentication:Microsoft:ClientSecret" "..."
+```
+
+On Elastic Beanstalk set the same keys as env vars with `__` instead of `:`.
+The redirect URIs to register with Google/Microsoft are `/signin-google` and `/signin-microsoft`.
+
 
 # Below is Given README from C#
 
