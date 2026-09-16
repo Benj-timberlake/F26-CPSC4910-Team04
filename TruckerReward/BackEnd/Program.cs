@@ -5,14 +5,16 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddHttpClient();
-builder.Services.AddSingleton<EbayClient>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySQL(connectionString));
+
+// Allow endpoints to make HTTP requests to eBay.
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<EbayClient>();
 
 var app = builder.Build();
 
@@ -49,7 +51,11 @@ app.MapGet("/dashboard", async (AppDbContext db) =>
 })
 .WithName("GetDriverDashboard");
 
+// Register the endpoint defined in src/endpoints/market.cs.
 app.MapMarketEndpoints();
+
+// login, register and the failed login log, see src/endpoints/auth.cs
+app.MapAuthEndpoints();
 
 app.Run();
 
