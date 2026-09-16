@@ -1,34 +1,13 @@
 ﻿@page "/"
-@using FrontEnd.Data
-@inject TruckerDashboardClient DashboardClient
 
-<PageTitle>TruckerReward Dashboard</PageTitle>
+<PageTitle>TruckerReward</PageTitle>
 
-<h1>My TruckerReward Dashboard</h1>
+<h1>TruckerReward</h1>
 
-<p>Review your driver profile.</p>
+<p>Welcome to TruckerReward.</p>
 
-@if (dashboard == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <section>
-        <h2>Driver information</h2>
-        <p><strong>@dashboard.Username</strong> · User ID: @dashboard.Id</p>
-        <p>Account type: @dashboard.UserType</p>
-        <p>Email: @dashboard.Email</p>
-        <p>Phone: @dashboard.PhoneNumber</p>
-        <p>Address: @dashboard.Address</p>
-    </section>
-}
-
-@code {
-    private UserProfile? dashboard;
-
-    protected override async Task OnInitializedAsync()
-    {
-        dashboard = await DashboardClient.GetDashboardAsync();
-    }
-}
+<p>
+    <a href="/login">Log in</a>
+    or
+    <a href="/register">create an account</a>.
+</p>
