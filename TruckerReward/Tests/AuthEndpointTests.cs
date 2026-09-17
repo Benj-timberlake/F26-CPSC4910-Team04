@@ -67,6 +67,21 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("short7!")]
+    [InlineData("        ")]
+    public async Task ShortPasswordIsRejected(string password)
+    {
+        var client = await Start();
+        var response = await client.PostAsJsonAsync("/auth/register", new
+        {
+            username = "bob", email = "bob@example.com", password, userType = "driver"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, await Db().Users.CountAsync());
+    }
+
     [Fact]
     public async Task DuplicateUsernameIsRejected()
     {
