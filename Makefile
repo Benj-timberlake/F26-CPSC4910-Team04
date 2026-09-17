@@ -1,4 +1,4 @@
-# Builds the AG_Login branch, starts MySQL + BackEnd + FrontEnd, and opens the app.
+# Builds main, starts MySQL + BackEnd + FrontEnd, and opens the app.
 #
 #   make            checkout branch, build, run everything, open browser tabs
 #   make stop       stop the two dotnet servers and the mysql container
@@ -7,9 +7,9 @@
 #   make status     what's running + urls
 #   make clean      stop everything and wipe the mysql volume
 #
-#   make BRANCH=main   to use a different branch
+#   make BRANCH=x   to use a different branch
 
-BRANCH       ?= AG_Login
+BRANCH       ?= main
 SLN          := TruckerReward/SampleApp.sln
 BACKEND_DIR  := TruckerReward/BackEnd
 FRONTEND_DIR := TruckerReward/FrontEnd
