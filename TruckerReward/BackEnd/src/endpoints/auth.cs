@@ -48,27 +48,41 @@ public static class AuthEndpoints
         });
 
         app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db) =>
-        {
-            var username = req.Username?.Trim() ?? "";
-            var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username);
+{
+    var username = req.Username?.Trim() ?? "";
 
-            var ok = user?.Password is not null
-                && hasher.VerifyHashedPassword(user, user.Password, req.Password ?? "") != PasswordVerificationResult.Failed;
+    var user = await db.Users
+        .FirstOrDefaultAsync(u => u.Username == username);
 
-            db.LoginAttempts.Add(new LoginAttempt
-            {
-                Username = username,
-                UserId = user?.Id,
-                Succeeded = ok,
-                IpAddress = req.IpAddress,
-                AttemptedAt = DateTime.UtcNow
-            });
-            await db.SaveChangesAsync();
+    // Username does not exist
+    if (user is null)
+    {
+        return Results.Unauthorized();
+    }
 
-            return ok
-                ? Results.Ok(ToProfile(user!))
-                : Results.Unauthorized();
-        });
+    var ok = user.Password is not null
+        && hasher.VerifyHashedPassword(
+            user,
+            user.Password,
+            req.Password ?? ""
+        ) != PasswordVerificationResult.Failed;
+
+    db.LoginAttempts.Add(new LoginAttempt
+    {
+        Username = username,
+        UserId = user.Id,
+        Succeeded = ok,
+        IpAddress = req.IpAddress,
+        AttemptedAt = DateTime.UtcNow
+    });
+
+    await db.SaveChangesAsync();
+
+    if (!ok)
+        return Results.Unauthorized();
+
+    return Results.Ok(ToProfile(user));
+});
 
         // called after a google/microsoft sign in on the frontend
         app.MapPost("/auth/external", async (ExternalLoginRequest req, AppDbContext db) =>
