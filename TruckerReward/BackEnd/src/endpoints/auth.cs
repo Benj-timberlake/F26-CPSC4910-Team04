@@ -12,6 +12,10 @@ public static class AuthEndpoints
     // PBKDF2 with a random salt per user, built into asp.net
     private static readonly PasswordHasher<User> hasher = new();
 
+    // stand-ins so a login for a missing user still does one hash verify, see /auth/login
+    private static readonly User dummyUser = new() { UserType = Driver, Username = "", Email = "", PhoneNumber = "", Address = "" };
+    private static readonly string dummyHash = hasher.HashPassword(dummyUser, Guid.NewGuid().ToString());
+
     public static void MapAuthEndpoints(this WebApplication app)
     {
         app.MapPost("/auth/register", async (RegisterRequest req, AppDbContext db) =>
@@ -48,41 +52,33 @@ public static class AuthEndpoints
         });
 
         app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db) =>
-{
-    var username = req.Username?.Trim() ?? "";
+        {
+            var username = req.Username?.Trim() ?? "";
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username);
 
-    var user = await db.Users
-        .FirstOrDefaultAsync(u => u.Username == username);
+            // always run a hash check, even when the username doesn't exist or the account is sso only,
+            // so the response time doesn't tell an attacker which usernames are real
+            var ok = hasher.VerifyHashedPassword(
+                user ?? dummyUser,
+                user?.Password ?? dummyHash,
+                req.Password ?? "") != PasswordVerificationResult.Failed
+                && user?.Password is not null;
 
-    // Username does not exist
-    if (user is null)
-    {
-        return Results.Unauthorized();
-    }
+            // every attempt is logged, unknown usernames included, so admins can spot guessing
+            db.LoginAttempts.Add(new LoginAttempt
+            {
+                Username = username,
+                UserId = user?.Id,
+                Succeeded = ok,
+                IpAddress = req.IpAddress,
+                AttemptedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
 
-    var ok = user.Password is not null
-        && hasher.VerifyHashedPassword(
-            user,
-            user.Password,
-            req.Password ?? ""
-        ) != PasswordVerificationResult.Failed;
-
-    db.LoginAttempts.Add(new LoginAttempt
-    {
-        Username = username,
-        UserId = user.Id,
-        Succeeded = ok,
-        IpAddress = req.IpAddress,
-        AttemptedAt = DateTime.UtcNow
-    });
-
-    await db.SaveChangesAsync();
-
-    if (!ok)
-        return Results.Unauthorized();
-
-    return Results.Ok(ToProfile(user));
-});
+            return ok
+                ? Results.Ok(ToProfile(user!))
+                : Results.Unauthorized();
+        });
 
         // called after a google/microsoft sign in on the frontend
         app.MapPost("/auth/external", async (ExternalLoginRequest req, AppDbContext db) =>
