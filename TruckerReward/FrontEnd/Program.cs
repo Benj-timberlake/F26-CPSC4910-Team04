@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.AddTruckerAuthentication();
+builder.Services.AddSingleton(TimeProvider.System);
 
 void ConfigureBackendClient(HttpClient client)
 {
