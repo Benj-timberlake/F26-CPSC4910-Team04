@@ -3,12 +3,12 @@
 
 ## Running locally
 
-1. `docker compose up -d` from the repo root to start MySQL (see `db/README.md`)
+1. put the RDS connection string in the BackEnd user secrets (see `db/README.md`)
 2. run BackEnd (port 8080) and FrontEnd (port 8081), or use Run All in VS Code
 3. go to http://localhost:8081/register to make a driver or sponsor account
 
-Or `make` does all three and opens the browser; `make test` runs the xUnit suite, `make stop`
-shuts everything down. Docker MySQL is for local work only, deployed builds use RDS.
+Or `make` does steps 2 and 3 and opens the browser; `make test` runs the xUnit suite, `make stop`
+shuts everything down.
 
 Admins are made by setting `user_type = 'admin'` on the user row directly.
 

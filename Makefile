@@ -1,11 +1,12 @@
-# Builds main, starts MySQL + BackEnd + FrontEnd, and opens the app.
+# Builds main, starts BackEnd + FrontEnd against RDS, and opens the app.
 #
 #   make            checkout branch, build, run everything, open browser tabs
-#   make stop       stop the two dotnet servers and the mysql container
+#   make stop       stop the two dotnet servers
 #   make logs       tail backend + frontend logs
 #   make test       run the xunit tests
 #   make status     what's running + urls
-#   make clean      stop everything and wipe the mysql volume
+#   make db         optional local mysql in docker, see db/README.md
+#   make clean      stop everything and wipe the local mysql volume
 #
 #   make BRANCH=x   to use a different branch
 
@@ -21,7 +22,7 @@ OPEN := $(if $(filter Darwin,$(shell uname)),open,xdg-open)
 
 .PHONY: up checkout db build run wait open stop logs test status clean
 
-up: checkout db build run wait open
+up: checkout build run wait open
 	@echo
 	@echo "  FrontEnd : $(FRONTEND_URL)/register"
 	@echo "  BackEnd  : $(BACKEND_URL)/scalar"
@@ -72,7 +73,7 @@ stop-dotnet:
 	@lsof -ti tcp:8080 -ti tcp:8081 2>/dev/null | xargs kill 2>/dev/null || true
 
 stop: stop-dotnet
-	docker compose stop
+	@docker compose stop 2>/dev/null || true
 
 logs:
 	tail -n 50 -f $(RUN_DIR)/backend.log $(RUN_DIR)/frontend.log
@@ -82,10 +83,9 @@ test:
 
 status:
 	@echo "branch  : $$(git branch --show-current)"
-	@echo "mysql   : $$(docker compose ps --status running -q mysql 2>/dev/null | grep -q . && echo running || echo stopped)"
 	@echo "backend : $$(curl -fs $(BACKEND_URL)/health >/dev/null 2>&1 && echo up at $(BACKEND_URL)/scalar || echo down)"
 	@echo "frontend: $$(curl -fs $(FRONTEND_URL)/register >/dev/null 2>&1 && echo up at $(FRONTEND_URL)/register || echo down)"
 
 clean: stop-dotnet
-	docker compose down -v
+	@docker compose down -v 2>/dev/null || true
 	rm -rf $(RUN_DIR)

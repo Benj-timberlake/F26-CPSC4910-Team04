@@ -6,8 +6,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 
+// the database is RDS in every environment. locally the string lives in user secrets, on
+// elastic beanstalk in the ConnectionStrings__DefaultConnection env var, never in appsettings
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
+    ?? throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection is not set. See db/README.md for the user-secrets command.");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySQL(connectionString));
