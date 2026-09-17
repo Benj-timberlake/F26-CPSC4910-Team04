@@ -9,9 +9,6 @@ public static class AuthEndpoints
     public const string Sponsor = "sponsor";
     public const string Admin = "admin";
 
-    // the register page says the same thing, this is what actually enforces it
-    public const int MinPasswordLength = 8;
-
     // PBKDF2 with a random salt per user, built into asp.net
     private static readonly PasswordHasher<User> hasher = new();
 
@@ -21,12 +18,15 @@ public static class AuthEndpoints
 
     public static void MapAuthEndpoints(this WebApplication app)
     {
+        // the frontend shows this next to every new-password box
+        app.MapGet("/auth/password-policy", () => Results.Ok(new { description = PasswordPolicy.Description }));
+
         app.MapPost("/auth/register", async (RegisterRequest req, AppDbContext db) =>
         {
             if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
                 return Results.BadRequest(new { message = "Username, email and password are required." });
-            if (req.Password.Length < MinPasswordLength)
-                return Results.BadRequest(new { message = $"Password must be at least {MinPasswordLength} characters." });
+            if (PasswordPolicy.Check(req.Password) is { } weak)
+                return Results.BadRequest(new { message = weak });
             if (req.UserType != Driver && req.UserType != Sponsor)
                 return Results.BadRequest(new { message = "Account type must be driver or sponsor." });
             if (req.UserType == Sponsor && string.IsNullOrWhiteSpace(req.CompanyName))

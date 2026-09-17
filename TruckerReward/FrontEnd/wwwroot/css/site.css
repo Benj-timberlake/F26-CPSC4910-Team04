@@ -166,7 +166,7 @@ a {
 }
 
 /* messages */
-.tr-alert-error, .tr-alert-warning {
+.tr-alert-error, .tr-alert-warning, .tr-alert-success {
     padding: 10px 12px;
     margin: 0 0 14px;
     border-radius: 6px;
@@ -183,6 +183,12 @@ a {
     color: var(--warn);
     background: var(--warn-bg);
     border-color: var(--warn-line);
+}
+
+.tr-alert-success {
+    color: #14532d;
+    background: #ecfdf3;
+    border-color: #a6e4bd;
 }
 
 /* plain data tables */
