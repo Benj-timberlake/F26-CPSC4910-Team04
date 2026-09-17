@@ -7,7 +7,7 @@
         <Authorized>
             <a href="dashboard">Dashboard</a>
             <AuthorizeView Roles="admin" Context="admin">
-                <a href="admin/login-attempts">Login attempts</a>
+                <a href="admin/security">Security</a>
             </AuthorizeView>
             <span class="spacer"></span>
             <span>@context.User.Identity?.Name</span>
