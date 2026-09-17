@@ -1,15 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using BackEnd.Models;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
-// change password while logged in, forgot/reset by email, and the admin view of the audit log
+// change password while logged in, forgot/reset by email
 public static class PasswordEndpoints
 {
     public static readonly TimeSpan ResetLinkLifetime = TimeSpan.FromHours(1);
-
-    private static readonly PasswordHasher<User> hasher = new();
 
     public static void MapPasswordEndpoints(this WebApplication app)
     {
@@ -19,8 +16,7 @@ public static class PasswordEndpoints
             if (user is null)
                 return Results.NotFound();
             // sso-only accounts have no password yet, so there's nothing to confirm
-            if (user.Password is not null
-                && hasher.VerifyHashedPassword(user, user.Password, req.CurrentPassword ?? "") == PasswordVerificationResult.Failed)
+            if (user.Password is not null && !Passwords.Verify(user, req.CurrentPassword))
                 return Results.Json(new { message = "Current password is wrong." }, statusCode: StatusCodes.Status401Unauthorized);
             if (PasswordPolicy.Check(req.NewPassword) is { } weak)
                 return Results.BadRequest(new { message = weak });
@@ -71,22 +67,11 @@ public static class PasswordEndpoints
                 $"Hi {user.Username},\n\nYour password was just reset. If that wasn't you, contact your sponsor or an administrator.");
             return Results.NoContent();
         });
-
-        app.MapGet("/admin/password-changes", async (int? limit, AppDbContext db) =>
-        {
-            var changes = await db.PasswordChanges.AsNoTracking()
-                .OrderByDescending(c => c.ChangedAt).ThenByDescending(c => c.Id)
-                .Take(Paging.Limit(limit))
-                .Join(db.Users, c => c.UserId, u => u.Id,
-                    (c, u) => new PasswordChangeEntry(c.ChangedAt, u.Id, u.Username, c.ChangeType, c.IpAddress))
-                .ToListAsync();
-            return Results.Ok(changes);
-        });
     }
 
     private static async Task SetPassword(AppDbContext db, User user, string password, string changeType, string? ip, TimeProvider clock)
     {
-        user.Password = hasher.HashPassword(user, password);
+        user.Password = Passwords.Hash(user, password);
         db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = changeType, IpAddress = ip, ChangedAt = clock.GetUtcNow().UtcDateTime });
         await db.SaveChangesAsync();
     }
@@ -100,5 +85,3 @@ public record ChangePasswordRequest(string? CurrentPassword, string NewPassword,
 public record ForgotPasswordRequest(string Email, string? IpAddress);
 
 public record ResetPasswordRequest(string Token, string NewPassword, string? IpAddress);
-
-public record PasswordChangeEntry(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress);

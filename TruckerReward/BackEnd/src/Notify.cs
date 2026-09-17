@@ -14,9 +14,3 @@ public static class Notify
             await email.SendAsync(to, subject, body);
     }
 }
-
-// list endpoints take an optional limit, capped so nobody asks for the whole table
-public static class Paging
-{
-    public static int Limit(int? requested) => requested is > 0 and <= 500 ? requested.Value : 100;
-}

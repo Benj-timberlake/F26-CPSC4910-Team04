@@ -42,10 +42,23 @@ app.MapGet("/", () => Results.Ok(new
 // Register the endpoint defined in src/endpoints/market.cs.
 app.MapMarketEndpoints();
 
-// login, register and the failed login log, see src/endpoints/auth.cs
+// see src/endpoints
 app.MapAuthEndpoints();
-
-// change, forgot and reset password, see src/endpoints/password.cs
 app.MapPasswordEndpoints();
+app.MapUserEndpoints();
+app.MapAdminEndpoints();
+
+// a real query, so this fails when the database is asleep or unreachable
+app.MapGet("/health", async (AppDbContext db) =>
+{
+    try
+    {
+        return Results.Ok(new { status = "ok", users = await db.Users.CountAsync() });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 503);
+    }
+});
 
 app.Run();
