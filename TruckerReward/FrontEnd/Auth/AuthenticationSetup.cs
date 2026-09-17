@@ -17,6 +17,8 @@ public static class AuthenticationSetup
                 options.AccessDeniedPath = "/login";
                 options.ExpireTimeSpan = TimeSpan.FromHours(8);
                 options.SlidingExpiration = true;
+                // re-check the user row every few minutes, see CookieRevalidation
+                options.EventsType = typeof(CookieRevalidation);
             })
             .AddCookie(ExternalScheme, options =>
             {
@@ -46,6 +48,7 @@ public static class AuthenticationSetup
             });
         }
 
+        builder.Services.AddScoped<CookieRevalidation>();
         builder.Services.AddAuthorization();
     }
 }

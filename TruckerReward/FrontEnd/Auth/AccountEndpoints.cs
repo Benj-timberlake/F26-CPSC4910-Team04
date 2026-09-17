@@ -33,7 +33,7 @@ public static class AccountEndpoints
             response.EnsureSuccessStatusCode();
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
-            await SignIn(http, user!);
+            await TruckerSignIn.SignInAsync(http, user!);
             return Results.LocalRedirect(SafeReturn(returnUrl));
         }).DisableAntiforgery();
 
@@ -62,7 +62,7 @@ public static class AccountEndpoints
             }
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
-            await SignIn(http, user!);
+            await TruckerSignIn.SignInAsync(http, user!);
             return Results.LocalRedirect("/dashboard");
         }).DisableAntiforgery();
 
@@ -98,7 +98,7 @@ public static class AccountEndpoints
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await http.SignOutAsync(AuthenticationSetup.ExternalScheme);
-            await SignIn(http, user!);
+            await TruckerSignIn.SignInAsync(http, user!);
             return Results.LocalRedirect(SafeReturn(returnUrl));
         });
 
@@ -107,19 +107,6 @@ public static class AccountEndpoints
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.Redirect("/");
         }).DisableAntiforgery();
-    }
-
-    private static Task SignIn(HttpContext http, UserProfile user)
-    {
-        var identity = new ClaimsIdentity(
-        [
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.UserType)
-        ], CookieAuthenticationDefaults.AuthenticationScheme);
-
-        return http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
     }
 
     private static string SafeReturn(string? returnUrl) =>
