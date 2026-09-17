@@ -1,5 +1,8 @@
 # F26-CPSC4910-Team04
-4910 Project
+
+TruckerReward: sponsors award points to truck drivers for good driving, drivers spend them in the
+sponsor's catalog. ASP.NET Core 10 backend (`TruckerReward/BackEnd`), Blazor Server frontend
+(`TruckerReward/FrontEnd`), xUnit tests (`TruckerReward/Tests`), MySQL on RDS.
 
 ## Running locally
 
@@ -12,28 +15,25 @@ shuts everything down.
 
 Admins are made by setting `user_type = 'admin'` on the user row directly.
 
-Google / Microsoft sign in only show up on the login page when their keys are set.
-Locally put them in user secrets for the FrontEnd project:
+Emails (reset links, security notices) go to the backend log unless `EMAIL_FROM` is set.
 
-```
-cd TruckerReward/FrontEnd
-dotnet user-secrets set "Authentication:Google:ClientId" "..."
-dotnet user-secrets set "Authentication:Google:ClientSecret" "..."
-dotnet user-secrets set "Authentication:Microsoft:ClientId" "..."
-dotnet user-secrets set "Authentication:Microsoft:ClientSecret" "..."
-```
+## Optional local settings
 
-On Elastic Beanstalk set the same keys as env vars with `__` instead of `:`.
-The redirect URIs to register with Google/Microsoft are `/signin-google` and `/signin-microsoft`.
+All of these are user secrets (`dotnet user-secrets set KEY VALUE` inside the project folder),
+never appsettings. Everything works without them.
 
-## Backend API key
+| Key | Project | Effect |
+|---|---|---|
+| `Authentication:Google:ClientId` / `ClientSecret` | FrontEnd | shows "Continue with Google" on the login page |
+| `Authentication:Microsoft:ClientId` / `ClientSecret` | FrontEnd | shows "Continue with Microsoft" |
+| `BACKEND_API_KEY` | both | backend refuses requests without the matching `X-Api-Key` header |
 
-Only the FrontEnd should be able to call the BackEnd. Set `BACKEND_API_KEY` to the same random
-value on both (env var on Elastic Beanstalk, `dotnet user-secrets set BACKEND_API_KEY "..."` in
-each project locally) and the backend rejects any request without a matching `X-Api-Key` header.
-`/health` stays open for the load balancer. Leave it unset on both for plain local dev; the
-backend logs a warning at startup so you know it's open.
+The sso redirect URIs to register are `http://localhost:8081/signin-google` and `/signin-microsoft`.
 
+## Deployment
+
+Pushing to `main` deploys to Elastic Beanstalk. Environment properties, HTTPS via CloudFront and
+SES are described in `infra/README.md`.
 
 # Below is Given README from C#
 
