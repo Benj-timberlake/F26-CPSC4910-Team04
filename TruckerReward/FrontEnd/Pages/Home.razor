@@ -1,0 +1,47 @@
+@page "/"
+
+<PageTitle>TruckerReward</PageTitle>
+
+<div class="home">
+    <h1>TruckerReward</h1>
+
+    <AuthorizeView>
+        <Authorized>
+            <p>You're signed in as <strong>@context.User.Identity?.Name</strong>.</p>
+            <p>
+                <a class="primary" href="dashboard">Go to your dashboard</a>
+                <a href="products">Browse products</a>
+            </p>
+        </Authorized>
+        <NotAuthorized>
+            <p>Earn points for good driving and spend them in your sponsor's catalog.</p>
+            <p>
+                <a class="primary" href="login">Log in</a>
+                <a href="register">Create an account</a>
+            </p>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+<style>
+    .home {
+        max-width: 720px;
+        margin: 48px auto;
+        padding: 0 24px;
+    }
+
+    .home a {
+        display: inline-block;
+        margin: 8px 12px 0 0;
+        padding: 10px 16px;
+        border: 1px solid #2455a4;
+        border-radius: 6px;
+        color: #2455a4;
+        text-decoration: none;
+    }
+
+    .home a.primary {
+        background: #2455a4;
+        color: white;
+    }
+</style>
