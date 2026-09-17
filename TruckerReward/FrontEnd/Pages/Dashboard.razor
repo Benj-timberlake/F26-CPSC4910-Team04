@@ -1,40 +1,209 @@
 @page "/dashboard"
 @attribute [Authorize]
 @using System.Security.Claims
-@using System.Text.Json.Serialization
 @inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Dashboard</PageTitle>
 
 <div class="dashboard">
-    <h1>My TruckerReward Dashboard</h1>
-
-    @if (account == null)
+    @if (loadError != null)
     {
-        <p><em>Loading...</em></p>
+        <h1>Dashboard</h1>
+        <p role="alert" class="error">@loadError</p>
+    }
+    else if (account == null || activity == null)
+    {
+        <h1>Dashboard</h1>
+        <p role="status"><em>Loading your account...</em></p>
     }
     else
     {
-        <section>
-            <h2>@(account.UserType == "sponsor" ? "Sponsor information" : "Driver information")</h2>
-            <p><strong>@account.Username</strong> · User ID: @account.Id</p>
-            @if (!string.IsNullOrEmpty(account.CompanyName))
+        <h1>Welcome back, @account.Username</h1>
+        <p class="subtitle">@AccountLabel(account.UserType)</p>
+
+        <div class="cards">
+            @if (account.UserType == "driver")
             {
-                <p>Company: @account.CompanyName</p>
+                <section class="card points">
+                    <h2>Points</h2>
+                    <p class="balance">@account.Points.ToString("N0")</p>
+                    <p class="hint">Earned for good driving. Spend them in your sponsor's <a href="products">product catalog</a>.</p>
+                </section>
             }
-            <p>Account type: @account.UserType</p>
-            <p>Email: @account.Email</p>
-            <p>Phone: @account.PhoneNumber</p>
-            <p>Address: @account.Address</p>
-        </section>
+
+            <section class="card">
+                <h2>@AccountLabel(account.UserType)</h2>
+                <dl>
+                    <dt>Username</dt>
+                    <dd>@account.Username</dd>
+                    @if (account.UserType == "sponsor")
+                    {
+                        <dt>Company</dt>
+                        <dd>@Shown(account.CompanyName)</dd>
+                    }
+                    <dt>Email</dt>
+                    <dd>@account.Email</dd>
+                    <dt>Phone</dt>
+                    <dd>@Shown(account.PhoneNumber)</dd>
+                    <dt>Address</dt>
+                    <dd>@Shown(account.Address)</dd>
+                </dl>
+            </section>
+
+            <section class="card">
+                <h2>Sign-in activity</h2>
+                @if (activity.FailedSincePreviousLogin > 0)
+                {
+                    <p role="alert" class="warning">
+                        @activity.FailedSincePreviousLogin failed sign-in @(activity.FailedSincePreviousLogin == 1 ? "attempt" : "attempts")
+                        on your account since your previous sign-in. If that wasn't you, change your password.
+                    </p>
+                }
+                <dl>
+                    <dt>This sign-in</dt>
+                    <dd>@When(activity.LastLoginAt)@Ip(activity.LastLoginIp)</dd>
+                    <dt>Previous sign-in</dt>
+                    <dd>@(activity.PreviousLoginAt is null ? "This is your first sign-in." : When(activity.PreviousLoginAt))</dd>
+                </dl>
+
+                @if (activity.Recent.Count > 0)
+                {
+                    <details>
+                        <summary>Recent attempts</summary>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>When</th>
+                                    <th>Result</th>
+                                    <th>IP</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in activity.Recent)
+                                {
+                                    <tr class="@(a.Succeeded ? "" : "failed")">
+                                        <td>@When(a.AttemptedAt)</td>
+                                        <td>@(a.Succeeded ? "Signed in" : "Failed")</td>
+                                        <td>@(a.IpAddress ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </details>
+                }
+            </section>
+        </div>
     }
 </div>
 
 <style>
     .dashboard {
-        max-width: 1200px;
+        max-width: 1100px;
         margin: 0 auto;
         padding: 24px;
+    }
+
+    .dashboard .subtitle {
+        margin-top: -8px;
+        color: #555;
+    }
+
+    .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        align-items: start;
+        margin-top: 24px;
+    }
+
+    .card {
+        padding: 20px 24px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        background: white;
+    }
+
+    .card h2 {
+        font-size: 18px;
+        margin: 0 0 12px;
+    }
+
+    .card dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 6px 16px;
+        margin: 0;
+    }
+
+    .card dt {
+        font-weight: 600;
+        color: #555;
+    }
+
+    .card dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .points {
+        background: #2455a4;
+        color: white;
+        border-color: #2455a4;
+    }
+
+    .points a {
+        color: white;
+    }
+
+    .balance {
+        font-size: 44px;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.1;
+    }
+
+    .hint {
+        margin: 8px 0 0;
+        opacity: 0.9;
+    }
+
+    .warning {
+        padding: 10px 12px;
+        margin: 0 0 14px;
+        border-radius: 6px;
+        background: #fff4e5;
+        color: #7a3e00;
+        border: 1px solid #f0c48a;
+    }
+
+    .error {
+        color: #b42318;
+    }
+
+    details {
+        margin-top: 14px;
+    }
+
+    summary {
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .card table {
+        width: 100%;
+        margin-top: 8px;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+
+    .card th, .card td {
+        text-align: left;
+        padding: 6px 4px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .card tr.failed td {
+        color: #b42318;
     }
 </style>
 
@@ -43,16 +212,53 @@
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     private Account? account;
+    private LoginActivity? activity;
+    private string? loadError;
 
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthState).User;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
         using var client = HttpClientFactory.CreateClient("Backend");
-        account = await client.GetFromJsonAsync<Account>($"users/{id}");
+        try
+        {
+            account = await client.GetFromJsonAsync<Account>($"users/{id}");
+            activity = await client.GetFromJsonAsync<LoginActivity>($"users/{id}/logins");
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't load your account right now. Try again in a moment.";
+        }
     }
 
-    private class Account
+    private static string AccountLabel(string userType) => userType switch
+    {
+        "driver" => "Driver account",
+        "sponsor" => "Sponsor account",
+        "admin" => "Administrator account",
+        _ => "Account"
+    };
+
+    private static string Shown(string? value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
+
+    private static string Ip(string? ip) => string.IsNullOrEmpty(ip) ? "" : $" from {ip}";
+
+    // stored in utc, shown as an absolute time plus how long ago so it reads at a glance
+    private static string When(DateTime? utc)
+    {
+        if (utc is null) return "—";
+        var t = DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc);
+        var ago = DateTime.UtcNow - t;
+        var rel = ago.TotalSeconds < 60 ? "just now"
+            : ago.TotalMinutes < 60 ? $"{(int)ago.TotalMinutes} min ago"
+            : ago.TotalHours < 24 ? $"{(int)ago.TotalHours} h ago"
+            : ago.TotalDays < 30 ? $"{(int)ago.TotalDays} d ago"
+            : "";
+        var abs = t.ToString("yyyy-MM-dd HH:mm") + " UTC";
+        return rel == "" ? abs : $"{abs} ({rel})";
+    }
+
+    private sealed class Account
     {
         public int Id { get; set; }
         public string UserType { get; set; } = "";
@@ -61,5 +267,22 @@
         public string PhoneNumber { get; set; } = "";
         public string Address { get; set; } = "";
         public string? CompanyName { get; set; }
+        public int Points { get; set; }
+    }
+
+    private sealed class LoginActivity
+    {
+        public DateTime? LastLoginAt { get; set; }
+        public string? LastLoginIp { get; set; }
+        public DateTime? PreviousLoginAt { get; set; }
+        public int FailedSincePreviousLogin { get; set; }
+        public List<LoginEvent> Recent { get; set; } = new();
+    }
+
+    private sealed class LoginEvent
+    {
+        public DateTime AttemptedAt { get; set; }
+        public bool Succeeded { get; set; }
+        public string? IpAddress { get; set; }
     }
 }
