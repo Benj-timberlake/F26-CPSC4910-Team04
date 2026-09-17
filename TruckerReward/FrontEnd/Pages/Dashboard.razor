@@ -5,11 +5,11 @@
 
 <PageTitle>Dashboard</PageTitle>
 
-<div class="dashboard">
+<div class="tr-page">
     @if (loadError != null)
     {
         <h1>Dashboard</h1>
-        <p role="alert" class="error">@loadError</p>
+        <p role="alert" class="tr-alert-error">@loadError</p>
     }
     else if (account == null || activity == null)
     {
@@ -19,21 +19,21 @@
     else
     {
         <h1>Welcome back, @account.Username</h1>
-        <p class="subtitle">@AccountLabel(account.UserType)</p>
+        <p class="tr-subtitle">@AccountLabel(account.UserType)</p>
 
-        <div class="cards">
+        <div class="tr-cards">
             @if (account.UserType == "driver")
             {
-                <section class="card points">
+                <section class="tr-card points">
                     <h2>Points</h2>
                     <p class="balance">@account.Points.ToString("N0")</p>
                     <p class="hint">Earned for good driving. Spend them in your sponsor's <a href="products">product catalog</a>.</p>
                 </section>
             }
 
-            <section class="card">
+            <section class="tr-card">
                 <h2>@AccountLabel(account.UserType)</h2>
-                <dl>
+                <dl class="tr-kv">
                     <dt>Username</dt>
                     <dd>@account.Username</dd>
                     @if (account.UserType == "sponsor")
@@ -50,16 +50,16 @@
                 </dl>
             </section>
 
-            <section class="card">
+            <section class="tr-card">
                 <h2>Sign-in activity</h2>
                 @if (activity.FailedSincePreviousLogin > 0)
                 {
-                    <p role="alert" class="warning">
+                    <p role="alert" class="tr-alert-warning">
                         @activity.FailedSincePreviousLogin failed sign-in @(activity.FailedSincePreviousLogin == 1 ? "attempt" : "attempts")
                         on your account since your previous sign-in. If that wasn't you, change your password.
                     </p>
                 }
-                <dl>
+                <dl class="tr-kv">
                     <dt>This sign-in</dt>
                     <dd>@When(activity.LastLoginAt)@Ip(activity.LastLoginIp)</dd>
                     <dt>Previous sign-in</dt>
@@ -70,7 +70,7 @@
                 {
                     <details>
                         <summary>Recent attempts</summary>
-                        <table>
+                        <table class="tr-table">
                             <thead>
                                 <tr>
                                     <th>When</th>
@@ -97,58 +97,10 @@
 </div>
 
 <style>
-    .dashboard {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 24px;
-    }
-
-    .dashboard .subtitle {
-        margin-top: -8px;
-        color: #555;
-    }
-
-    .cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 20px;
-        align-items: start;
-        margin-top: 24px;
-    }
-
-    .card {
-        padding: 20px 24px;
-        border: 1px solid #ddd;
-        border-radius: 10px;
-        background: white;
-    }
-
-    .card h2 {
-        font-size: 18px;
-        margin: 0 0 12px;
-    }
-
-    .card dl {
-        display: grid;
-        grid-template-columns: max-content 1fr;
-        gap: 6px 16px;
-        margin: 0;
-    }
-
-    .card dt {
-        font-weight: 600;
-        color: #555;
-    }
-
-    .card dd {
-        margin: 0;
-        overflow-wrap: anywhere;
-    }
-
     .points {
-        background: #2455a4;
+        background: var(--brand);
+        border-color: var(--brand);
         color: white;
-        border-color: #2455a4;
     }
 
     .points a {
@@ -158,26 +110,13 @@
     .balance {
         font-size: 44px;
         font-weight: 700;
-        margin: 0;
         line-height: 1.1;
+        margin: 0;
     }
 
     .hint {
         margin: 8px 0 0;
         opacity: 0.9;
-    }
-
-    .warning {
-        padding: 10px 12px;
-        margin: 0 0 14px;
-        border-radius: 6px;
-        background: #fff4e5;
-        color: #7a3e00;
-        border: 1px solid #f0c48a;
-    }
-
-    .error {
-        color: #b42318;
     }
 
     details {
@@ -189,21 +128,8 @@
         font-weight: 600;
     }
 
-    .card table {
-        width: 100%;
+    details .tr-table {
         margin-top: 8px;
-        border-collapse: collapse;
-        font-size: 14px;
-    }
-
-    .card th, .card td {
-        text-align: left;
-        padding: 6px 4px;
-        border-bottom: 1px solid #eee;
-    }
-
-    .card tr.failed td {
-        color: #b42318;
     }
 </style>
 

@@ -1,7 +1,7 @@
 @namespace FrontEnd.Shared
 
 <nav class="account-bar">
-    <a href="">Home</a>
+    <a class="brand" href="">TruckerReward</a>
     <a href="products">Products</a>
     <AuthorizeView>
         <Authorized>
@@ -30,8 +30,13 @@
         align-items: center;
         gap: 12px 18px;
         padding: 12px 24px;
-        background: #2455a4;
+        background: var(--brand);
         color: white;
+    }
+
+    .account-bar .brand {
+        font-weight: 700;
+        margin-right: 8px;
     }
 
     .account-bar a {
