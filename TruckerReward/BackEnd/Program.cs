@@ -15,6 +15,9 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySQL(connectionString));
 
+// timestamps on login attempts, resets and lockouts; tests swap in a fake
+builder.Services.AddSingleton(TimeProvider.System);
+
 // Allow endpoints to make HTTP requests to eBay.
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<EbayClient>();

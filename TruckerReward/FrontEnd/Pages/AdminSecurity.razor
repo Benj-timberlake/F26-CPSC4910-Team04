@@ -60,7 +60,7 @@
                             {
                                 <tr class="@(a.Succeeded ? "" : "failed")">
                                     <td>@Time(a.AttemptedAt)</td>
-                                    <td>@a.Username @if (a.UserId is null) { <span class="tr-muted">(no such user)</span> }</td>
+                                    <td>@a.Username @if (a.UserId is null) { <span class="tr-muted"> (no such user)</span> }</td>
                                     <td>@(a.Succeeded ? "Signed in" : "Failed")</td>
                                     <td>@(a.IpAddress ?? "—")</td>
                                 </tr>
