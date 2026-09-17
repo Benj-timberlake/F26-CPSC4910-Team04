@@ -1,5 +1,6 @@
 @page "/register"
 @inject NavigationManager Nav
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Create account</PageTitle>
 
@@ -34,7 +35,7 @@
 
             <label for="password">Password</label>
             <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" />
-            <p class="help">At least 8 characters.</p>
+            <p class="help">@policy</p>
 
             <label for="phoneNumber">Phone</label>
             <input id="phoneNumber" name="phoneNumber" type="tel" autocomplete="tel" />
@@ -59,9 +60,11 @@
 @code {
     private string userType = "driver";
     private string? error;
+    private string? policy;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         error = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["error"];
+        policy = await PasswordPolicyText.Load(HttpClientFactory);
     }
 }

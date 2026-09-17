@@ -10,13 +10,9 @@
         <h1>Log in</h1>
         <p class="tr-subtitle">Drivers, sponsors and administrators all sign in here.</p>
 
-        @if (error == "1")
+        @if (message is not null)
         {
-            <p role="alert" class="tr-alert-error">Wrong username or password.</p>
-        }
-        else if (error == "sso")
-        {
-            <p role="alert" class="tr-alert-error">Sign in with that provider didn't work. Try again or use a password.</p>
+            <p role="alert" class="@(error is null ? "tr-alert-success" : "tr-alert-error")">@message</p>
         }
 
         <form class="tr-form" method="post" action="account/login">
@@ -64,6 +60,7 @@
 
 @code {
     private string? error;
+    private string? message;
     private string? returnUrl;
     private List<AuthenticationScheme> providers = new();
 
@@ -72,6 +69,15 @@
         var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
         error = query["error"];
         returnUrl = query["returnUrl"];
+        // one message for a bad username or a bad password, saying which would confirm which usernames exist
+        message = error switch
+        {
+            "1" => "Wrong username or password.",
+            "locked" => "Too many failed attempts. Wait a few minutes and try again.",
+            "sso" => "Sign in with that provider didn't work. Try again or use a password.",
+            null when query["reset"] == "1" => "Your password has been reset. Log in with the new one.",
+            _ => null
+        };
 
         // only google/microsoft have a display name, the cookie schemes don't
         providers = (await Schemes.GetAllSchemesAsync())

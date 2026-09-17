@@ -43,7 +43,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     {
         username,
         email,
-        password = "hunter22",
+        password = "Hunter22x",
         userType = "driver",
         phoneNumber = "864-555-0100",
         address = "1 Main St"
@@ -59,19 +59,19 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         var user = await Db().Users.SingleAsync();
         Assert.Equal("bob", user.Username);
         Assert.NotNull(user.Password);
-        Assert.NotEqual("hunter22", user.Password);
-        Assert.DoesNotContain("hunter22", user.Password);
+        Assert.NotEqual("Hunter22x", user.Password);
+        Assert.DoesNotContain("Hunter22x", user.Password);
 
         var body = await response.Content.ReadAsStringAsync();
-        Assert.DoesNotContain("hunter22", body);
+        Assert.DoesNotContain("Hunter22x", body);
         Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
     [InlineData("")]
-    [InlineData("short7!")]
-    [InlineData("        ")]
-    public async Task ShortPasswordIsRejected(string password)
+    [InlineData("Short7!")]
+    [InlineData("nouppercase1")]
+    public async Task WeakPasswordIsRejected(string password)
     {
         var client = await Start();
         var response = await client.PostAsJsonAsync("/auth/register", new
@@ -109,7 +109,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         {
             username = "acme",
             email = "acme@example.com",
-            password = "hunter22",
+            password = "Hunter22x",
             userType = "sponsor",
             companyName = "Acme Freight"
         });
@@ -132,7 +132,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         {
             username = "acme",
             email = "acme@example.com",
-            password = "hunter22",
+            password = "Hunter22x",
             userType = "sponsor"
         });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -146,7 +146,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         {
             username = "root",
             email = "root@example.com",
-            password = "hunter22",
+            password = "Hunter22x",
             userType = "admin"
         });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -157,7 +157,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     {
         var client = await Start();
         await client.PostAsJsonAsync("/auth/register", Driver());
-        var response = await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "hunter22", ipAddress = "10.0.0.5" });
+        var response = await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x", ipAddress = "10.0.0.5" });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var attempt = await Db().LoginAttempts.SingleAsync();
@@ -198,7 +198,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     {
         var client = await Start();
         await client.PostAsJsonAsync("/auth/register", Driver());
-        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "hunter22" });
+        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x" });
         await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "nope" });
         await client.PostAsJsonAsync("/auth/login", new { username = "eve", password = "nope" });
 
@@ -287,7 +287,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     {
         var client = await Start();
         await client.PostAsJsonAsync("/auth/register", Driver());
-        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "hunter22", ipAddress = "10.0.0.5" });
+        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x", ipAddress = "10.0.0.5" });
         var id = (await Db().Users.SingleAsync()).Id;
 
         var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{id}/logins");
@@ -317,7 +317,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
                 new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, AttemptedAt = t.AddHours(3) });
             await db.SaveChangesAsync();
         }
-        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "hunter22", ipAddress = "10.0.0.5" });
+        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x", ipAddress = "10.0.0.5" });
 
         var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{id}/logins");
         Assert.Equal("10.0.0.5", activity!.LastLoginIp);
@@ -333,9 +333,9 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         var client = await Start();
         await client.PostAsJsonAsync("/auth/register", Driver());
         await client.PostAsJsonAsync("/auth/register", Driver(username: "amy", email: "amy@example.com"));
-        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "hunter22" });
+        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x" });
         await client.PostAsJsonAsync("/auth/login", new { username = "amy", password = "wrong" });
-        await client.PostAsJsonAsync("/auth/login", new { username = "amy", password = "hunter22" });
+        await client.PostAsJsonAsync("/auth/login", new { username = "amy", password = "Hunter22x" });
         var bob = await Db().Users.SingleAsync(u => u.Username == "bob");
 
         var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{bob.Id}/logins");
