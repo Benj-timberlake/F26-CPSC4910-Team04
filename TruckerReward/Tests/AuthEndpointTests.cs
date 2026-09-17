@@ -228,6 +228,114 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public async Task NewDriverStartsWithZeroPoints()
+    {
+        var client = await Start();
+        await client.PostAsJsonAsync("/auth/register", Driver());
+        var user = await Db().Users.SingleAsync();
+
+        var details = await client.GetFromJsonAsync<UserDetails>($"/users/{user.Id}");
+        Assert.NotNull(details);
+        Assert.Equal(0, details.Points);
+        Assert.Equal("driver", details.UserType);
+        Assert.Null(details.CompanyName);
+    }
+
+    [Fact]
+    public async Task UserDetailsIncludesStoredPoints()
+    {
+        var client = await Start();
+        await client.PostAsJsonAsync("/auth/register", Driver());
+        using (var db = Db())
+        {
+            var user = await db.Users.SingleAsync();
+            user.Points = 1250;
+            await db.SaveChangesAsync();
+        }
+        var id = (await Db().Users.SingleAsync()).Id;
+
+        var details = await client.GetFromJsonAsync<UserDetails>($"/users/{id}");
+        Assert.Equal(1250, details!.Points);
+    }
+
+    [Fact]
+    public async Task UnknownUserDetailsIs404()
+    {
+        var client = await Start();
+        var response = await client.GetAsync("/users/999");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task LoginActivityForFirstLoginHasNoPreviousLogin()
+    {
+        var client = await Start();
+        await client.PostAsJsonAsync("/auth/register", Driver());
+        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "hunter22", ipAddress = "10.0.0.5" });
+        var id = (await Db().Users.SingleAsync()).Id;
+
+        var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{id}/logins");
+        Assert.NotNull(activity);
+        Assert.NotNull(activity.LastLoginAt);
+        Assert.Equal("10.0.0.5", activity.LastLoginIp);
+        Assert.Null(activity.PreviousLoginAt);
+        Assert.Equal(0, activity.FailedSincePreviousLogin);
+        Assert.Single(activity.Recent);
+    }
+
+    [Fact]
+    public async Task LoginActivityCountsFailuresSincePreviousLogin()
+    {
+        var client = await Start();
+        await client.PostAsJsonAsync("/auth/register", Driver());
+        var id = (await Db().Users.SingleAsync()).Id;
+
+        // an old failure, a login, then two failures and today's login. only the two count.
+        using (var db = Db())
+        {
+            var t = DateTime.UtcNow.AddDays(-3);
+            db.LoginAttempts.AddRange(
+                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, AttemptedAt = t },
+                new LoginAttempt { Username = "bob", UserId = id, Succeeded = true, IpAddress = "1.1.1.1", AttemptedAt = t.AddHours(1) },
+                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, AttemptedAt = t.AddHours(2) },
+                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, AttemptedAt = t.AddHours(3) });
+            await db.SaveChangesAsync();
+        }
+        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "hunter22", ipAddress = "10.0.0.5" });
+
+        var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{id}/logins");
+        Assert.Equal("10.0.0.5", activity!.LastLoginIp);
+        Assert.NotNull(activity.PreviousLoginAt);
+        Assert.Equal(2, activity.FailedSincePreviousLogin);
+        Assert.Equal(5, activity.Recent.Count);
+        Assert.True(activity.Recent[0].AttemptedAt >= activity.Recent[1].AttemptedAt, "newest first");
+    }
+
+    [Fact]
+    public async Task LoginActivityOnlyShowsThatUsersAttempts()
+    {
+        var client = await Start();
+        await client.PostAsJsonAsync("/auth/register", Driver());
+        await client.PostAsJsonAsync("/auth/register", Driver(username: "amy", email: "amy@example.com"));
+        await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "hunter22" });
+        await client.PostAsJsonAsync("/auth/login", new { username = "amy", password = "wrong" });
+        await client.PostAsJsonAsync("/auth/login", new { username = "amy", password = "hunter22" });
+        var bob = await Db().Users.SingleAsync(u => u.Username == "bob");
+
+        var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{bob.Id}/logins");
+        Assert.Single(activity!.Recent);
+        Assert.Equal(0, activity.FailedSincePreviousLogin);
+    }
+
+    [Fact]
+    public async Task LoginActivityForUnknownUserIs404()
+    {
+        var client = await Start();
+        var response = await client.GetAsync("/users/999/logins");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (app is not null) await app.DisposeAsync();
