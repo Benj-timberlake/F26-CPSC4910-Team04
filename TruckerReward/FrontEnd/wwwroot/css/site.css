@@ -1,41 +1,214 @@
 @import url('open-iconic/font/css/open-iconic-bootstrap.min.css');
 
+/* one place for the colours and shapes every page shares, so the pages themselves only
+   carry layout that is really theirs */
+:root {
+    --brand: #2455a4;
+    --brand-dark: #1b4383;
+    --ink: #1f2933;
+    --muted: #5f6b7a;
+    --line: #d9dee5;
+    --surface: #ffffff;
+    --bg: #f4f6f9;
+    --danger: #b42318;
+    --danger-bg: #fdf1f0;
+    --warn: #7a3e00;
+    --warn-bg: #fff4e5;
+    --warn-line: #f0c48a;
+    --radius: 10px;
+}
+
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
 }
 
 h1:focus {
     outline: none;
 }
 
-a, .btn-link {
-    color: #0071c1;
-}
-
-.btn-primary {
-    color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+a {
+    color: var(--brand);
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+    box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
 }
 
-.content {
-    padding-top: 1.1rem;
+/* page containers */
+.tr-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px;
 }
 
-.valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+.tr-page-narrow {
+    max-width: 440px;
+    margin: 48px auto;
+    padding: 0 16px;
 }
 
-.invalid {
-    outline: 1px solid red;
+.tr-page h1, .tr-page-narrow h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 4px;
 }
 
-.validation-message {
-    color: red;
+.tr-subtitle {
+    color: var(--muted);
+    margin: 0 0 20px;
+}
+
+/* cards */
+.tr-card {
+    padding: 20px 24px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.tr-card h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 12px;
+}
+
+.tr-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+/* label / value pairs */
+.tr-kv {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 16px;
+    margin: 0;
+}
+
+.tr-kv dt {
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.tr-kv dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* forms */
+.tr-form label {
+    display: block;
+    margin-top: 14px;
+    font-weight: 600;
+}
+
+.tr-form input, .tr-form select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #c4ccd6;
+    border-radius: 6px;
+    font-size: 16px;
+    background: var(--surface);
+}
+
+.tr-form input:focus, .tr-form select:focus {
+    outline: 2px solid var(--brand);
+    outline-offset: 1px;
+    border-color: var(--brand);
+}
+
+.tr-form .help {
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+/* buttons and button-like links */
+.tr-btn, .tr-btn-outline {
+    display: inline-block;
+    padding: 10px 16px;
+    border: 1px solid var(--brand);
+    border-radius: 6px;
+    font-size: 16px;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.tr-btn {
+    background: var(--brand);
+    color: white;
+}
+
+.tr-btn:hover {
+    background: var(--brand-dark);
+    color: white;
+}
+
+.tr-btn-outline {
+    background: var(--surface);
+    color: var(--brand);
+}
+
+.tr-btn-outline:hover {
+    background: #eef2f9;
+}
+
+.tr-btn-block {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    text-align: center;
+}
+
+/* messages */
+.tr-alert-error, .tr-alert-warning {
+    padding: 10px 12px;
+    margin: 0 0 14px;
+    border-radius: 6px;
+    border: 1px solid;
+}
+
+.tr-alert-error {
+    color: var(--danger);
+    background: var(--danger-bg);
+    border-color: #f1b9b4;
+}
+
+.tr-alert-warning {
+    color: var(--warn);
+    background: var(--warn-bg);
+    border-color: var(--warn-line);
+}
+
+/* plain data tables */
+.tr-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.tr-table th, .tr-table td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid #eceff3;
+}
+
+.tr-table th {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.tr-table tr.failed td {
+    color: var(--danger);
+}
+
+.tr-table-wrap {
+    overflow-x: auto;
 }
 
 #blazor-error-ui {

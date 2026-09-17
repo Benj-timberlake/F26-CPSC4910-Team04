@@ -4,10 +4,11 @@
 
 <PageTitle>Login attempts</PageTitle>
 
-<div class="attempts">
+<div class="tr-page">
     <h1>Login attempts</h1>
+    <p class="tr-subtitle">Every password and single sign-on attempt, newest first. Unknown usernames are listed too.</p>
 
-    <label>
+    <label class="filter">
         <input type="checkbox" @bind="failedOnly" @bind:after="Load" />
         Failed only
     </label>
@@ -22,7 +23,8 @@
     }
     else
     {
-        <table class="table">
+        <div class="tr-card tr-table-wrap">
+        <table class="tr-table">
             <thead>
                 <tr>
                     <th>When (UTC)</th>
@@ -35,29 +37,28 @@
             <tbody>
                 @foreach (var a in attempts)
                 {
-                    <tr class="@(a.Succeeded ? "" : "table-danger")">
+                    <tr class="@(a.Succeeded ? "" : "failed")">
                         <td>@a.AttemptedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
                         <td>@a.Username</td>
-                        <td>@(a.UserId?.ToString() ?? "unknown user")</td>
-                        <td>@(a.Succeeded ? "ok" : "failed")</td>
-                        <td>@a.IpAddress</td>
+                        <td>@(a.UserId?.ToString() ?? "no such user")</td>
+                        <td>@(a.Succeeded ? "Signed in" : "Failed")</td>
+                        <td>@(a.IpAddress ?? "—")</td>
                     </tr>
                 }
             </tbody>
         </table>
+        </div>
     }
 </div>
 
 <style>
-    .attempts {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 24px;
+    .filter {
+        display: block;
+        margin: 0 0 16px;
     }
 
-    .attempts label {
-        display: block;
-        margin: 16px 0;
+    .filter input {
+        margin-right: 6px;
     }
 </style>
 
