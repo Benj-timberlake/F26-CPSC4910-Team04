@@ -2,42 +2,18 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using BackEnd.Models;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace TruckerReward.Tests;
 
 public sealed class AuthEndpointTests : IAsyncDisposable
 {
-    // sqlite in memory instead of mysql so the tests don't need docker
-    private readonly SqliteConnection connection = new("DataSource=:memory:");
-    private WebApplication? app;
+    private readonly TestApp app = new();
 
-    private async Task<HttpClient> Start()
-    {
-        await connection.OpenAsync();
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(connection));
-        app = builder.Build();
-        app.MapAuthEndpoints();
-        using (var scope = app.Services.CreateScope())
-        {
-            // the mysql enum column type isn't valid in sqlite
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var script = db.Database.GenerateCreateScript().Replace("enum('admin','sponsor','driver')", "TEXT");
-            await db.Database.ExecuteSqlRawAsync(script);
-        }
-        await app.StartAsync();
-        return app.GetTestClient();
-    }
+    private Task<HttpClient> Start() => app.Start();
 
-    private AppDbContext Db() => app!.Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>();
+    private AppDbContext Db() => app.Db();
 
     private static object Driver(string username = "bob", string email = "bob@example.com") => new
     {
@@ -351,9 +327,5 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        if (app is not null) await app.DisposeAsync();
-        await connection.DisposeAsync();
-    }
+    public ValueTask DisposeAsync() => app.DisposeAsync();
 }

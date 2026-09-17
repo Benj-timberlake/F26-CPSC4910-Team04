@@ -175,7 +175,7 @@ public static class AuthEndpoints
                 query = query.Where(a => !a.Succeeded);
             var attempts = await query
                 .OrderByDescending(a => a.AttemptedAt)
-                .Take(limit is > 0 and <= 500 ? limit.Value : 100)
+                .Take(Paging.Limit(limit))
                 .ToListAsync();
             return Results.Ok(attempts);
         });
