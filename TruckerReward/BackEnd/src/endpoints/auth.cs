@@ -56,10 +56,12 @@ public static class AuthEndpoints
             return Results.Created($"/users/{user.Id}", ToProfile(user));
         });
 
-        app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db) =>
+        app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db, IEmailSender email, TimeProvider clock) =>
         {
             var username = req.Username?.Trim() ?? "";
+            var now = clock.GetUtcNow().UtcDateTime;
             var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username);
+            var lockedUntil = await Lockout.LockedUntil(db, username, now);
 
             // always run a hash check, even when the username doesn't exist or the account is sso only,
             // so the response time doesn't tell an attacker which usernames are real
@@ -67,26 +69,34 @@ public static class AuthEndpoints
                 user ?? dummyUser,
                 user?.Password ?? dummyHash,
                 req.Password ?? "") != PasswordVerificationResult.Failed
-                && user?.Password is not null;
+                && user?.Password is not null
+                && lockedUntil is null;
 
-            // every attempt is logged, unknown usernames included, so admins can spot guessing
+            // every attempt is logged, unknown usernames and refused-while-locked included
             db.LoginAttempts.Add(new LoginAttempt
             {
                 Username = username,
                 UserId = user?.Id,
                 Succeeded = ok,
                 IpAddress = req.IpAddress,
-                AttemptedAt = DateTime.UtcNow
+                AttemptedAt = now
             });
             await db.SaveChangesAsync();
 
-            return ok
-                ? Results.Ok(ToProfile(user!))
-                : Results.Unauthorized();
+            if (ok)
+                return Results.Ok(ToProfile(user!));
+            if (lockedUntil is not null)
+                return Results.Json(new { message = "Too many failed attempts.", lockedUntil }, statusCode: StatusCodes.Status423Locked);
+
+            // this failure may be the one that starts a lock, tell the admins once
+            if (await Lockout.LockedUntil(db, username, now) is { } until)
+                await Notify.Admins(db, email, $"Account locked: {username}",
+                    $"{Lockout.MaxFailures} failed sign-in attempts in a row for {username} from {req.IpAddress ?? "an unknown address"}. The account is locked until {until:u}.");
+            return Results.Unauthorized();
         });
 
         // called after a google/microsoft sign in on the frontend
-        app.MapPost("/auth/external", async (ExternalLoginRequest req, AppDbContext db) =>
+        app.MapPost("/auth/external", async (ExternalLoginRequest req, AppDbContext db, TimeProvider clock) =>
         {
             if (string.IsNullOrWhiteSpace(req.Email))
                 return Results.BadRequest(new { message = "The sign in provider did not return an email." });
@@ -113,7 +123,7 @@ public static class AuthEndpoints
                 UserId = user.Id,
                 Succeeded = true,
                 IpAddress = req.IpAddress,
-                AttemptedAt = DateTime.UtcNow
+                AttemptedAt = clock.GetUtcNow().UtcDateTime
             });
             await db.SaveChangesAsync();
 
@@ -172,6 +182,9 @@ public static class AuthEndpoints
                 recent,
                 passwordChangedAt));
         });
+
+        app.MapGet("/admin/locked-accounts", async (AppDbContext db, TimeProvider clock) =>
+            Results.Ok(await Lockout.All(db, clock.GetUtcNow().UtcDateTime)));
 
         app.MapGet("/admin/login-attempts", async (bool failedOnly, int? limit, AppDbContext db) =>
         {
