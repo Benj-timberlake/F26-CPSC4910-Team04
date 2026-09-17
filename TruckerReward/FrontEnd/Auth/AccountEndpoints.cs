@@ -30,6 +30,8 @@ public static class AccountEndpoints
 
             if (response.StatusCode == HttpStatusCode.Unauthorized)
                 return Results.Redirect("/login?error=1" + ReturnParam(returnUrl));
+            if (response.StatusCode == HttpStatusCode.Locked)
+                return Results.Redirect("/login?error=locked" + ReturnParam(returnUrl));
             response.EnsureSuccessStatusCode();
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
@@ -55,11 +57,7 @@ public static class AccountEndpoints
             });
 
             if (!response.IsSuccessStatusCode)
-            {
-                var problem = await response.Content.ReadFromJsonAsync<ErrorBody>();
-                var message = problem?.Message ?? "Could not create the account.";
-                return Results.Redirect("/register?error=" + Uri.EscapeDataString(message));
-            }
+                return Results.Redirect("/register?error=" + await ErrorParam(response, "Could not create the account."));
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await TruckerSignIn.SignInAsync(http, user!);
@@ -102,6 +100,48 @@ public static class AccountEndpoints
             return Results.LocalRedirect(SafeReturn(returnUrl));
         });
 
+        app.MapPost("/account/forgot", async ([FromForm] string email, HttpContext http, IHttpClientFactory clients) =>
+        {
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/forgot", new
+            {
+                email,
+                ipAddress = http.Connection.RemoteIpAddress?.ToString()
+            });
+            // the backend answers the same way for unknown emails, so the page always says "sent"
+            return Results.Redirect(response.IsSuccessStatusCode ? "/forgot-password?sent=1" : "/forgot-password?error=1");
+        }).DisableAntiforgery();
+
+        app.MapPost("/account/reset", async ([FromForm] string token, [FromForm] string password, HttpContext http, IHttpClientFactory clients) =>
+        {
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/reset", new
+            {
+                token,
+                newPassword = password,
+                ipAddress = http.Connection.RemoteIpAddress?.ToString()
+            });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect($"/reset-password?token={Uri.EscapeDataString(token)}&error=" + await ErrorParam(response, "Could not reset the password."));
+            return Results.Redirect("/login?reset=1");
+        }).DisableAntiforgery();
+
+        app.MapPost("/account/change-password", async (
+            [FromForm] string? currentPassword,
+            [FromForm] string password,
+            HttpContext http,
+            IHttpClientFactory clients) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/password", new
+            {
+                currentPassword,
+                newPassword = password,
+                ipAddress = http.Connection.RemoteIpAddress?.ToString()
+            });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/account/password?error=" + await ErrorParam(response, "Could not change the password."));
+            return Results.Redirect("/dashboard?password=changed");
+        }).RequireAuthorization().DisableAntiforgery();
+
         app.MapPost("/account/logout", async (HttpContext http) =>
         {
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -114,6 +154,14 @@ public static class AccountEndpoints
 
     private static string ReturnParam(string? returnUrl, bool first = false) =>
         string.IsNullOrEmpty(returnUrl) ? "" : (first ? "?" : "&") + "returnUrl=" + Uri.EscapeDataString(returnUrl);
+
+    // the backend's { message } as a query value, or the fallback when the body isn't one
+    private static async Task<string> ErrorParam(HttpResponseMessage response, string fallback)
+    {
+        ErrorBody? body = null;
+        try { body = await response.Content.ReadFromJsonAsync<ErrorBody>(); } catch (System.Text.Json.JsonException) { }
+        return Uri.EscapeDataString(body?.Message ?? fallback);
+    }
 
     private sealed record ErrorBody(string? Message);
 }

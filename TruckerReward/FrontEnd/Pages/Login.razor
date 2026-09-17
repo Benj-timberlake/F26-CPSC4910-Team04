@@ -25,6 +25,7 @@
             <input id="password" name="password" type="password" required autocomplete="current-password" />
 
             <button type="submit" class="tr-btn tr-btn-block">Log in</button>
+            <p class="tr-alt"><a href="forgot-password">Forgot your password?</a></p>
         </form>
 
         @if (providers.Count > 0)
@@ -39,7 +40,7 @@
         }
     </div>
 
-    <p class="alt">No account yet? <a href="register">Create one</a></p>
+    <p class="tr-alt">No account yet? <a href="register">Create one</a></p>
 </div>
 
 <style>
@@ -50,11 +51,6 @@
 
     .sso .tr-btn-block {
         margin-top: 8px;
-    }
-
-    .alt {
-        margin-top: 20px;
-        text-align: center;
     }
 </style>
 
