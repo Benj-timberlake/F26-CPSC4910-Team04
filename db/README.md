@@ -15,6 +15,18 @@ To wipe and start over:
 docker compose down -v
 ```
 
+## Schema changes
+
+`schema.sql` is the full schema for a fresh database. When a table changes, also add a numbered
+file under `migrations/` with the `ALTER` for databases that already exist, and run it against
+your local container and RDS:
+
+```
+docker compose exec -T mysql mysql -uroot -proot truckerreward < db/migrations/001_users_points.sql
+```
+
+(or `docker compose down -v` locally to rebuild from `schema.sql`).
+
 ## RDS
 
 The same `schema.sql` needs to be run against the RDS instance. For prod the connection

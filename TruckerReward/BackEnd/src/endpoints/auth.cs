@@ -124,7 +124,43 @@ public static class AuthEndpoints
                 .Where(s => s.UserId == id)
                 .Select(s => s.CompanyName)
                 .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.Email, user.PhoneNumber, user.Address, company));
+            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.Email, user.PhoneNumber, user.Address, company, user.Points));
+        });
+
+        // what the dashboard shows under "sign-in activity": when this login happened, when the one
+        // before it happened and how many failures there were in between
+        app.MapGet("/users/{id:int}/logins", async (int id, AppDbContext db) =>
+        {
+            if (!await db.Users.AnyAsync(u => u.Id == id))
+                return Results.NotFound();
+
+            var attempts = db.LoginAttempts.AsNoTracking().Where(a => a.UserId == id);
+            var logins = await attempts
+                .Where(a => a.Succeeded)
+                .OrderByDescending(a => a.AttemptedAt)
+                .ThenByDescending(a => a.Id)
+                .Take(2)
+                .ToListAsync();
+            var last = logins.ElementAtOrDefault(0);
+            var previous = logins.ElementAtOrDefault(1);
+
+            var failedSincePrevious = previous is null
+                ? await attempts.CountAsync(a => !a.Succeeded)
+                : await attempts.CountAsync(a => !a.Succeeded && a.AttemptedAt > previous.AttemptedAt);
+
+            var recent = await attempts
+                .OrderByDescending(a => a.AttemptedAt)
+                .ThenByDescending(a => a.Id)
+                .Take(10)
+                .Select(a => new LoginEvent(a.AttemptedAt, a.Succeeded, a.IpAddress))
+                .ToListAsync();
+
+            return Results.Ok(new LoginActivity(
+                last?.AttemptedAt,
+                last?.IpAddress,
+                previous?.AttemptedAt,
+                failedSincePrevious,
+                recent));
         });
 
         app.MapGet("/admin/login-attempts", async (bool failedOnly, int? limit, AppDbContext db) =>
@@ -184,4 +220,13 @@ public record UserProfile(int Id, string UserType, string Username, string Email
 
 public record ExternalLoginRequest(string Provider, string Email, string? Name, string? IpAddress);
 
-public record UserDetails(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, string? CompanyName);
+public record UserDetails(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, string? CompanyName, int Points);
+
+public record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
+
+public record LoginActivity(
+    DateTime? LastLoginAt,
+    string? LastLoginIp,
+    DateTime? PreviousLoginAt,
+    int FailedSincePreviousLogin,
+    List<LoginEvent> Recent);

@@ -18,4 +18,6 @@ public partial class User
     public string PhoneNumber { get; set; } = null!;
 
     public string Address { get; set; } = null!;
+
+    public int Points { get; set; }
 }
