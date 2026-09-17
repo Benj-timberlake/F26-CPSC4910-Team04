@@ -1,5 +1,4 @@
 using FrontEnd.Auth;
-using FrontEnd.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +14,6 @@ void ConfigureBackendClient(HttpClient client)
     client.BaseAddress = new Uri(url);
 }
 
-builder.Services.AddHttpClient<TruckerDashboardClient>(ConfigureBackendClient);
 builder.Services.AddHttpClient("Backend", ConfigureBackendClient);
 
 var app = builder.Build();

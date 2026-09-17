@@ -179,6 +179,9 @@ public record RegisterRequest(
 
 public record LoginRequest(string Username, string Password, string? IpAddress);
 
+// what login/register hand back, the frontend turns this into the cookie claims
+public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address);
+
 public record ExternalLoginRequest(string Provider, string Email, string? Name, string? IpAddress);
 
 public record UserDetails(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, string? CompanyName);

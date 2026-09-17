@@ -27,29 +27,8 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/", () => Results.Ok(new
 {
     message = "TruckerReward API is running.",
-    dashboard = "/dashboard"
+    health = "/health"
 }));
-
-app.MapGet("/dashboard", async (AppDbContext db) =>
-{
-    var driver = await db.Users
-        .AsNoTracking()
-        .Where(user => user.UserType == "driver")
-        .OrderBy(user => user.Id)
-        .Select(user => new UserProfile(
-            user.Id,
-            user.UserType,
-            user.Username,
-            user.Email,
-            user.PhoneNumber,
-            user.Address))
-        .FirstOrDefaultAsync();
-
-    return driver is null
-        ? Results.NotFound(new { message = "No driver user was found." })
-        : Results.Ok(driver);
-})
-.WithName("GetDriverDashboard");
 
 // Register the endpoint defined in src/endpoints/market.cs.
 app.MapMarketEndpoints();
@@ -58,5 +37,3 @@ app.MapMarketEndpoints();
 app.MapAuthEndpoints();
 
 app.Run();
-
-record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address);
