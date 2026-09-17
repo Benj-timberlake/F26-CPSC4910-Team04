@@ -1,20 +1,13 @@
 using BackEnd.Models;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
+// register, log in with a password, log in through google/microsoft
 public static class AuthEndpoints
 {
     // values in the users.user_type enum
     public const string Driver = "driver";
     public const string Sponsor = "sponsor";
     public const string Admin = "admin";
-
-    // PBKDF2 with a random salt per user, built into asp.net
-    private static readonly PasswordHasher<User> hasher = new();
-
-    // stand-ins so a login for a missing user still does one hash verify, see /auth/login
-    private static readonly User dummyUser = new() { UserType = Driver, Username = "", Email = "", PhoneNumber = "", Address = "" };
-    private static readonly string dummyHash = hasher.HashPassword(dummyUser, Guid.NewGuid().ToString());
 
     public static void MapAuthEndpoints(this WebApplication app)
     {
@@ -47,13 +40,13 @@ public static class AuthEndpoints
                 PhoneNumber = req.PhoneNumber?.Trim() ?? "",
                 Address = req.Address?.Trim() ?? ""
             };
-            user.Password = hasher.HashPassword(user, req.Password);
+            user.Password = Passwords.Hash(user, req.Password);
             db.Users.Add(user);
             if (req.UserType == Sponsor)
                 db.Sponsors.Add(new Sponsor { User = user, CompanyName = req.CompanyName!.Trim() });
             await db.SaveChangesAsync();
 
-            return Results.Created($"/users/{user.Id}", ToProfile(user));
+            return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
         });
 
         app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db, IEmailSender email, TimeProvider clock) =>
@@ -63,28 +56,12 @@ public static class AuthEndpoints
             var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username);
             var lockedUntil = await Lockout.LockedUntil(db, username, now);
 
-            // always run a hash check, even when the username doesn't exist or the account is sso only,
-            // so the response time doesn't tell an attacker which usernames are real
-            var ok = hasher.VerifyHashedPassword(
-                user ?? dummyUser,
-                user?.Password ?? dummyHash,
-                req.Password ?? "") != PasswordVerificationResult.Failed
-                && user?.Password is not null
-                && lockedUntil is null;
-
-            // every attempt is logged, unknown usernames and refused-while-locked included
-            db.LoginAttempts.Add(new LoginAttempt
-            {
-                Username = username,
-                UserId = user?.Id,
-                Succeeded = ok,
-                IpAddress = req.IpAddress,
-                AttemptedAt = now
-            });
-            await db.SaveChangesAsync();
+            // verify even when the username is unknown or locked, so every path costs the same
+            var ok = Passwords.Verify(user, req.Password) && lockedUntil is null;
+            await RecordAttempt(db, username, user?.Id, ok, req.IpAddress, now);
 
             if (ok)
-                return Results.Ok(ToProfile(user!));
+                return Results.Ok(UserProfile.Of(user!));
             if (lockedUntil is not null)
                 return Results.Json(new { message = "Too many failed attempts.", lockedUntil }, statusCode: StatusCodes.Status423Locked);
 
@@ -95,7 +72,7 @@ public static class AuthEndpoints
             return Results.Unauthorized();
         });
 
-        // called after a google/microsoft sign in on the frontend
+        // called by the frontend after a google/microsoft sign in. first time through makes a driver account
         app.MapPost("/auth/external", async (ExternalLoginRequest req, AppDbContext db, TimeProvider clock) =>
         {
             if (string.IsNullOrWhiteSpace(req.Email))
@@ -105,116 +82,21 @@ public static class AuthEndpoints
             var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user is null)
             {
-                user = new User
-                {
-                    UserType = Driver,
-                    Username = await UniqueUsername(db, email),
-                    Email = email,
-                    PhoneNumber = "",
-                    Address = ""
-                };
+                user = new User { UserType = Driver, Username = await UniqueUsername(db, email), Email = email, PhoneNumber = "", Address = "" };
                 db.Users.Add(user);
                 await db.SaveChangesAsync();
             }
-
-            db.LoginAttempts.Add(new LoginAttempt
-            {
-                Username = user.Username,
-                UserId = user.Id,
-                Succeeded = true,
-                IpAddress = req.IpAddress,
-                AttemptedAt = clock.GetUtcNow().UtcDateTime
-            });
-            await db.SaveChangesAsync();
-
-            return Results.Ok(ToProfile(user));
-        });
-
-        app.MapGet("/users/{id:int}", async (int id, AppDbContext db) =>
-        {
-            var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
-            if (user is null)
-                return Results.NotFound();
-            var company = await db.Sponsors.AsNoTracking()
-                .Where(s => s.UserId == id)
-                .Select(s => s.CompanyName)
-                .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.Email, user.PhoneNumber, user.Address, company, user.Points));
-        });
-
-        // the dashboard's security card: this login, the one before it, failures in between,
-        // the last ten attempts and when the password last changed
-        app.MapGet("/users/{id:int}/security", async (int id, AppDbContext db) =>
-        {
-            if (!await db.Users.AnyAsync(u => u.Id == id))
-                return Results.NotFound();
-
-            var attempts = db.LoginAttempts.AsNoTracking().Where(a => a.UserId == id);
-            var logins = await attempts
-                .Where(a => a.Succeeded)
-                .OrderByDescending(a => a.AttemptedAt)
-                .ThenByDescending(a => a.Id)
-                .Take(2)
-                .ToListAsync();
-            var last = logins.ElementAtOrDefault(0);
-            var previous = logins.ElementAtOrDefault(1);
-
-            var failedSincePrevious = previous is null
-                ? await attempts.CountAsync(a => !a.Succeeded)
-                : await attempts.CountAsync(a => !a.Succeeded && a.AttemptedAt > previous.AttemptedAt);
-
-            var recent = await attempts
-                .OrderByDescending(a => a.AttemptedAt)
-                .ThenByDescending(a => a.Id)
-                .Take(10)
-                .Select(a => new LoginEvent(a.AttemptedAt, a.Succeeded, a.IpAddress))
-                .ToListAsync();
-
-            var passwordChangedAt = await db.PasswordChanges.AsNoTracking()
-                .Where(c => c.UserId == id && c.ChangeType != PasswordChange.ResetRequested)
-                .MaxAsync(c => (DateTime?)c.ChangedAt);
-
-            return Results.Ok(new SecuritySummary(
-                last?.AttemptedAt,
-                last?.IpAddress,
-                previous?.AttemptedAt,
-                failedSincePrevious,
-                recent,
-                passwordChangedAt));
-        });
-
-        app.MapGet("/admin/locked-accounts", async (AppDbContext db, TimeProvider clock) =>
-            Results.Ok(await Lockout.All(db, clock.GetUtcNow().UtcDateTime)));
-
-        app.MapGet("/admin/login-attempts", async (bool failedOnly, int? limit, AppDbContext db) =>
-        {
-            var query = db.LoginAttempts.AsNoTracking();
-            if (failedOnly)
-                query = query.Where(a => !a.Succeeded);
-            var attempts = await query
-                .OrderByDescending(a => a.AttemptedAt)
-                .Take(Paging.Limit(limit))
-                .ToListAsync();
-            return Results.Ok(attempts);
-        });
-
-        // real query so this fails if the db is asleep or unreachable
-        app.MapGet("/health", async (AppDbContext db) =>
-        {
-            try
-            {
-                var users = await db.Users.CountAsync();
-                return Results.Ok(new { status = "ok", users });
-            }
-            catch (Exception ex)
-            {
-                return Results.Problem(detail: ex.Message, statusCode: 503);
-            }
+            await RecordAttempt(db, user.Username, user.Id, true, req.IpAddress, clock.GetUtcNow().UtcDateTime);
+            return Results.Ok(UserProfile.Of(user));
         });
     }
 
-    private static UserProfile ToProfile(User u) =>
-        new(u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address);
+    // every attempt is logged: successes, wrong passwords, unknown usernames and refused-while-locked
+    private static Task RecordAttempt(AppDbContext db, string username, int? userId, bool succeeded, string? ip, DateTime at)
+    {
+        db.LoginAttempts.Add(new LoginAttempt { Username = username, UserId = userId, Succeeded = succeeded, IpAddress = ip, AttemptedAt = at });
+        return db.SaveChangesAsync();
+    }
 
     // sso accounts don't pick a username so use the email prefix, add a number if taken
     private static async Task<string> UniqueUsername(AppDbContext db, string email)
@@ -227,30 +109,14 @@ public static class AuthEndpoints
     }
 }
 
-public record RegisterRequest(
-    string Username,
-    string Email,
-    string Password,
-    string UserType,
-    string? CompanyName,
-    string? PhoneNumber,
-    string? Address);
+public record RegisterRequest(string Username, string Email, string Password, string UserType, string? CompanyName, string? PhoneNumber, string? Address);
 
 public record LoginRequest(string Username, string Password, string? IpAddress);
 
-// what login/register hand back, the frontend turns this into the cookie claims
-public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address);
-
 public record ExternalLoginRequest(string Provider, string Email, string? Name, string? IpAddress);
 
-public record UserDetails(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, string? CompanyName, int Points);
-
-public record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
-
-public record SecuritySummary(
-    DateTime? LastLoginAt,
-    string? LastLoginIp,
-    DateTime? PreviousLoginAt,
-    int FailedSincePreviousLogin,
-    List<LoginEvent> Recent,
-    DateTime? PasswordChangedAt);
+// what login and register hand back, the frontend turns it into the cookie claims
+public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address)
+{
+    public static UserProfile Of(User u) => new(u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address);
+}

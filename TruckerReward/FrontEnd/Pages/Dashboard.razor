@@ -202,32 +202,7 @@
         return rel == "" ? abs : $"{abs} ({rel})";
     }
 
-    private sealed class Account
-    {
-        public int Id { get; set; }
-        public string UserType { get; set; } = "";
-        public string Username { get; set; } = "";
-        public string Email { get; set; } = "";
-        public string PhoneNumber { get; set; } = "";
-        public string Address { get; set; } = "";
-        public string? CompanyName { get; set; }
-        public int Points { get; set; }
-    }
-
-    private sealed class SecuritySummary
-    {
-        public DateTime? LastLoginAt { get; set; }
-        public string? LastLoginIp { get; set; }
-        public DateTime? PreviousLoginAt { get; set; }
-        public int FailedSincePreviousLogin { get; set; }
-        public List<LoginEvent> Recent { get; set; } = new();
-        public DateTime? PasswordChangedAt { get; set; }
-    }
-
-    private sealed class LoginEvent
-    {
-        public DateTime AttemptedAt { get; set; }
-        public bool Succeeded { get; set; }
-        public string? IpAddress { get; set; }
-    }
+    private sealed record Account(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, string? CompanyName, int Points);
+    private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
+    private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
 }

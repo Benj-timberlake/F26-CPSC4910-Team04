@@ -20,13 +20,7 @@ public static class AccountEndpoints
             HttpContext http,
             IHttpClientFactory clients) =>
         {
-            var backend = clients.CreateClient("Backend");
-            using var response = await backend.PostAsJsonAsync("auth/login", new
-            {
-                username,
-                password,
-                ipAddress = http.Connection.RemoteIpAddress?.ToString()
-            });
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/login", new { username, password, ipAddress = Ip(http) });
 
             if (response.StatusCode == HttpStatusCode.Unauthorized)
                 return Results.Redirect("/login?error=1" + ReturnParam(returnUrl));
@@ -50,11 +44,8 @@ public static class AccountEndpoints
             HttpContext http,
             IHttpClientFactory clients) =>
         {
-            var backend = clients.CreateClient("Backend");
-            using var response = await backend.PostAsJsonAsync("auth/register", new
-            {
-                username, email, password, userType, companyName, phoneNumber, address
-            });
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/register",
+                new { username, email, password, userType, companyName, phoneNumber, address });
 
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/register?error=" + await ErrorParam(response, "Could not create the account."));
@@ -83,14 +74,7 @@ public static class AccountEndpoints
             var name = external.Principal.FindFirstValue(ClaimTypes.Name);
             var provider = external.Principal.Identity?.AuthenticationType;
 
-            var backend = clients.CreateClient("Backend");
-            using var response = await backend.PostAsJsonAsync("auth/external", new
-            {
-                provider,
-                email,
-                name,
-                ipAddress = http.Connection.RemoteIpAddress?.ToString()
-            });
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/external", new { provider, email, name, ipAddress = Ip(http) });
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/login?error=sso");
 
@@ -102,23 +86,14 @@ public static class AccountEndpoints
 
         app.MapPost("/account/forgot", async ([FromForm] string email, HttpContext http, IHttpClientFactory clients) =>
         {
-            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/forgot", new
-            {
-                email,
-                ipAddress = http.Connection.RemoteIpAddress?.ToString()
-            });
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/forgot", new { email, ipAddress = Ip(http) });
             // the backend answers the same way for unknown emails, so the page always says "sent"
             return Results.Redirect(response.IsSuccessStatusCode ? "/forgot-password?sent=1" : "/forgot-password?error=1");
         }).DisableAntiforgery();
 
         app.MapPost("/account/reset", async ([FromForm] string token, [FromForm] string password, HttpContext http, IHttpClientFactory clients) =>
         {
-            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/reset", new
-            {
-                token,
-                newPassword = password,
-                ipAddress = http.Connection.RemoteIpAddress?.ToString()
-            });
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/reset", new { token, newPassword = password, ipAddress = Ip(http) });
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect($"/reset-password?token={Uri.EscapeDataString(token)}&error=" + await ErrorParam(response, "Could not reset the password."));
             return Results.Redirect("/login?reset=1");
@@ -131,12 +106,8 @@ public static class AccountEndpoints
             IHttpClientFactory clients) =>
         {
             var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/password", new
-            {
-                currentPassword,
-                newPassword = password,
-                ipAddress = http.Connection.RemoteIpAddress?.ToString()
-            });
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/password",
+                new { currentPassword, newPassword = password, ipAddress = Ip(http) });
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/account/password?error=" + await ErrorParam(response, "Could not change the password."));
             return Results.Redirect("/dashboard?password=changed");
@@ -148,6 +119,9 @@ public static class AccountEndpoints
             return Results.Redirect("/");
         }).DisableAntiforgery();
     }
+
+    // goes into the login attempt log; behind cloudfront this is the browser's address thanks to the forwarded headers
+    private static string? Ip(HttpContext http) => http.Connection.RemoteIpAddress?.ToString();
 
     private static string SafeReturn(string? returnUrl) =>
         !string.IsNullOrEmpty(returnUrl) && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") ? returnUrl : "/dashboard";
