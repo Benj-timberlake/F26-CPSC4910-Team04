@@ -1,4 +1,5 @@
 using FrontEnd.Auth;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,13 +24,25 @@ builder.Services.AddHttpClient("Backend", ConfigureBackendClient);
 
 var app = builder.Build();
 
+// In production the app sits behind CloudFront (TLS) and the beanstalk nginx, so the scheme the
+// browser used and its IP arrive in headers. Trusting them is what makes the auth cookie Secure,
+// the Google/Microsoft redirect URIs https, and the login attempt log show real addresses.
+// See infra/README.md.
 if (!app.Environment.IsDevelopment())
 {
+    var forwarded = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
+        ForwardedProtoHeaderName = "CloudFront-Forwarded-Proto",
+        ForwardLimit = null
+    };
+    forwarded.KnownNetworks.Clear();
+    forwarded.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwarded);
+
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
-
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
