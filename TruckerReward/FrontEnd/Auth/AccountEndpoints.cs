@@ -1,5 +1,4 @@
 using System.Net;
-using FrontEnd.Data;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
@@ -131,3 +130,6 @@ public static class AccountEndpoints
 
     private sealed record ErrorBody(string? Message);
 }
+
+// shape of the backend's login/register response
+public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address);
