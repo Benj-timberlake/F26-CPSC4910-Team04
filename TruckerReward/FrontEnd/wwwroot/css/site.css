@@ -127,6 +127,15 @@ a {
     color: var(--muted);
 }
 
+.tr-form .tr-mismatch {
+    color: var(--danger);
+}
+
+.tr-alt {
+    margin-top: 20px;
+    text-align: center;
+}
+
 /* buttons and button-like links */
 .tr-btn, .tr-btn-outline {
     display: inline-block;

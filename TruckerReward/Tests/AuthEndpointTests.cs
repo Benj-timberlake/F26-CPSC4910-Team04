@@ -259,14 +259,14 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task LoginActivityForFirstLoginHasNoPreviousLogin()
+    public async Task SecuritySummaryForFirstLoginHasNoPreviousLogin()
     {
         var client = await Start();
         await client.PostAsJsonAsync("/auth/register", Driver());
         await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x", ipAddress = "10.0.0.5" });
         var id = (await Db().Users.SingleAsync()).Id;
 
-        var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{id}/logins");
+        var activity = await client.GetFromJsonAsync<SecuritySummary>($"/users/{id}/security");
         Assert.NotNull(activity);
         Assert.NotNull(activity.LastLoginAt);
         Assert.Equal("10.0.0.5", activity.LastLoginIp);
@@ -276,7 +276,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task LoginActivityCountsFailuresSincePreviousLogin()
+    public async Task SecuritySummaryCountsFailuresSincePreviousLogin()
     {
         var client = await Start();
         await client.PostAsJsonAsync("/auth/register", Driver());
@@ -295,7 +295,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         }
         await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x", ipAddress = "10.0.0.5" });
 
-        var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{id}/logins");
+        var activity = await client.GetFromJsonAsync<SecuritySummary>($"/users/{id}/security");
         Assert.Equal("10.0.0.5", activity!.LastLoginIp);
         Assert.NotNull(activity.PreviousLoginAt);
         Assert.Equal(2, activity.FailedSincePreviousLogin);
@@ -304,7 +304,7 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task LoginActivityOnlyShowsThatUsersAttempts()
+    public async Task SecuritySummaryOnlyShowsThatUsersAttempts()
     {
         var client = await Start();
         await client.PostAsJsonAsync("/auth/register", Driver());
@@ -314,16 +314,35 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         await client.PostAsJsonAsync("/auth/login", new { username = "amy", password = "Hunter22x" });
         var bob = await Db().Users.SingleAsync(u => u.Username == "bob");
 
-        var activity = await client.GetFromJsonAsync<LoginActivity>($"/users/{bob.Id}/logins");
+        var activity = await client.GetFromJsonAsync<SecuritySummary>($"/users/{bob.Id}/security");
         Assert.Single(activity!.Recent);
         Assert.Equal(0, activity.FailedSincePreviousLogin);
     }
 
     [Fact]
-    public async Task LoginActivityForUnknownUserIs404()
+    public async Task SecuritySummaryShowsWhenThePasswordLastChangedButNotRequests()
     {
         var client = await Start();
-        var response = await client.GetAsync("/users/999/logins");
+        await client.PostAsJsonAsync("/auth/register", Driver());
+        var id = (await Db().Users.SingleAsync()).Id;
+
+        var before = await client.GetFromJsonAsync<SecuritySummary>($"/users/{id}/security");
+        Assert.Null(before!.PasswordChangedAt);
+
+        await client.PostAsJsonAsync("/auth/forgot", new { email = "bob@example.com" });
+        var requested = await client.GetFromJsonAsync<SecuritySummary>($"/users/{id}/security");
+        Assert.Null(requested!.PasswordChangedAt);
+
+        await client.PostAsJsonAsync($"/users/{id}/password", new { currentPassword = "Hunter22x", newPassword = "NewPass99" });
+        var after = await client.GetFromJsonAsync<SecuritySummary>($"/users/{id}/security");
+        Assert.NotNull(after!.PasswordChangedAt);
+    }
+
+    [Fact]
+    public async Task SecuritySummaryForUnknownUserIs404()
+    {
+        var client = await Start();
+        var response = await client.GetAsync("/users/999/security");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 

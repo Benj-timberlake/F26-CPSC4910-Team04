@@ -132,9 +132,9 @@ public static class AuthEndpoints
             return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.Email, user.PhoneNumber, user.Address, company, user.Points));
         });
 
-        // what the dashboard shows under "sign-in activity": when this login happened, when the one
-        // before it happened and how many failures there were in between
-        app.MapGet("/users/{id:int}/logins", async (int id, AppDbContext db) =>
+        // the dashboard's security card: this login, the one before it, failures in between,
+        // the last ten attempts and when the password last changed
+        app.MapGet("/users/{id:int}/security", async (int id, AppDbContext db) =>
         {
             if (!await db.Users.AnyAsync(u => u.Id == id))
                 return Results.NotFound();
@@ -160,12 +160,17 @@ public static class AuthEndpoints
                 .Select(a => new LoginEvent(a.AttemptedAt, a.Succeeded, a.IpAddress))
                 .ToListAsync();
 
-            return Results.Ok(new LoginActivity(
+            var passwordChangedAt = await db.PasswordChanges.AsNoTracking()
+                .Where(c => c.UserId == id && c.ChangeType != PasswordChange.ResetRequested)
+                .MaxAsync(c => (DateTime?)c.ChangedAt);
+
+            return Results.Ok(new SecuritySummary(
                 last?.AttemptedAt,
                 last?.IpAddress,
                 previous?.AttemptedAt,
                 failedSincePrevious,
-                recent));
+                recent,
+                passwordChangedAt));
         });
 
         app.MapGet("/admin/login-attempts", async (bool failedOnly, int? limit, AppDbContext db) =>
@@ -229,9 +234,10 @@ public record UserDetails(int Id, string UserType, string Username, string Email
 
 public record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
 
-public record LoginActivity(
+public record SecuritySummary(
     DateTime? LastLoginAt,
     string? LastLoginIp,
     DateTime? PreviousLoginAt,
     int FailedSincePreviousLogin,
-    List<LoginEvent> Recent);
+    List<LoginEvent> Recent,
+    DateTime? PasswordChangedAt);

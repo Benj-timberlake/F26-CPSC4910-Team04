@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using System.Security.Claims
 @inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
 
 <PageTitle>Dashboard</PageTitle>
 
@@ -20,6 +21,10 @@
     {
         <h1>Welcome back, @account.Username</h1>
         <p class="tr-subtitle">@AccountLabel(account.UserType)</p>
+        @if (notice is not null)
+        {
+            <p role="status" class="tr-alert-success">@notice</p>
+        }
 
         <div class="tr-cards">
             @if (account.UserType == "driver")
@@ -51,7 +56,7 @@
             </section>
 
             <section class="tr-card">
-                <h2>Sign-in activity</h2>
+                <h2>Security</h2>
                 @if (activity.FailedSincePreviousLogin > 0)
                 {
                     <p role="alert" class="tr-alert-warning">
@@ -64,6 +69,11 @@
                     <dd>@When(activity.LastLoginAt)@Ip(activity.LastLoginIp)</dd>
                     <dt>Previous sign-in</dt>
                     <dd>@(activity.PreviousLoginAt is null ? "This is your first sign-in." : When(activity.PreviousLoginAt))</dd>
+                    <dt>Password</dt>
+                    <dd>
+                        @(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))
+                        <a href="account/password">Change password</a>
+                    </dd>
                 </dl>
 
                 @if (activity.Recent.Count > 0)
@@ -119,6 +129,10 @@
         opacity: 0.9;
     }
 
+    .tr-kv dd a {
+        margin-left: 8px;
+    }
+
     details {
         margin-top: 14px;
     }
@@ -138,18 +152,22 @@
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     private Account? account;
-    private LoginActivity? activity;
+    private SecuritySummary? activity;
     private string? loadError;
+    private string? notice;
 
     protected override async Task OnInitializedAsync()
     {
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["password"] == "changed")
+            notice = "Your password has been changed.";
+
         var user = (await AuthState).User;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
         using var client = HttpClientFactory.CreateClient("Backend");
         try
         {
             account = await client.GetFromJsonAsync<Account>($"users/{id}");
-            activity = await client.GetFromJsonAsync<LoginActivity>($"users/{id}/logins");
+            activity = await client.GetFromJsonAsync<SecuritySummary>($"users/{id}/security");
         }
         catch (HttpRequestException)
         {
@@ -196,13 +214,14 @@
         public int Points { get; set; }
     }
 
-    private sealed class LoginActivity
+    private sealed class SecuritySummary
     {
         public DateTime? LastLoginAt { get; set; }
         public string? LastLoginIp { get; set; }
         public DateTime? PreviousLoginAt { get; set; }
         public int FailedSincePreviousLogin { get; set; }
         public List<LoginEvent> Recent { get; set; } = new();
+        public DateTime? PasswordChangedAt { get; set; }
     }
 
     private sealed class LoginEvent
