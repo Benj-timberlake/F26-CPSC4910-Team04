@@ -18,6 +18,9 @@ builder.Services.AddSingleton<EbayClient>();
 
 var app = builder.Build();
 
+// everything after this needs X-Api-Key when BACKEND_API_KEY is set, see src/ApiKeyMiddleware.cs
+app.UseBackendApiKey();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();

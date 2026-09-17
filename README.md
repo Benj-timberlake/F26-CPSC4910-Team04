@@ -23,6 +23,14 @@ dotnet user-secrets set "Authentication:Microsoft:ClientSecret" "..."
 On Elastic Beanstalk set the same keys as env vars with `__` instead of `:`.
 The redirect URIs to register with Google/Microsoft are `/signin-google` and `/signin-microsoft`.
 
+## Backend API key
+
+Only the FrontEnd should be able to call the BackEnd. Set `BACKEND_API_KEY` to the same random
+value on both (env var on Elastic Beanstalk, `dotnet user-secrets set BACKEND_API_KEY "..."` in
+each project locally) and the backend rejects any request without a matching `X-Api-Key` header.
+`/health` stays open for the load balancer. Leave it unset on both for plain local dev; the
+backend logs a warning at startup so you know it's open.
+
 
 # Below is Given README from C#
 

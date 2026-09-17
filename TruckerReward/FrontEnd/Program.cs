@@ -12,6 +12,11 @@ void ConfigureBackendClient(HttpClient client)
         ?? throw new InvalidOperationException("BACKEND_URL is not set");
 
     client.BaseAddress = new Uri(url);
+
+    // has to match BACKEND_API_KEY on the backend, leave both unset for local dev
+    var apiKey = builder.Configuration["BACKEND_API_KEY"];
+    if (!string.IsNullOrEmpty(apiKey))
+        client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
 }
 
 builder.Services.AddHttpClient("Backend", ConfigureBackendClient);
