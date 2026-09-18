@@ -7,14 +7,14 @@
 
     <AuthorizeView>
         <Authorized>
-            <p class="tr-subtitle">Signed in as <strong>@context.User.Identity?.Name</strong>.</p>
+            <p>Signed in as <strong>@context.User.Identity?.Name</strong>.</p>
             <p>
                 <a class="tr-btn" href="dashboard">Go to your dashboard</a>
                 <a class="tr-btn-outline" href="products">Browse products</a>
             </p>
         </Authorized>
         <NotAuthorized>
-            <p class="tr-subtitle">Earn points for good driving and spend them in your sponsor's catalog.</p>
+            <p>Welcome to TruckerReward.</p>
             <p>
                 <a class="tr-btn" href="login">Log in</a>
                 <a class="tr-btn-outline" href="register">Create an account</a>
