@@ -1,6 +1,4 @@
--- Team04_DB was created from an older schema: sponser typo in the enum, NOT NULL on columns that
--- have to be NULL (sso accounts have no password, unknown usernames have no user_id), no id on
--- sponsors, and none of the unique keys or foreign keys. Brings it in line with schema.sql.
+-- Team04_DB was created from an older schema.sql; this brings it up to the current one
 
 ALTER TABLE users
     MODIFY user_type ENUM('admin','sponser','sponsor','driver') NOT NULL;
