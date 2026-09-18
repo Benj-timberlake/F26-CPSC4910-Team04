@@ -45,7 +45,7 @@ jobs:
       # ---------------------------------------------------
 
       - name: Restore dependencies
-        run: dotnet restore TruckerReward/SampleApp.sln
+        run: dotnet restore TruckerReward/TruckerReward.sln
 
 
       # ---------------------------------------------------
@@ -54,7 +54,7 @@ jobs:
 
       - name: Build solution
         run: |
-          dotnet build TruckerReward/SampleApp.sln \
+          dotnet build TruckerReward/TruckerReward.sln \
             --configuration Release \
             --no-restore
 

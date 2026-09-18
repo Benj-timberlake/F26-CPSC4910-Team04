@@ -120,7 +120,6 @@ public static class AccountEndpoints
         }).DisableAntiforgery();
     }
 
-    // goes into the login attempt log; behind cloudfront this is the browser's address thanks to the forwarded headers
     private static string? Ip(HttpContext http) => http.Connection.RemoteIpAddress?.ToString();
 
     private static string SafeReturn(string? returnUrl) =>

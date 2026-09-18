@@ -25,10 +25,7 @@ builder.Services.AddHttpClient("Backend", ConfigureBackendClient);
 
 var app = builder.Build();
 
-// In production the app sits behind CloudFront (TLS) and the beanstalk nginx, so the scheme the
-// browser used and its IP arrive in headers. Trusting them is what makes the auth cookie Secure,
-// the Google/Microsoft redirect URIs https, and the login attempt log show real addresses.
-// See infra/README.md.
+// behind cloudfront and the beanstalk nginx the browser's scheme and ip only arrive in headers
 if (!app.Environment.IsDevelopment())
 {
     var forwarded = new ForwardedHeadersOptions

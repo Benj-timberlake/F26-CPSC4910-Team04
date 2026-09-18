@@ -12,8 +12,6 @@ using Xunit;
 
 namespace TruckerReward.Tests;
 
-// the auth cookie is issued from the user row at login. these check that it is re-checked against
-// the backend afterwards so a changed user_type or a deleted account doesn't live on for 8 hours
 public sealed class CookieRevalidationTests : IAsyncDisposable
 {
     private readonly FakeClock clock = new(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero));

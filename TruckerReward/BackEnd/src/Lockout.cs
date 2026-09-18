@@ -1,17 +1,15 @@
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
 
-// after MaxFailures wrong passwords in a row a username is refused for Duration, counted from the
-// last failure. nothing is stored beyond login_attempts: a lock is just "the last MaxFailures
-// attempts within Duration were all failures". keyed by username so unknown names lock the same way.
+// MaxFailures wrong passwords in a row lock a username for Duration. derived from login_attempts,
+// keyed by username so unknown names lock the same way as real ones.
 public static class Lockout
 {
     public const int MaxFailures = 5;
     public static readonly TimeSpan Duration = TimeSpan.FromMinutes(3);
 
-    // when the lock on this username lifts, or null if it isn't locked. Replays the recent attempts
-    // oldest first: a success clears the streak, MaxFailures failures within Duration of each other
-    // start a lock, and attempts made while a lock is on are skipped so hammering can't extend it.
+    // replays the recent attempts oldest first. attempts made while locked are skipped so the lock
+    // ends Duration after it started no matter how many more come in.
     public static async Task<DateTime?> LockedUntil(AppDbContext db, string username, DateTime now)
     {
         var attempts = await db.LoginAttempts.AsNoTracking()
@@ -46,7 +44,6 @@ public static class Lockout
         return lockedUntil > now ? lockedUntil : null;
     }
 
-    // every username with a live lock, for the admin page
     public static async Task<List<LockedAccount>> All(AppDbContext db, DateTime now)
     {
         var since = now - Duration;

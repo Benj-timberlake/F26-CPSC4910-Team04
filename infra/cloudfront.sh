@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
-# Puts a CloudFront distribution in front of the Elastic Beanstalk environment so the site has
-# HTTPS on a *.cloudfront.net address without buying a domain. Run once, by hand, with AWS
-# credentials that can manage CloudFront:
-#
+# CloudFront in front of the beanstalk environment, for https without a domain. run once:
 #   infra/cloudfront.sh BEANSTALK-04-env.eba-xxxx.us-east-1.elasticbeanstalk.com
-#
-# Prints the https address when done. Afterwards set FRONTEND_URL on the backend and register
-# https://<that address>/signin-google and /signin-microsoft with the sso providers.
 set -euo pipefail
 
 origin="${1:?usage: infra/cloudfront.sh <beanstalk environment hostname>}"
 
-# aws managed policies: no caching (this is an app, not a static site), and forward every viewer
-# header, cookie and query string plus CloudFront-Forwarded-Proto so the app knows it was https
+# aws managed policies: CachingDisabled and AllViewerAndCloudFrontHeaders-2022-06
 caching_disabled="4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
 all_viewer_and_cloudfront="33f36d7e-f396-46d9-90e0-52428a34d9dc"
 

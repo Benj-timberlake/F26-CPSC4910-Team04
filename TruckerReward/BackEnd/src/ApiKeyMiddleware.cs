@@ -1,15 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 
-// Only the frontend is supposed to talk to the backend. When BACKEND_API_KEY is set (env var on
-// Elastic Beanstalk, user secrets locally, never appsettings) every request has to send the same
-// value in X-Api-Key. Left unset, nothing changes, so local dev keeps working without it.
+// with BACKEND_API_KEY set, every request needs the same value in X-Api-Key. unset means open.
 public static class ApiKeyMiddleware
 {
     public const string Header = "X-Api-Key";
     public const string ConfigKey = "BACKEND_API_KEY";
 
-    // beanstalk and humans hit these without a key
     private static readonly string[] openPaths = ["/", "/health"];
 
     public static WebApplication UseBackendApiKey(this WebApplication app)
@@ -39,7 +36,6 @@ public static class ApiKeyMiddleware
         return app;
     }
 
-    // constant time so the comparison doesn't leak how much of the key was right
     private static bool Matches(string? provided, byte[] expected) =>
         provided is not null
         && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(provided), expected);

@@ -56,7 +56,6 @@ public static class AuthEndpoints
             var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username);
             var lockedUntil = await Lockout.LockedUntil(db, username, now);
 
-            // verify even when the username is unknown or locked, so every path costs the same
             var ok = Passwords.Verify(user, req.Password) && lockedUntil is null;
             await RecordAttempt(db, username, user?.Id, ok, req.IpAddress, now);
 
@@ -72,7 +71,7 @@ public static class AuthEndpoints
             return Results.Unauthorized();
         });
 
-        // called by the frontend after a google/microsoft sign in. first time through makes a driver account
+        // after a google/microsoft sign in on the frontend. first time makes a driver account
         app.MapPost("/auth/external", async (ExternalLoginRequest req, AppDbContext db, TimeProvider clock) =>
         {
             if (string.IsNullOrWhiteSpace(req.Email))
@@ -91,7 +90,6 @@ public static class AuthEndpoints
         });
     }
 
-    // every attempt is logged: successes, wrong passwords, unknown usernames and refused-while-locked
     private static Task RecordAttempt(AppDbContext db, string username, int? userId, bool succeeded, string? ip, DateTime at)
     {
         db.LoginAttempts.Add(new LoginAttempt { Username = username, UserId = userId, Succeeded = succeeded, IpAddress = ip, AttemptedAt = at });
