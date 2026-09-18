@@ -5,7 +5,7 @@ Everything runs in AWS us-east-1:
 | Piece | What | Where it's set up |
 |---|---|---|
 | Elastic Beanstalk `BEANSTALK-04-env` | FrontEnd (port 5000, public) and BackEnd (port 5100, loopback only) from one bundle | `.github/workflows/deploy.yml` on every push to `main` |
-| RDS MySQL | the only database, local dev included | console; schema from `db/schema.sql` + `db/migrations/` |
+| RDS MySQL (class instance, database `Team04_DB`) | the only database, local dev included | console; schema from `db/schema.sql` + `db/migrations/` |
 | CloudFront | HTTPS in front of the Beanstalk URL | `infra/cloudfront.sh`, once |
 | SES | reset links and security emails | console: verify the `EMAIL_FROM` address, leave the sandbox |
 
@@ -15,7 +15,7 @@ Set these in the environment's configuration, never in the repo:
 
 | Name | Used by | Value |
 |---|---|---|
-| `ConnectionStrings__DefaultConnection` | BackEnd | `server=...;port=3306;database=truckerreward;user=...;password=...` |
+| `ConnectionStrings__DefaultConnection` | BackEnd | `server=...;port=3306;database=Team04_DB;user=...;password=...` |
 | `BACKEND_API_KEY` | both | one long random string, the same on both |
 | `FRONTEND_URL` | BackEnd | the CloudFront address, e.g. `https://d1234.cloudfront.net` — reset links are built from it |
 | `EMAIL_FROM` | BackEnd | the SES-verified sender; unset means emails only go to the log |

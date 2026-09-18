@@ -1,6 +1,7 @@
 # Database
 
-The app uses the team's RDS MySQL instance everywhere, including local development. The
+The app uses the class RDS MySQL instance everywhere, including local development. It is shared
+between teams, one database each: ours is `Team04_DB`. Never create databases on it. The
 connection string is never checked in:
 
 - locally, put it in the BackEnd project's user secrets (stored under `~/.microsoft/usersecrets`,
@@ -9,7 +10,7 @@ connection string is never checked in:
   ```
   cd TruckerReward/BackEnd
   dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
-    "server=HOST;port=3306;database=truckerreward;user=USER;password=PASSWORD"
+    "server=HOST;port=3306;database=Team04_DB;user=USER;password=PASSWORD"
   ```
 
 - on Elastic Beanstalk it is the `ConnectionStrings__DefaultConnection` environment property.
@@ -25,7 +26,7 @@ file under `migrations/` with the `ALTER`/`CREATE` for databases that already ex
 against RDS:
 
 ```
-mysql -h HOST -u USER -p truckerreward < db/migrations/002_password_changes_and_resets.sql
+mysql -h HOST -u USER -p Team04_DB < db/migrations/002_password_changes_and_resets.sql
 ```
 
 ## RDS settings worth checking
