@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace TruckerReward.Tests;
 
-// a backend on an in-memory sqlite db with all endpoints mapped, so tests don't need docker or mysql
+// the backend on in-memory sqlite, no mysql needed
 public sealed class TestApp : IAsyncDisposable
 {
     private readonly SqliteConnection connection = new("DataSource=:memory:");

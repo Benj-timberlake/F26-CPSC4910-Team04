@@ -3,8 +3,6 @@ using Xunit;
 
 namespace TruckerReward.Tests;
 
-// the frontend is the only thing meant to call the backend, so when BACKEND_API_KEY is set
-// every request except /health has to carry it
 public sealed class ApiKeyTests : IAsyncDisposable
 {
     private readonly TestApp app = new();

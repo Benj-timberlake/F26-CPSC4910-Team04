@@ -6,9 +6,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace FrontEnd.Auth;
 
-// The cookie carries the user's type as a role claim. Without this, an admin changing someone's
-// user_type (or deleting the account) wouldn't take effect until the cookie expired, 8 hours
-// later. So every few minutes the cookie is checked against the backend's current user row.
+// the role claim comes from user_type at login. re-check the row every Interval so a changed
+// type or a deleted account doesn't live on for the cookie's full 8 hours.
 public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider clock, ILogger<CookieRevalidation> log)
     : CookieAuthenticationEvents
 {
@@ -41,7 +40,7 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
                 await Reject(context);
                 return;
             }
-            // anything else that isn't a clean answer: keep the cookie and try again next request
+            // any other error: keep the cookie, try again next request
             if (!response.IsSuccessStatusCode)
                 return;
             user = await response.Content.ReadFromJsonAsync<UserProfile>();
@@ -54,7 +53,6 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
         if (user is null)
             return;
 
-        // username, email or type may have changed, rebuild the claims from the row
         context.ReplacePrincipal(TruckerSignIn.Principal(user));
         MarkChecked(context.Properties, now);
         context.ShouldRenew = true;

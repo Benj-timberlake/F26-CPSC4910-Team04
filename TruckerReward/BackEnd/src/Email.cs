@@ -6,7 +6,6 @@ public interface IEmailSender
     Task SendAsync(string to, string subject, string body);
 }
 
-// local dev and tests: the email ends up in the log instead of a mailbox
 public sealed class LogEmailSender(ILogger<LogEmailSender> log) : IEmailSender
 {
     public Task SendAsync(string to, string subject, string body)
@@ -16,7 +15,7 @@ public sealed class LogEmailSender(ILogger<LogEmailSender> log) : IEmailSender
     }
 }
 
-// production: amazon ses using the instance role, EMAIL_FROM has to be a verified identity
+// ses through the instance role. EMAIL_FROM must be a verified identity
 public sealed class SesEmailSender(IAmazonSimpleEmailService ses, string from, ILogger<SesEmailSender> log) : IEmailSender
 {
     public async Task SendAsync(string to, string subject, string body)

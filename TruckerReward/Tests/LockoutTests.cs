@@ -5,8 +5,6 @@ using Xunit;
 
 namespace TruckerReward.Tests;
 
-// five wrong passwords in a row lock the account for three minutes. the attempts are still
-// logged, admins get one email per lockout and can see who is locked right now
 public sealed class LockoutTests : IAsyncDisposable
 {
     private readonly TestApp app = new();
