@@ -8,7 +8,6 @@
 <div class="tr-page-narrow">
     <div class="tr-card">
         <h1>Log in</h1>
-        <p class="tr-subtitle">Drivers, sponsors and administrators all sign in here.</p>
 
         @if (message is not null)
         {
@@ -70,6 +69,7 @@
         {
             "1" => "Wrong username or password.",
             "locked" => "Too many failed attempts. Wait a few minutes and try again.",
+            "backend" => "Something went wrong on our side. Try again in a moment.",
             "sso" => "Sign in with that provider didn't work. Try again or use a password.",
             null when query["reset"] == "1" => "Your password has been reset. Log in with the new one.",
             _ => null

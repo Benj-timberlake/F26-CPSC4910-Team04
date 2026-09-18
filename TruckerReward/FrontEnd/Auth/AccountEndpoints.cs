@@ -26,7 +26,8 @@ public static class AccountEndpoints
                 return Results.Redirect("/login?error=1" + ReturnParam(returnUrl));
             if (response.StatusCode == HttpStatusCode.Locked)
                 return Results.Redirect("/login?error=locked" + ReturnParam(returnUrl));
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/login?error=backend" + ReturnParam(returnUrl));
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await TruckerSignIn.SignInAsync(http, user!);
