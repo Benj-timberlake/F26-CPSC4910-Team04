@@ -1,0 +1,133 @@
+@page "/product"
+@using System.Net
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+@implements IDisposable
+
+<PageTitle>@(product?.Title ?? "Product details")</PageTitle>
+
+<main class="product-detail">
+    <a href="/products">Back to catalog</a>
+    @if (loading)
+    {
+        <p role="status">Loading product...</p>
+    }
+    else if (error is not null)
+    {
+        <p role="alert">@error</p>
+        <button type="button" @onclick="LoadProduct">Retry</button>
+    }
+    else if (product is not null)
+    {
+        <div class="detail-layout">
+            <div class="detail-photo">
+                @if (!string.IsNullOrWhiteSpace(product.Image?.ImageUrl))
+                {
+                    <img src="@product.Image.ImageUrl" alt="@product.Title" />
+                }
+                else
+                {
+                    <p>No image available</p>
+                }
+            </div>
+            <section>
+                <h1>@product.Title</h1>
+                <p class="detail-price">@(product.Price?.Display ?? "Price unavailable")</p>
+                <button type="button" class="buy-button" disabled>Buy</button>
+            </section>
+        </div>
+        <section class="description">
+            <h2>Description</h2>
+            @if (!string.IsNullOrWhiteSpace(product.Description))
+            {
+                <iframe title="Product description" sandbox="" referrerpolicy="no-referrer"
+                        srcdoc="@(DescriptionDocument(product.Description))"></iframe>
+            }
+            else
+            {
+                <p>@(string.IsNullOrWhiteSpace(product.ShortDescription) ? "No description available." : product.ShortDescription)</p>
+            }
+        </section>
+    }
+</main>
+
+<style>
+    .product-detail { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .detail-layout { display: flex; flex-wrap: wrap; gap: 32px; margin-top: 24px; }
+    .detail-layout > * { flex: 1 1 300px; min-width: 0; }
+    .detail-photo { display: grid; place-items: center; background: #f8f8f8; border-radius: 12px; min-height: 300px; }
+    .detail-photo img { width: 100%; height: 480px; object-fit: contain; }
+    .product-detail h1 { font-size: 28px; overflow-wrap: anywhere; }
+    .detail-price { font-size: 26px; font-weight: 700; margin: 24px 0; }
+    .buy-button { padding: 12px 40px; background: #2455a4; color: white; border: 0; border-radius: 6px; opacity: .65; cursor: not-allowed; }
+    .description { margin-top: 32px; }
+    .description iframe { width: 100%; height: 440px; border: 1px solid #ddd; border-radius: 6px; background: white; }
+    .product-detail [role=alert] { color: #b42318; margin-top: 24px; }
+</style>
+
+@code {
+    [Parameter, SupplyParameterFromQuery(Name = "itemId")]
+    public string? ItemId { get; set; }
+
+    private Products.Product? product;
+    private bool loading;
+    private string? error;
+    private CancellationTokenSource? requestCancellation;
+
+    protected override Task OnParametersSetAsync() => LoadProduct();
+
+    private async Task LoadProduct()
+    {
+        requestCancellation?.Cancel();
+        requestCancellation?.Dispose();
+        var cancellation = requestCancellation = new CancellationTokenSource();
+        product = null;
+        error = null;
+        loading = true;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(ItemId))
+            {
+                error = "No product selected.";
+                return;
+            }
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.GetAsync("api/products/detail?itemId=" + Uri.EscapeDataString(ItemId), cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (!response.IsSuccessStatusCode)
+            {
+                error = response.StatusCode == HttpStatusCode.NotFound
+                    ? "This product is no longer available." : "Could not load the product. Please try again.";
+                return;
+            }
+            var json = await response.Content.ReadAsStringAsync(cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            product = JsonSerializer.Deserialize<Products.Product>(json);
+            if (string.IsNullOrWhiteSpace(product?.ItemId))
+            {
+                product = null;
+                error = "The product service returned an invalid response.";
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (OperationCanceledException) { error = "The product request timed out. Please try again."; }
+        catch (HttpRequestException) { error = "Could not connect to the product service. Please try again."; }
+        catch (JsonException) { error = "The product service returned an invalid response."; }
+        finally
+        {
+            if (ReferenceEquals(requestCancellation, cancellation)) loading = false;
+        }
+    }
+
+    // Keep seller HTML inside an opaque sandbox. Scripts, forms, navigation and
+    // external resources are blocked; only inline formatting and embedded images remain.
+    private static string DescriptionDocument(string html) =>
+        "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\">" +
+        "<style>body{font:16px/1.5 sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}</style></head><body>" + html + "</body></html>";
+
+    public void Dispose()
+    {
+        requestCancellation?.Cancel();
+        requestCancellation?.Dispose();
+    }
+}
