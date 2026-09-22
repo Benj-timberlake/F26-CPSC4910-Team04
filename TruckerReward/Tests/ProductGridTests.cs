@@ -21,6 +21,8 @@ public sealed class ProductGridTests : TestContext
     {
         handler.Body = json;
         var component = RenderComponent<Products>();
+        component.Find(".search-bar > input").Change("truck");
+        component.Find("form").Submit();
         component.WaitForAssertion(() => Assert.Empty(component.FindAll("[role=status]")));
         return component;
     }
@@ -48,7 +50,6 @@ public sealed class ProductGridTests : TestContext
     [Theory]
     [InlineData(" gps ", "gps")]
     [InlineData("tools & parts/+?=雪", "tools & parts/+?=雪")]
-    [InlineData("   ", "truck")]
     public void SearchRequestsBackendWithEncodedQuery(string query, string expected)
     {
         var component = RenderCatalog("""{"itemSummaries":[{"title":"Initial"}]}""");
@@ -97,6 +98,76 @@ public sealed class ProductGridTests : TestContext
         Assert.Contains("Could not load eBay products", component.Find("[role=alert]").TextContent);
         Assert.False(component.Find("button").HasAttribute("disabled"));
         Assert.Empty(component.FindAll(".product-grid"));
+    }
+
+    [Fact]
+    public void SearchCombinesSortAndAvailabilityAndAllowsClearing()
+    {
+        var component = RenderCatalog("""{"itemSummaries":[]}""");
+        component.Find("select").Change("-price");
+        component.Find("#available-only").Change(true);
+        component.Find("form").Submit();
+        component.WaitForAssertion(() => Assert.Equal(
+            "http://backend/api/products?q=truck&sort=-price&availableOnly=true", handler.Url));
+        component.Find("select").Change("");
+        component.Find("#available-only").Change(false);
+        component.Find("form").Submit();
+        component.WaitForAssertion(() => Assert.Equal("http://backend/api/products?q=truck", handler.Url));
+    }
+
+    [Theory]
+    [InlineData("mostWatched")]
+    [InlineData("availability")]
+    [InlineData("price")]
+    [InlineData("-price")]
+    [InlineData("newlyListed")]
+    public void NewSortOptionsSubmitAndConditionControlsAreRemoved(string sort)
+    {
+        var component = RenderCatalog("""{"itemSummaries":[]}""");
+        Assert.Empty(component.FindAll("#condition-new, #condition-used, #condition-refurbished, #free-shipping, #returns-accepted"));
+        Assert.Equal("Popularity", component.Find("option[value=mostWatched]").TextContent);
+        Assert.DoesNotContain("Select any combination", component.Markup);
+        component.Find("select").Change(sort);
+        component.Find("form").Submit();
+        component.WaitForAssertion(() => Assert.Equal("http://backend/api/products?q=truck&sort=" + sort, handler.Url));
+    }
+
+    [Fact]
+    public void CardsShowCurrencyAndLinkToDetails()
+    {
+        var component = RenderCatalog("""
+            {"itemSummaries":[{"itemId":"v1|123|0","title":"GPS","price":{"value":"29.5","currency":"USD"}},{"title":"Unknown"}]}
+            """);
+        Assert.Equal(new[] { "29.50 USD", "Price unavailable" }, component.FindAll(".product-price").Select(p => p.TextContent));
+        Assert.Equal("/product?itemId=v1%7C123%7C0", component.Find(".product-link").GetAttribute("href"));
+        Assert.Equal("View GPS", component.Find(".product-link").GetAttribute("aria-label"));
+    }
+
+    [Fact]
+    public void DefaultSortOmitsSortParameterAndPreservesServerOrder()
+    {
+        var component = RenderCatalog("""{"itemSummaries":[{"title":"Z"},{"title":"A"}]}""");
+        Assert.Equal("http://backend/api/products?q=truck", handler.Url);
+        Assert.Equal(new[] { "Z", "A" }, component.FindAll("h2").Select(e => e.TextContent));
+    }
+
+    [Fact]
+    public void PartialDetailsNoticeClearsAfterSuccessfulSearch()
+    {
+        var component = RenderCatalog("""{"catalogNotice":"Some details unavailable","itemSummaries":[{"title":"GPS","watchCount":0,"availability":"IN_STOCK"}]}""");
+        Assert.Equal("Some details unavailable", component.Find("[role=note]").TextContent);
+        Assert.Contains("0 watching", component.Markup);
+        Assert.Contains("In stock", component.Find(".product-card").TextContent);
+        handler.Body = """{"itemSummaries":[{"title":"GPS"}]}""";
+        component.Find("form").Submit();
+        component.WaitForAssertion(() => Assert.Empty(component.FindAll("[role=note]")));
+    }
+
+    [Fact]
+    public void MissingIdDoesNotCreateBrokenProductLink()
+    {
+        var component = RenderCatalog("""{"itemSummaries":[{"title":"Unknown"}]}""");
+        Assert.Empty(component.FindAll(".product-link"));
     }
 
     private sealed class StubHandler : HttpMessageHandler

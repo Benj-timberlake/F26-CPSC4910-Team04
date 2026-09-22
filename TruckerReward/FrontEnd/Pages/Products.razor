@@ -22,7 +22,25 @@
         <button type="submit" disabled="@loading">
             @(loading ? "Searching..." : "Search")
         </button>
+        <fieldset class="catalog-controls" disabled="@loading">
+            <legend>Sort and filter products</legend>
+            <label for="product-sort">Sort by</label>
+            <select id="product-sort" @bind="sort">
+                <option value="">Best match</option>
+                <option value="price">Price: low to high</option>
+                <option value="-price">Price: high to low</option>
+                <option value="mostWatched">Popularity</option>
+                <option value="availability">Availability</option>
+                <option value="newlyListed">Creation date: newest first</option>
+            </select>
+            <label><input id="available-only" type="checkbox" @bind="availableOnly" /> In stock</label>
+        </fieldset>
     </form>
+
+    @if (!string.IsNullOrEmpty(notice))
+    {
+        <p role="note">@notice</p>
+    }
 
     @if (loading)
     {
@@ -34,7 +52,7 @@
     }
     else if (products.Count == 0)
     {
-        <p>No products found. Try another search.</p>
+        <p>No products found. Enter a search or adjust your filters.</p>
     }
     else
     {
@@ -54,6 +72,20 @@
                     }
 
                     <h2>@product.Title</h2>
+                    <p class="product-price">@(product.Price?.Display ?? "Price unavailable")</p>
+                    @if (!string.IsNullOrWhiteSpace(product.ItemId))
+                    {
+                        <a class="product-link" href="@("/product?itemId=" + Uri.EscapeDataString(product.ItemId))"
+                           aria-label="@("View " + product.Title)"></a>
+                    }
+                    @if (product.WatchCount is not null)
+                    {
+                        <p>@product.WatchCount watching</p>
+                    }
+                    @if (product.Availability is not null)
+                    {
+                        <p>@(product.Availability switch { "IN_STOCK" => "In stock", "LIMITED_STOCK" => "Limited stock", "OUT_OF_STOCK" => "Out of stock", _ => "Availability unknown" })</p>
+                    }
                 </article>
             }
         </div>
@@ -70,10 +102,11 @@
     .search-bar {
         display: flex;
         gap: 10px;
+        flex-wrap: wrap;
         margin: 24px 0;
     }
 
-    .search-bar input {
+    .search-bar > input {
         flex: 1;
         min-width: 0;
         padding: 12px;
@@ -102,12 +135,23 @@
         gap: 20px;
     }
 
+    .catalog-controls { flex-basis: 100%; padding: 16px; border: 1px solid #ccc; border-radius: 6px; }
+    .catalog-controls label { display: inline-block; margin: 8px 16px 8px 0; }
+    .catalog-controls select { padding: 8px; max-width: 100%; }
+    .catalog-controls legend { font-size: 16px; }
+
     .product-card {
+        position: relative;
         padding: 16px;
         border: 1px solid #ddd;
         border-radius: 10px;
         background: white;
     }
+
+    .product-link { position: absolute; inset: 0; border-radius: 10px; }
+    .product-link:hover { box-shadow: 0 3px 12px #0002; }
+    .product-link:focus-visible { outline: 3px solid #2455a4; outline-offset: 3px; }
+    .product-price { font-weight: 700; color: #222; margin: 12px 0 0; }
 
     .product-card img {
         width: 100%;
@@ -137,9 +181,12 @@
 </style>
 
 @code {
-    private string search = "truck";
+    private string search = "";
+    private string sort = "";
+    private bool availableOnly;
     private bool loading;
     private string? error;
+    private string? notice;
     private List<Product> products = new();
 
     protected override async Task OnInitializedAsync()
@@ -154,13 +201,21 @@
 
         loading = true;
         error = null;
+        notice = null;
         products.Clear();
 
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            var query = string.IsNullOrWhiteSpace(search) ? "truck" : search.Trim();
-            using var response = await client.GetAsync("api/products?q=" + Uri.EscapeDataString(query));
+            var query = search.Trim();
+            if (query.Length == 0)
+            {
+                return;
+            }
+            var url = "api/products?q=" + Uri.EscapeDataString(query);
+            if (sort.Length > 0) url += "&sort=" + Uri.EscapeDataString(sort);
+            if (availableOnly) url += "&availableOnly=true";
+            using var response = await client.GetAsync(url);
             if (!response.IsSuccessStatusCode)
             {
                 error = "Could not load eBay products. Please try again.";
@@ -170,6 +225,7 @@
             var json = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<ProductSearchResponse>(json);
             products = result?.Items ?? new List<Product>();
+            notice = result?.Notice;
         }
         catch (HttpRequestException)
         {
@@ -190,12 +246,30 @@
     }
     public class ProductSearchResponse
     {
+        [JsonPropertyName("catalogNotice")]
+        public string? Notice { get; set; }
         [JsonPropertyName("itemSummaries")]
         public List<Product>? Items { get; set; }
     }
 
     public class Product
     {
+        [JsonPropertyName("itemId")]
+        public string? ItemId { get; set; }
+
+        [JsonPropertyName("price")]
+        public FrontEnd.Shared.ProductPrice? Price { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("shortDescription")]
+        public string? ShortDescription { get; set; }
+        [JsonPropertyName("watchCount")]
+        public long? WatchCount { get; set; }
+
+        [JsonPropertyName("availability")]
+        public string? Availability { get; set; }
         [JsonPropertyName("title")]
         public string Title { get; set; } = "";
 
