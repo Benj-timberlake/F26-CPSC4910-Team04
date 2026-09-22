@@ -41,7 +41,7 @@ public sealed class MarketEndpointTests
         Assert.Equal(json, await response.Content.ReadAsStringAsync());
         Assert.Equal(1, handler.Calls);
         Assert.Equal(HttpMethod.Get, handler.Method);
-        Assert.Equal("https://api.ebay.com/buy/browse/v1/item_summary/search?q=" + Uri.EscapeDataString(query) + "&limit=10", handler.Url);
+        Assert.Equal("https://api.ebay.com/buy/browse/v1/item_summary/search?q=" + Uri.EscapeDataString(query) + "&limit=12", handler.Url);
         Assert.Equal("Bearer test-token", handler.Authorization);
         Assert.Equal("EBAY_US", handler.Marketplace);
     }
@@ -109,6 +109,87 @@ public sealed class MarketEndpointTests
         Assert.Equal("{}", await ebay.SearchAsync("gps", default));
         Assert.Equal(1, handler.TokenCalls);
         Assert.Equal(2, handler.SearchCalls);
+    }
+
+    [Theory]
+    [InlineData("price")]
+    [InlineData("-price")]
+    [InlineData("newlyListed")]
+    public async Task SortAndCombinedFiltersAreForwarded(string sort)
+    {
+        using var handler = new StubHandler(HttpStatusCode.OK);
+        await using var app = await StartApp(handler);
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync("/api/products?q=truck&sort=" + sort + "&freeShipping=true&returnsAccepted=true");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("https://api.ebay.com/buy/browse/v1/item_summary/search?q=truck&limit=12&sort=" + sort +
+            "&filter=" + Uri.EscapeDataString("maxDeliveryCost:0,returnsAccepted:true"), handler.Url);
+    }
+
+    [Theory]
+    [InlineData("sort=popularity")]
+    [InlineData("sort=invalid")]
+    public async Task UnsupportedOptionsAreRejected(string options)
+    {
+        using var handler = new StubHandler(HttpStatusCode.OK);
+        await using var app = await StartApp(handler);
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync("/api/products?q=truck&" + options);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
+    public async Task ProductDetailUsesEncodedItemIdAndReturnsListing()
+    {
+        const string body = """{"itemId":"v1|123|0","description":"Description"}""";
+        using var handler = new StubHandler(HttpStatusCode.OK, body);
+        await using var app = await StartApp(handler);
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync("/api/products/detail?itemId=v1%7C123%7C0");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(body, await response.Content.ReadAsStringAsync());
+        Assert.Equal("https://api.ebay.com/buy/browse/v1/item/v1%7C123%7C0", handler.Url);
+        Assert.Equal("Bearer test-token", handler.Authorization);
+    }
+
+    [Theory]
+    [InlineData(404, 404)]
+    [InlineData(500, 502)]
+    public async Task ProductDetailMapsUpstreamFailures(int upstream, int expected)
+    {
+        using var handler = new StubHandler((HttpStatusCode)upstream);
+        await using var app = await StartApp(handler);
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync("/api/products/detail?itemId=v1%7C123%7C0");
+        Assert.Equal((HttpStatusCode)expected, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/products/detail")]
+    [InlineData("/api/products/detail?itemId=")]
+    [InlineData("/api/products/detail?itemId=%20")]
+    public async Task MissingDetailIdIsRejectedBeforeCallingEbay(string url)
+    {
+        using var handler = new StubHandler(HttpStatusCode.OK);
+        await using var app = await StartApp(handler);
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync(url);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData("invalid JSON")]
+    [InlineData("null")]
+    [InlineData("{}")]
+    public async Task InvalidUpstreamDetailReturnsBadGateway(string body)
+    {
+        using var handler = new StubHandler(HttpStatusCode.OK, body);
+        await using var app = await StartApp(handler);
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync("/api/products/detail?itemId=v1%7C123%7C0");
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
     }
 
     private sealed class OAuthHandler(string host) : HttpMessageHandler
