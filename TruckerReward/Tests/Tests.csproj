@@ -14,6 +14,7 @@
     <!-- Override bUnit's older parser dependency with the patched release. -->
     <PackageReference Include="AngleSharp" Version="1.5.0" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
     <ProjectReference Include="../FrontEnd/FrontEnd.csproj" />
     <ProjectReference Include="../BackEnd/BackEnd.csproj" />
   </ItemGroup>

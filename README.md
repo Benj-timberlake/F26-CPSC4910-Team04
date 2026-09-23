@@ -1,68 +1,68 @@
-# F26-CPSC4910-Team04
-4910 Project
+# TruckerReward
 
+CPSC 4910 Team 04. Sponsors award points to truck drivers for good driving; drivers spend them in
+the sponsor's catalog.
 
-# Below is Given README from C#
+- `TruckerReward/BackEnd` — ASP.NET Core 10 minimal API, EF Core, MySQL
+- `TruckerReward/FrontEnd` — Blazor Server
+- `TruckerReward/Tests` — xUnit, bUnit
+- `db/` — `schema.sql` for a fresh database, `migrations/` for one that already exists
+- `infra/` — CloudFront setup script
 
+## Local setup
 
-# GitHub Codespaces ♥️ C#
+The database is the class RDS instance, database `Team04_DB`. Put the connection string in the
+BackEnd user secrets once (your IP has to be allowed on port 3306):
 
-Want to try out C# for web development? 
+```
+cd TruckerReward/BackEnd
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "server=HOST;port=3306;database=Team04_DB;user=USER;password=PASSWORD"
+```
 
-This repo builds a Weather API, OpenAPI integration to test with [Scalar](https://learn.microsoft.com/aspnet/core/fundamentals/openapi/using-openapi-documents?view=aspnetcore-10.0#use-scalar-for-interactive-api-documentation), and displays the data in a web application using Blazor (.NET/C#).
+Then `make` builds, starts both apps (BackEnd 8080, FrontEnd 8081) and opens the login page.
+`make test`, `make stop`, `make logs`. VS Code's Run All does the same as `make`.
 
-We've given you both a frontend and backend to play around with and where you go from here is up to you!
+Admins are made by setting `user_type = 'admin'` on the user row. Emails (reset links, security
+notices) print to the backend log unless `EMAIL_FROM` is set.
 
-Everything you do here is contained within this one codespace. There is no repository on GitHub yet. If and when you’re ready you can click "Publish Branch" and we’ll create your repository and push up your project. If you were just exploring then and have no further need for this code then you can simply delete your codespace and it's gone forever.
+Optional user secrets, never appsettings:
 
-### Run Options
+| Key | Project | Effect |
+|---|---|---|
+| `Authentication:Google:ClientId` / `ClientSecret` | FrontEnd | Google sign-in button; redirect URI `/signin-google` |
+| `Authentication:Microsoft:ClientId` / `ClientSecret` | FrontEnd | Microsoft sign-in button; redirect URI `/signin-microsoft` |
+| `BACKEND_API_KEY` | both | backend rejects requests without a matching `X-Api-Key` |
 
-[![Open in GitHub Codespaces](https://img.shields.io/static/v1?style=for-the-badge&label=GitHub+Codespaces&message=Open&color=lightgrey&logo=github)](https://codespaces.new/github/dotnet-codespaces)
-[![Open in Dev Container](https://img.shields.io/static/v1?style=for-the-badge&label=Dev+Container&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/github/dotnet-codespaces)
+## Schema changes
 
-You can also run this repository locally by following these instructions: 
-1. Clone the repo to your local machine `git clone https://github.com/github/dotnet-codespaces`
-1. Open repo in VS Code
+Edit `db/schema.sql` and add a numbered file under `db/migrations/` with the `ALTER`/`CREATE`
+for the existing database, then run it against RDS: `mysql -h HOST -u USER -p Team04_DB < db/migrations/NNN_name.sql`.
 
-## Getting started
+## Deployment
 
-1. **📤 One-click setup**: [Open a new Codespace](https://codespaces.new/github/dotnet-codespaces), giving you a fully configured cloud developer environment.
-2. **▶️ Run all, one-click again**: Use VS Code's built-in *Run* command and open the forwarded ports *8080* and *8081* in your browser. 
+Every push to `main` builds both apps into one bundle and deploys it to Elastic Beanstalk
+(`.github/workflows/deploy.yml`). The FrontEnd listens on 5000, the BackEnd on 5100 loopback only.
 
-![Debug menu in VS Code showing Run All](images/RunAll.png)
+Environment properties on the Beanstalk environment:
 
-3. The Blazor web app and Scalar can be open by heading to **/scalar** in your browser. On Scalar, head to the backend API and click "Test Request" to call and test the API. 
+| Name | Value |
+|---|---|
+| `ConnectionStrings__DefaultConnection` | same as local, database `Team04_DB` |
+| `BACKEND_API_KEY` | one random string; the BackEnd refuses requests without it |
+| `FRONTEND_URL` | the public https address; reset links are built from it |
+| `EMAIL_FROM` | an SES-verified sender; the instance role needs `ses:SendEmail` |
+| `Authentication__Google__*`, `Authentication__Microsoft__*` | as above, with `__` for `:` |
 
-![A website showing weather](images/BlazorApp.png)
+### HTTPS
 
-!["UI showing testing an API"](images/scalar.png)
+Google and Microsoft refuse `http://` redirect URIs outside localhost and ACM won't issue a
+certificate for an `elasticbeanstalk.com` name, so TLS comes from CloudFront:
 
+```
+infra/cloudfront.sh BEANSTALK-04-env.eba-xxxx.us-east-1.elasticbeanstalk.com
+```
 
-4. **🔄 Iterate quickly:** Codespaces updates the server on each save, and VS Code's debugger lets you dig into the code execution.
-
-5. To stop running, return to VS Code, and click Stop twice in the debug toolbar. 
-
-![VS Code stop debuggin on both backend and frontend](images/StopRun.png)
-
-
-## Contributing
-
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
-
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
-
-## Trademarks
-
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+It forwards everything uncached (including the Blazor WebSocket) and redirects http to https.
+The FrontEnd reads `CloudFront-Forwarded-Proto`, so the auth cookie is `Secure`, the sso redirect
+URIs are https and the login log records the browser's IP. Set `FRONTEND_URL` to the CloudFront
+address and register `https://<it>/signin-google` and `/signin-microsoft` with the providers.
