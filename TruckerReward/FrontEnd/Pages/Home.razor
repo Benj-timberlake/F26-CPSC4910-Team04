@@ -1,0 +1,34 @@
+@page "/"
+
+<PageTitle>TruckerReward</PageTitle>
+
+<div class="tr-page-narrow home">
+    <h1>TruckerReward</h1>
+
+    <AuthorizeView>
+        <Authorized>
+            <p>Signed in as <strong>@context.User.Identity?.Name</strong>.</p>
+            <p>
+                <a class="tr-btn" href="dashboard">Go to your dashboard</a>
+                <a class="tr-btn-outline" href="products">Browse products</a>
+            </p>
+        </Authorized>
+        <NotAuthorized>
+            <p>Welcome to TruckerReward.</p>
+            <p>
+                <a class="tr-btn" href="login">Log in</a>
+                <a class="tr-btn-outline" href="register">Create an account</a>
+            </p>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+<style>
+    .home {
+        max-width: 640px;
+    }
+
+    .home .tr-btn, .home .tr-btn-outline {
+        margin: 8px 12px 0 0;
+    }
+</style>

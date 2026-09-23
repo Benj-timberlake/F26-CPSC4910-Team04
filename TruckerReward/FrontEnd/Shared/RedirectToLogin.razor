@@ -1,0 +1,19 @@
+@namespace FrontEnd.Shared
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized>
+        <p role="alert" style="padding: 24px;">Your account doesn't have access to this page.</p>
+    </Authorized>
+    <NotAuthorized>
+        @{ SendToLogin(); }
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private void SendToLogin()
+    {
+        var returnUrl = Nav.ToBaseRelativePath(Nav.Uri);
+        Nav.NavigateTo("login?returnUrl=" + Uri.EscapeDataString("/" + returnUrl), forceLoad: true);
+    }
+}

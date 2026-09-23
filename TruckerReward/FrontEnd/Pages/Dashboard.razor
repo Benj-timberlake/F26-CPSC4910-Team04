@@ -1,0 +1,207 @@
+@page "/dashboard"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard</PageTitle>
+
+<div class="tr-page">
+    @if (loadError != null)
+    {
+        <h1>Dashboard</h1>
+        <p role="alert" class="tr-alert-error">@loadError</p>
+    }
+    else if (account == null || activity == null)
+    {
+        <h1>Dashboard</h1>
+        <p role="status"><em>Loading your account...</em></p>
+    }
+    else
+    {
+        <h1>My TruckerReward Dashboard</h1>
+        @if (notice is not null)
+        {
+            <p role="status" class="tr-alert-success">@notice</p>
+        }
+
+        <div class="tr-cards">
+            @if (account.UserType == "driver")
+            {
+                <section class="tr-card points">
+                    <h2>Points</h2>
+                    <p class="balance">@account.Points.ToString("N0")</p>
+                    <p class="hint">Earned for good driving. Spend them in your sponsor's <a href="products">product catalog</a>.</p>
+                </section>
+            }
+
+            <section class="tr-card">
+                <h2>@AccountLabel(account.UserType)</h2>
+                <dl class="tr-kv">
+                    <dt>Username</dt>
+                    <dd>@account.Username</dd>
+                    @if (account.UserType == "sponsor")
+                    {
+                        <dt>Company</dt>
+                        <dd>@Shown(account.CompanyName)</dd>
+                    }
+                    <dt>Email</dt>
+                    <dd>@account.Email</dd>
+                    <dt>Phone</dt>
+                    <dd>@Shown(account.PhoneNumber)</dd>
+                    <dt>Address</dt>
+                    <dd>@Shown(account.Address)</dd>
+                </dl>
+            </section>
+
+            <section class="tr-card">
+                <h2>Security</h2>
+                @if (activity.FailedSincePreviousLogin > 0)
+                {
+                    <p role="alert" class="tr-alert-warning">
+                        @activity.FailedSincePreviousLogin failed sign-in @(activity.FailedSincePreviousLogin == 1 ? "attempt" : "attempts")
+                        on your account since your previous sign-in. If that wasn't you, change your password.
+                    </p>
+                }
+                <dl class="tr-kv">
+                    <dt>This sign-in</dt>
+                    <dd>@When(activity.LastLoginAt)@Ip(activity.LastLoginIp)</dd>
+                    <dt>Previous sign-in</dt>
+                    <dd>@(activity.PreviousLoginAt is null ? "This is your first sign-in." : When(activity.PreviousLoginAt))</dd>
+                    <dt>Password</dt>
+                    <dd>
+                        @(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))
+                        <a href="account/password">Change password</a>
+                    </dd>
+                </dl>
+
+                @if (activity.Recent.Count > 0)
+                {
+                    <details>
+                        <summary>Recent attempts</summary>
+                        <table class="tr-table">
+                            <thead>
+                                <tr>
+                                    <th>When</th>
+                                    <th>Result</th>
+                                    <th>IP</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in activity.Recent)
+                                {
+                                    <tr class="@(a.Succeeded ? "" : "failed")">
+                                        <td>@When(a.AttemptedAt)</td>
+                                        <td>@(a.Succeeded ? "Signed in" : "Failed")</td>
+                                        <td>@(a.IpAddress ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </details>
+                }
+            </section>
+        </div>
+    }
+</div>
+
+<style>
+    .points {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: white;
+    }
+
+    .points a {
+        color: white;
+    }
+
+    .balance {
+        font-size: 44px;
+        font-weight: 700;
+        line-height: 1.1;
+        margin: 0;
+    }
+
+    .hint {
+        margin: 8px 0 0;
+        opacity: 0.9;
+    }
+
+    .tr-kv dd a {
+        margin-left: 8px;
+    }
+
+    details {
+        margin-top: 14px;
+    }
+
+    summary {
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    details .tr-table {
+        margin-top: 8px;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private Account? account;
+    private SecuritySummary? activity;
+    private string? loadError;
+    private string? notice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["password"] == "changed")
+            notice = "Your password has been changed.";
+
+        var user = (await AuthState).User;
+        var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        using var client = HttpClientFactory.CreateClient("Backend");
+        try
+        {
+            account = await client.GetFromJsonAsync<Account>($"users/{id}");
+            activity = await client.GetFromJsonAsync<SecuritySummary>($"users/{id}/security");
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't load your account right now. Try again in a moment.";
+        }
+    }
+
+    private static string AccountLabel(string userType) => userType switch
+    {
+        "driver" => "Driver account",
+        "sponsor" => "Sponsor account",
+        "admin" => "Administrator account",
+        _ => "Account"
+    };
+
+    private static string Shown(string? value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
+
+    private static string Ip(string? ip) => string.IsNullOrEmpty(ip) ? "" : $" from {ip}";
+
+    // stored in utc, shown as an absolute time plus how long ago so it reads at a glance
+    private static string When(DateTime? utc)
+    {
+        if (utc is null) return "—";
+        var t = DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc);
+        var ago = DateTime.UtcNow - t;
+        var rel = ago.TotalSeconds < 60 ? "just now"
+            : ago.TotalMinutes < 60 ? $"{(int)ago.TotalMinutes} min ago"
+            : ago.TotalHours < 24 ? $"{(int)ago.TotalHours} h ago"
+            : ago.TotalDays < 30 ? $"{(int)ago.TotalDays} d ago"
+            : "";
+        var abs = t.ToString("yyyy-MM-dd HH:mm") + " UTC";
+        return rel == "" ? abs : $"{abs} ({rel})";
+    }
+
+    private sealed record Account(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, string? CompanyName, int Points);
+    private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
+    private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
+}

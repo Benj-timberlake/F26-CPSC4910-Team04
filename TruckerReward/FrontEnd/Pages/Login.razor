@@ -1,0 +1,83 @@
+@page "/login"
+@using Microsoft.AspNetCore.Authentication
+@inject IAuthenticationSchemeProvider Schemes
+@inject NavigationManager Nav
+
+<PageTitle>Log in</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Log in</h1>
+
+        @if (message is not null)
+        {
+            <p role="alert" class="@(error is null ? "tr-alert-success" : "tr-alert-error")">@message</p>
+        }
+
+        <form class="tr-form" method="post" action="account/login">
+            <input type="hidden" name="returnUrl" value="@returnUrl" />
+
+            <label for="username">Username</label>
+            <input id="username" name="username" required autocomplete="username" autofocus />
+
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required autocomplete="current-password" />
+
+            <button type="submit" class="tr-btn tr-btn-block">Log in</button>
+            <p class="tr-alt"><a href="forgot-password">Forgot your password?</a></p>
+        </form>
+
+        @if (providers.Count > 0)
+        {
+            <div class="sso">
+                <p class="tr-subtitle">or continue with</p>
+                @foreach (var p in providers)
+                {
+                    <a class="tr-btn-outline tr-btn-block" href="account/external/@p.Name?returnUrl=@Uri.EscapeDataString(returnUrl ?? "")">@p.DisplayName</a>
+                }
+            </div>
+        }
+    </div>
+
+    <p class="tr-alt">No account yet? <a href="register">Create one</a></p>
+</div>
+
+<style>
+    .sso {
+        margin-top: 24px;
+        text-align: center;
+    }
+
+    .sso .tr-btn-block {
+        margin-top: 8px;
+    }
+</style>
+
+@code {
+    private string? error;
+    private string? message;
+    private string? returnUrl;
+    private List<AuthenticationScheme> providers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        error = query["error"];
+        returnUrl = query["returnUrl"];
+        // one message for a bad username or a bad password, saying which would confirm which usernames exist
+        message = error switch
+        {
+            "1" => "Wrong username or password.",
+            "locked" => "Too many failed attempts. Wait a few minutes and try again.",
+            "backend" => "Something went wrong on our side. Try again in a moment.",
+            "sso" => "Sign in with that provider didn't work. Try again or use a password.",
+            null when query["reset"] == "1" => "Your password has been reset. Log in with the new one.",
+            _ => null
+        };
+
+        // only google/microsoft have a display name, the cookie schemes don't
+        providers = (await Schemes.GetAllSchemesAsync())
+            .Where(s => !string.IsNullOrEmpty(s.DisplayName))
+            .ToList();
+    }
+}

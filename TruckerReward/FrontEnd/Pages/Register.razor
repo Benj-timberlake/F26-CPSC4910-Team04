@@ -1,0 +1,62 @@
+@page "/register"
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Create account</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Create account</h1>
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <p role="alert" class="tr-alert-error">@error</p>
+        }
+
+        <form class="tr-form" method="post" action="account/register">
+            <label for="userType">I am a</label>
+            <select id="userType" name="userType" @bind="userType">
+                <option value="driver">Driver</option>
+                <option value="sponsor">Sponsor</option>
+            </select>
+
+            @if (userType == "sponsor")
+            {
+                <label for="companyName">Company name</label>
+                <input id="companyName" name="companyName" required autocomplete="organization" />
+            }
+
+            <label for="username">Username</label>
+            <input id="username" name="username" required autocomplete="username" />
+
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required autocomplete="email" />
+
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" />
+            <p class="help">@policy</p>
+
+            <label for="phoneNumber">Phone</label>
+            <input id="phoneNumber" name="phoneNumber" type="tel" autocomplete="tel" />
+
+            <label for="address">Address</label>
+            <input id="address" name="address" autocomplete="street-address" />
+
+            <button type="submit" class="tr-btn tr-btn-block">Create account</button>
+        </form>
+    </div>
+
+    <p class="tr-alt">Already have an account? <a href="login">Log in</a></p>
+</div>
+
+@code {
+    private string userType = "driver";
+    private string? error;
+    private string? policy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        error = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["error"];
+        policy = await PasswordPolicyText.Load(HttpClientFactory);
+    }
+}

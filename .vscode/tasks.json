@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/SampleApp/FrontEnd/FrontEnd.csproj",
+                "${workspaceFolder}/TruckerReward/FrontEnd/FrontEnd.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -19,7 +19,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/SampleApp/FrontEnd/FrontEnd.csproj",
+                "${workspaceFolder}/TruckerReward/FrontEnd/FrontEnd.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -33,7 +33,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/SampleApp/FrontEnd/FrontEnd.csproj"
+                "${workspaceFolder}/TruckerReward/FrontEnd/FrontEnd.csproj"
             ],
             "problemMatcher": "$msCompile"
         },
@@ -43,7 +43,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/SampleApp/BackEnd/BackEnd.csproj",
+                "${workspaceFolder}/TruckerReward/BackEnd/BackEnd.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -55,7 +55,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/SampleApp/BackEnd/BackEnd.csproj",
+                "${workspaceFolder}/TruckerReward/BackEnd/BackEnd.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -69,7 +69,7 @@
                 "watch",
                 "run",
                 "--project",
-                "${workspaceFolder}/SampleApp/BackEnd/BackEnd.csproj"
+                "${workspaceFolder}/TruckerReward/BackEnd/BackEnd.csproj"
             ],
             "problemMatcher": "$msCompile"
         }

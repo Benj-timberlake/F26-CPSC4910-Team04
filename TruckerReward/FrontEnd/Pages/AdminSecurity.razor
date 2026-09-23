@@ -1,0 +1,149 @@
+@page "/admin/security"
+@attribute [Authorize(Roles = "admin")]
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Security</PageTitle>
+
+<div class="tr-page">
+    <h1>Security</h1>
+
+    @if (loadError is not null)
+    {
+        <p role="alert" class="tr-alert-error">@loadError</p>
+    }
+    else if (locked is null || attempts is null || changes is null)
+    {
+        <p role="status"><em>Loading...</em></p>
+    }
+    else
+    {
+        <section class="tr-card">
+            <h2>Locked accounts</h2>
+            @if (locked.Count == 0)
+            {
+                <p class="tr-muted">Nothing is locked right now. An account locks for three minutes after five wrong passwords in a row.</p>
+            }
+            else
+            {
+                <div class="tr-table-wrap">
+                    <table class="tr-table">
+                        <thead><tr><th>Username</th><th>Locked until</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in locked)
+                            {
+                                <tr><td>@l.Username</td><td>@Time(l.LockedUntil)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="tr-card">
+            <h2>Sign-in attempts</h2>
+            <label class="tr-check">
+                <input type="checkbox" @bind="failedOnly" @bind:after="LoadAttempts" />
+                Failed only
+            </label>
+            @if (attempts.Count == 0)
+            {
+                <p class="tr-muted">Nothing logged yet.</p>
+            }
+            else
+            {
+                <div class="tr-table-wrap">
+                    <table class="tr-table">
+                        <thead><tr><th>When</th><th>Username</th><th>Result</th><th>IP</th></tr></thead>
+                        <tbody>
+                            @foreach (var a in attempts)
+                            {
+                                <tr class="@(a.Succeeded ? "" : "failed")">
+                                    <td>@Time(a.AttemptedAt)</td>
+                                    <td>@a.Username @if (a.UserId is null) { <span class="tr-muted"> (no such user)</span> }</td>
+                                    <td>@(a.Succeeded ? "Signed in" : "Failed")</td>
+                                    <td>@(a.IpAddress ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="tr-card">
+            <h2>Password changes</h2>
+            @if (changes.Count == 0)
+            {
+                <p class="tr-muted">No password changes yet.</p>
+            }
+            else
+            {
+                <div class="tr-table-wrap">
+                    <table class="tr-table">
+                        <thead><tr><th>When</th><th>Username</th><th>Change</th><th>IP</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in changes)
+                            {
+                                <tr>
+                                    <td>@Time(c.ChangedAt)</td>
+                                    <td>@c.Username</td>
+                                    <td>@ChangeLabel(c.ChangeType)</td>
+                                    <td>@(c.IpAddress ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+<style>
+    .tr-page .tr-card + .tr-card {
+        margin-top: 20px;
+    }
+</style>
+
+@code {
+    private bool failedOnly = true;
+    private List<Locked>? locked;
+    private List<Attempt>? attempts;
+    private List<Change>? changes;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            locked = await client.GetFromJsonAsync<List<Locked>>("admin/locked-accounts");
+            changes = await client.GetFromJsonAsync<List<Change>>("admin/password-changes");
+            await LoadAttempts();
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't reach the backend. Try again in a moment.";
+        }
+    }
+
+    private async Task LoadAttempts()
+    {
+        using var client = HttpClientFactory.CreateClient("Backend");
+        attempts = await client.GetFromJsonAsync<List<Attempt>>($"admin/login-attempts?failedOnly={failedOnly}");
+    }
+
+    private static string Time(DateTime utc) => utc.ToString("yyyy-MM-dd HH:mm:ss");
+
+    private static string ChangeLabel(string type) => type switch
+    {
+        "changed" => "Changed by the user",
+        "reset_requested" => "Reset link requested",
+        "reset_completed" => "Reset with emailed link",
+        _ => type
+    };
+
+    private sealed record Locked(string Username, DateTime LockedUntil);
+    private sealed record Attempt(string Username, int? UserId, bool Succeeded, string? IpAddress, DateTime AttemptedAt);
+    private sealed record Change(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress);
+}
