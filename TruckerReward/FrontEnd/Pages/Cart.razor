@@ -1,3 +1,78 @@
 @page "/cart"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
 
-<h1>cart</h1>
+<PageTitle>Cart</PageTitle>
+
+<div class="tr-page">
+    <h1>cart</h1>
+    @if (loadError is not null)
+    {
+        <p role="alert" class="tr-alert-error">@loadError</p>
+    }
+    else if (items is null)
+    {
+        <p role="status">Loading your cart...</p>
+    }
+    else
+    {
+        <div class="tr-table-wrap">
+            <table class="tr-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Product</th>
+                        <th scope="col">Price</th>
+                        <th scope="col">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>@item.Name</td>
+                            <td>@item.Price.ToString("F2")</td>
+                            <td>@item.Description</td>
+                        </tr>
+                    }
+                    @if (items.Count == 0)
+                    {
+                        <tr><td colspan="3">Your cart is empty.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private List<CartItem>? items;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        if (user.Identity?.IsAuthenticated != true
+            || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+        {
+            loadError = "Please sign in to view your cart.";
+            return;
+        }
+
+        using var client = HttpClientFactory.CreateClient("Backend");
+        try
+        {
+            items = await client.GetFromJsonAsync<List<CartItem>>($"users/{id}/cart")
+                ?? throw new System.Text.Json.JsonException("Missing cart response.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            loadError = "Couldn't load your cart right now. Please try again.";
+        }
+    }
+
+    private sealed record CartItem(uint Id, string Name, decimal Price, string? Description);
+}
