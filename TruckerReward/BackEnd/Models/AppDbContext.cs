@@ -14,6 +14,7 @@ public partial class AppDbContext : DbContext
     }
 
     public virtual DbSet<User> Users { get; set; }
+    public DbSet<CartItem> CartItems { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

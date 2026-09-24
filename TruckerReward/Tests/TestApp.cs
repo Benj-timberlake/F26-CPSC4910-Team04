@@ -35,6 +35,7 @@ public sealed class TestApp : IAsyncDisposable
         app.MapAuthEndpoints();
         app.MapPasswordEndpoints();
         app.MapUserEndpoints();
+        app.MapCartEndpoints();
         app.MapAdminEndpoints();
         using (var scope = app.Services.CreateScope())
         {

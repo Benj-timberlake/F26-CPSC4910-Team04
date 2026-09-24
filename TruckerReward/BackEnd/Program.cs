@@ -33,6 +33,7 @@ app.MapMarketEndpoints();
 app.MapAuthEndpoints();
 app.MapPasswordEndpoints();
 app.MapUserEndpoints();
+app.MapCartEndpoints();
 app.MapAdminEndpoints();
 
 // a real query, so this fails when the database is asleep or unreachable
