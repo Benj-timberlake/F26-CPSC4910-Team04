@@ -101,8 +101,8 @@ jobs:
       - name: Create Procfile
         run: |
           cat > bundle/Procfile <<'EOF'
-          web: dotnet ./FrontEnd/FrontEnd.dll --urls http://0.0.0.0:5000
-          backend: dotnet ./BackEnd/BackEnd.dll --urls http://127.0.0.1:5100
+          web: cd FrontEnd && dotnet FrontEnd.dll --urls http://0.0.0.0:5000
+          backend: cd BackEnd && dotnet BackEnd.dll --urls http://127.0.0.1:5100
           EOF
 
 
