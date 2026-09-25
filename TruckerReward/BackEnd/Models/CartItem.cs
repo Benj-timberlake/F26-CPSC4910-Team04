@@ -21,6 +21,9 @@ public sealed class CartItem
     [Column("price", TypeName = "decimal(10,2)")]
     public decimal Price { get; set; }
 
+    [Column("quantity")]
+    public int Quantity { get; set; } = 1;
+
     [Column("description", TypeName = "text")]
     public string? Description { get; set; }
 }
