@@ -5,7 +5,7 @@
 
 <PageTitle>Cart</PageTitle>
 
-<div class="tr-page">
+<div class="tr-page cart-page">
     <h1>cart</h1>
     @if (loadError is not null)
     {
@@ -41,6 +41,9 @@
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="cart-total">
+            <strong>Cart total: @items.Sum(item => item.Price).ToString("F2")</strong>
         </div>
     }
 </div>
