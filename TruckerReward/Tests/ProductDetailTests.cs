@@ -1,5 +1,7 @@
 using Bunit;
-using FrontEnd.Pages;
+using Bunit.TestDoubles;
+using System.Security.Claims;
+using FrontEnd.Pages.Products;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using Xunit;
@@ -9,16 +11,35 @@ namespace TruckerReward.Tests;
 public sealed class ProductDetailTests : TestContext
 {
     private readonly Handler handler = new();
+    private readonly TestAuthorizationContext auth;
 
     public ProductDetailTests()
     {
+        auth = this.AddTestAuthorization();
         Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
             .ConfigurePrimaryHttpMessageHandler(() => handler);
         Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("/product?itemId=v1%7C123%7C0");
     }
 
     [Fact]
-    public void DetailsRenderAndBuyHasNoAction()
+    public void BuyPostsProductForSignedInUserAndOpensCart()
+    {
+        auth.SetAuthorized("buyer");
+        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        handler.Body = """{"itemId":"v1|123|0","title":"GPS","price":{"value":"29.50","currency":"USD"},"shortDescription":"Navigation"}""";
+        var component = RenderComponent<ProductDetail>();
+        component.WaitForAssertion(() => Assert.Equal("GPS", component.Find("h1").TextContent));
+        component.Find(".buy-button").Click();
+        component.WaitForAssertion(() => Assert.EndsWith("/cart", Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri));
+        Assert.Equal("http://backend/users/7/cart", handler.Url);
+        Assert.Equal(HttpMethod.Post, handler.Method);
+        using var payload = System.Text.Json.JsonDocument.Parse(handler.RequestBody!);
+        Assert.Equal("GPS", payload.RootElement.GetProperty("name").GetString());
+        Assert.Equal(29.50m, payload.RootElement.GetProperty("price").GetDecimal());
+    }
+
+    [Fact]
+    public void DetailsRenderAndBuyIsEnabled()
     {
         handler.Body = """
             {"itemId":"v1|123|0","title":"GPS","price":{"value":"29.50","currency":"USD"},
@@ -29,7 +50,7 @@ public sealed class ProductDetailTests : TestContext
         Assert.Equal("http://backend/api/products/detail?itemId=v1%7C123%7C0", handler.Url);
         Assert.Equal("29.50 USD", component.Find(".detail-price").TextContent);
         Assert.Equal("https://example.com/photo.jpg", component.Find(".detail-photo img").GetAttribute("src"));
-        Assert.True(component.Find(".buy-button").HasAttribute("disabled"));
+        Assert.False(component.Find(".buy-button").HasAttribute("disabled"));
         Assert.Empty(component.FindAll("form"));
         var frame = component.Find("iframe");
         Assert.Equal("", frame.GetAttribute("sandbox"));
@@ -111,10 +132,14 @@ public sealed class ProductDetailTests : TestContext
         public string Body { get; set; } = "{}";
         public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
         public string? Url { get; private set; }
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public HttpMethod? Method { get; private set; }
+        public string? RequestBody { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Url = request.RequestUri!.AbsoluteUri;
-            return Task.FromResult(new HttpResponseMessage(Status) { Content = new StringContent(Body) });
+            Method = request.Method;
+            RequestBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(Status) { Content = new StringContent(Body) };
         }
     }
 }

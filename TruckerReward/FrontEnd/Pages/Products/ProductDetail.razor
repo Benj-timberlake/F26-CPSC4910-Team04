@@ -1,7 +1,10 @@
 @page "/product"
 @using System.Net
 @using System.Text.Json
+@using System.Security.Claims
+@using System.Globalization
 @inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
 @implements IDisposable
 
 <PageTitle>@(product?.Title ?? "Product details")</PageTitle>
@@ -33,7 +36,11 @@
             <section>
                 <h1>@product.Title</h1>
                 <p class="detail-price">@(product.Price?.Display ?? "Price unavailable")</p>
-                <button type="button" class="buy-button" disabled>Buy</button>
+                <button type="button" class="buy-button" disabled="@addingToCart" @onclick="AddToCart">@(addingToCart ? "Adding..." : "Buy")</button>
+                @if (cartError is not null)
+                {
+                    <p role="alert">@cartError</p>
+                }
             </section>
         </div>
         <section class="description">
@@ -59,6 +66,51 @@
     private bool loading;
     private string? error;
     private CancellationTokenSource? requestCancellation;
+    private bool addingToCart;
+    private string? cartError;
+
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private async Task AddToCart()
+    {
+        if (addingToCart || product is null) return;
+        cartError = null;
+        var user = (await AuthState).User;
+        if (user.Identity?.IsAuthenticated != true
+            || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+        {
+            cartError = "Please log in to add items to your cart.";
+            return;
+        }
+        if (!decimal.TryParse(product.Price?.Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var price))
+        {
+            cartError = "This product's price is unavailable.";
+            return;
+        }
+
+        addingToCart = true;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PostAsJsonAsync($"users/{id}/cart", new
+            {
+                Name = product.Title,
+                Price = price,
+                Description = product.ShortDescription ?? product.Description
+            });
+            response.EnsureSuccessStatusCode();
+            Nav.NavigateTo("cart");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            cartError = "Couldn't add this item to your cart. Please check your cart before trying again.";
+        }
+        finally
+        {
+            addingToCart = false;
+        }
+    }
 
     protected override Task OnParametersSetAsync() => LoadProduct();
 
@@ -68,6 +120,7 @@
         requestCancellation?.Dispose();
         var cancellation = requestCancellation = new CancellationTokenSource();
         product = null;
+        cartError = null;
         error = null;
         loading = true;
         try
