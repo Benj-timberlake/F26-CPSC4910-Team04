@@ -240,16 +240,9 @@ a, .btn-link {
         #f4f7fb;
 }
 
-
-/* Custom truck cursor */
-html,
-body,
-a,
-button,
-input,
-select,
-textarea,
-.tr-btn,
-.tr-btn-outline {
-    cursor: url('/images/truck-cursor-32.png') 4 4, auto;
+/* Custom truck cursor everywhere */
+*,
+*::before,
+*::after {
+    cursor: url('/images/truck-cursor-32.png') 4 4, auto !important;
 }
