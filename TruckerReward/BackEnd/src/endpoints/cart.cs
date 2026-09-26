@@ -72,6 +72,7 @@ public static class CartEndpoints
     }
 }
 
+// Price in cart requests/responses is USD per item, not reward points.
 public record CartItemDetails(uint Id, string Name, decimal Price, string? Description, int Quantity = 1);
 public record UpdateCartQuantity(int Quantity);
 public record AddCartItem(string Name, decimal Price, string? Description);

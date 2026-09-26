@@ -7,9 +7,14 @@ namespace TruckerReward.Tests;
 public sealed class ProductPriceTests
 {
     [Theory]
-    [InlineData("29.5", "USD", "29.50 USD")]
-    [InlineData("0", "USD", "0.00 USD")]
-    [InlineData("1234.56", "EUR", "1,234.56 EUR")]
+    [InlineData("29.5", "USD", "2,950 points")]
+    [InlineData("0", "USD", "0 points")]
+    [InlineData("0.01", "USD", "1 point")]
+    [InlineData("1234.56", "USD", "123,456 points")]
+    [InlineData("-1", "USD", "Price unavailable")]
+    [InlineData("0.001", "USD", "Price unavailable")]
+    [InlineData("79228162514264337593543950335", "USD", "Price unavailable")]
+    [InlineData("1234.56", "EUR", "Price unavailable")]
     [InlineData(null, "USD", "Price unavailable")]
     [InlineData("invalid", "USD", "Price unavailable")]
     [InlineData("10", null, "Price unavailable")]

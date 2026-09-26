@@ -11,8 +11,13 @@ public sealed class ProductPrice
     [JsonPropertyName("currency")]
     public string? Currency { get; set; }
 
-    public string Display => decimal.TryParse(Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
-        && !string.IsNullOrWhiteSpace(Currency)
-        ? $"{amount.ToString("N2", CultureInfo.InvariantCulture)} {Currency}"
+    public bool TryGetDollars(out decimal dollars) =>
+        decimal.TryParse(Value, NumberStyles.Number, CultureInfo.InvariantCulture, out dollars)
+        && string.Equals(Currency, "USD", StringComparison.OrdinalIgnoreCase)
+        && dollars >= 0 && dollars <= 99999999.99m
+        && decimal.Round(dollars, 2) == dollars;
+
+    public string Display => TryGetDollars(out var dollars)
+        ? RewardPoints.Format(RewardPoints.FromDollars(dollars))
         : "Price unavailable";
 }

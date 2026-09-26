@@ -39,6 +39,19 @@ public sealed class ProductDetailTests : TestContext
     }
 
     [Fact]
+    public void BuyRejectsNonDollarPrices()
+    {
+        auth.SetAuthorized("buyer");
+        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        handler.Body = """{"itemId":"v1|123|0","title":"GPS","price":{"value":"29.50","currency":"EUR"}}""";
+        var component = RenderComponent<ProductDetail>();
+        component.WaitForAssertion(() => Assert.Equal("Price unavailable", component.Find(".detail-price").TextContent));
+        component.Find(".buy-button").Click();
+        component.WaitForAssertion(() => Assert.Contains("price is unavailable", component.Find("[role=alert]").TextContent));
+        Assert.NotEqual(HttpMethod.Post, handler.Method);
+    }
+
+    [Fact]
     public void DetailsRenderAndBuyIsEnabled()
     {
         handler.Body = """
@@ -48,7 +61,7 @@ public sealed class ProductDetailTests : TestContext
         var component = RenderComponent<ProductDetail>();
         component.WaitForAssertion(() => Assert.Equal("GPS", component.Find("h1").TextContent));
         Assert.Equal("http://backend/api/products/detail?itemId=v1%7C123%7C0", handler.Url);
-        Assert.Equal("29.50 USD", component.Find(".detail-price").TextContent);
+        Assert.Equal("2,950 points", component.Find(".detail-price").TextContent);
         Assert.Equal("https://example.com/photo.jpg", component.Find(".detail-photo img").GetAttribute("src"));
         Assert.False(component.Find(".buy-button").HasAttribute("disabled"));
         Assert.Empty(component.FindAll("form"));
