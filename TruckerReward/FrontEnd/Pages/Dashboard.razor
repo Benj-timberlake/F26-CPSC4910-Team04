@@ -20,6 +20,7 @@
     else
     {
         <h1>My TruckerReward Dashboard</h1>
+        <p><a class="tr-btn" href="pastorders">Past Orders</a></p>
         @if (notice is not null)
         {
             <p role="status" class="tr-alert-success">@notice</p>
@@ -30,7 +31,7 @@
             {
                 <section class="tr-card points">
                     <h2>Points</h2>
-                    <p class="balance">@account.Points.ToString("N0")</p>
+                    <p class="balance">@FrontEnd.Shared.RewardPoints.Format(account.Points)</p>
                     <p class="hint">Earned for good driving. Spend them in your sponsor's <a href="products">product catalog</a>.</p>
                 </section>
             }

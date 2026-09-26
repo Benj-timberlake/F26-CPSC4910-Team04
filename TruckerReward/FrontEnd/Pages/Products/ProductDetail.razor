@@ -2,7 +2,6 @@
 @using System.Net
 @using System.Text.Json
 @using System.Security.Claims
-@using System.Globalization
 @inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager Nav
 @implements IDisposable
@@ -83,7 +82,7 @@
             cartError = "Please log in to add items to your cart.";
             return;
         }
-        if (!decimal.TryParse(product.Price?.Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var price))
+        if (product.Price is null || !product.Price.TryGetDollars(out var price))
         {
             cartError = "This product's price is unavailable.";
             return;

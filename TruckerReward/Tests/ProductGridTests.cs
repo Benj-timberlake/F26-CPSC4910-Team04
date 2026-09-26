@@ -1,5 +1,5 @@
 using Bunit;
-using FrontEnd.Pages;
+using FrontEnd.Pages.Products;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text;
@@ -133,12 +133,12 @@ public sealed class ProductGridTests : TestContext
     }
 
     [Fact]
-    public void CardsShowCurrencyAndLinkToDetails()
+    public void CardsShowPointsAndLinkToDetails()
     {
         var component = RenderCatalog("""
             {"itemSummaries":[{"itemId":"v1|123|0","title":"GPS","price":{"value":"29.5","currency":"USD"}},{"title":"Unknown"}]}
             """);
-        Assert.Equal(new[] { "29.50 USD", "Price unavailable" }, component.FindAll(".product-price").Select(p => p.TextContent));
+        Assert.Equal(new[] { "2,950 points", "Price unavailable" }, component.FindAll(".product-price").Select(p => p.TextContent));
         Assert.Equal("/product?itemId=v1%7C123%7C0", component.Find(".product-link").GetAttribute("href"));
         Assert.Equal("View GPS", component.Find(".product-link").GetAttribute("aria-label"));
     }

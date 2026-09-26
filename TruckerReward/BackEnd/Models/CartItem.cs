@@ -19,6 +19,7 @@ public sealed class CartItem
     public string Name { get; set; } = null!;
 
     [Column("price", TypeName = "decimal(10,2)")]
+    // USD per item; the UI converts to reward points at 100 points per dollar.
     public decimal Price { get; set; }
 
     [Column("quantity")]
