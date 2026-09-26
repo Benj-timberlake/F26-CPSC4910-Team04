@@ -239,3 +239,17 @@ a, .btn-link {
         ),
         #f4f7fb;
 }
+
+
+/* Custom truck cursor */
+html,
+body,
+a,
+button,
+input,
+select,
+textarea,
+.tr-btn,
+.tr-btn-outline {
+    cursor: url('/images/truck-cursor.png') 4 4, auto;
+}
