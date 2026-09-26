@@ -87,11 +87,17 @@
         {
             using var client = HttpClientFactory.CreateClient("Backend");
             using var response = await client.PostAsync($"users/{userId}/cart/send-order", null);
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var error = await response.Content.ReadFromJsonAsync<OrderError>();
+                actionError = error?.Message ?? "Couldn't place your order. Please refresh your cart and try again.";
+                return;
+            }
             response.EnsureSuccessStatusCode();
             items.Clear();
             orderSent = true;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
             actionError = "Couldn't confirm your order. Please refresh your cart before trying again.";
         }
@@ -150,4 +156,5 @@
     }
 
     private sealed record CartItem(uint Id, string Name, decimal Price, string? Description, int Quantity = 1);
+    private sealed record OrderError(string Message);
 }

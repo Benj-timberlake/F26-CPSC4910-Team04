@@ -5,15 +5,46 @@ public static class CartEndpoints
 {
     public static void MapCartEndpoints(this WebApplication app)
     {
-        // Placeholder submission: clear the cart without placing an external order.
-        app.MapPost("/users/{id:int}/cart/send-order", async (int id, AppDbContext db) =>
+        app.MapPost("/users/{id:int}/cart/send-order", async (int id, AppDbContext db, TimeProvider clock) =>
         {
-            if (!await db.Users.AnyAsync(user => user.Id == id))
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            // Lock this user's balance before reading the cart so duplicate submissions
+            // cannot both spend the same points. All changes commit or roll back together.
+            await db.Users.Where(user => user.Id == id)
+                .ExecuteUpdateAsync(update => update.SetProperty(user => user.Points, user => user.Points));
+            var user = await db.Users.SingleOrDefaultAsync(user => user.Id == id);
+            if (user is null)
                 return Results.NotFound();
-            var removed = await db.CartItems.Where(item => item.UserId == id).ExecuteDeleteAsync();
-            return removed == 0
-                ? Results.BadRequest(new { message = "Your cart is empty." })
-                : Results.NoContent();
+
+            var items = await db.CartItems
+                .Where(item => item.UserId == id && item.InCart && !item.WasOrdered).ToListAsync();
+            if (items.Count == 0)
+                return Results.BadRequest(new { message = "Your cart is empty." });
+            if (items.Any(item => item.Price < 0 || decimal.Round(item.Price, 2) != item.Price || item.Quantity < 1))
+                return Results.BadRequest(new { message = "Your cart contains an invalid price or quantity." });
+
+            // Stored prices are USD; one cent is one point. Use decimal before the
+            // balance comparison so large carts cannot overflow the integer balance.
+            var totalPoints = items.Sum(item => item.Price * 100m * item.Quantity);
+            if (totalPoints > user.Points)
+                return Results.BadRequest(new { message = $"Not enough points. Your order costs {totalPoints:N0} points, but you have {user.Points:N0} points." });
+
+            user.Points -= (int)totalPoints;
+            var history = new PointsHistory
+            {
+                UserId = id, PointsDelta = -(int)totalPoints,
+                Timestamp = clock.GetUtcNow().UtcDateTime
+            };
+            db.PointsHistory.Add(history);
+            foreach (var item in items)
+            {
+                item.InCart = false;
+                item.WasOrdered = true;
+                item.PointsHistory = history;
+            }
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return Results.NoContent();
         });
 
         app.MapPost("/users/{id:int}/cart", async (int id, AddCartItem request, AppDbContext db) =>
@@ -42,7 +73,7 @@ public static class CartEndpoints
                 return Results.NotFound();
 
             var items = await db.CartItems.AsNoTracking()
-                .Where(item => item.UserId == id)
+                .Where(item => item.UserId == id && item.InCart && !item.WasOrdered)
                 .OrderBy(item => item.Id)
                 .Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity))
                 .ToListAsync();
@@ -54,20 +85,18 @@ public static class CartEndpoints
         {
             if (request.Quantity < 1 || request.Quantity > 999)
                 return Results.BadRequest(new { message = "Quantity must be between 1 and 999." });
-            var item = await db.CartItems.FirstOrDefaultAsync(item => item.UserId == id && item.Id == itemId);
-            if (item is null) return Results.NotFound();
-            item.Quantity = request.Quantity;
-            await db.SaveChangesAsync();
-            return Results.NoContent();
+            var changed = await db.CartItems
+                .Where(item => item.UserId == id && item.Id == itemId && item.InCart && !item.WasOrdered)
+                .ExecuteUpdateAsync(update => update.SetProperty(item => item.Quantity, request.Quantity));
+            return changed == 0 ? Results.NotFound() : Results.NoContent();
         });
 
         app.MapDelete("/users/{id:int}/cart/{itemId:long}", async (int id, long itemId, AppDbContext db) =>
         {
-            var item = await db.CartItems.FirstOrDefaultAsync(item => item.UserId == id && item.Id == itemId);
-            if (item is null) return Results.NotFound();
-            db.CartItems.Remove(item);
-            await db.SaveChangesAsync();
-            return Results.NoContent();
+            var removed = await db.CartItems
+                .Where(item => item.UserId == id && item.Id == itemId && item.InCart && !item.WasOrdered)
+                .ExecuteDeleteAsync();
+            return removed == 0 ? Results.NotFound() : Results.NoContent();
         });
     }
 }

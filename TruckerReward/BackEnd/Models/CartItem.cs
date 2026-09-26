@@ -25,6 +25,18 @@ public sealed class CartItem
     [Column("quantity")]
     public int Quantity { get; set; } = 1;
 
+    [Column("in_cart")]
+    public bool InCart { get; set; } = true;
+
+    [Column("was_ordered")]
+    public bool WasOrdered { get; set; }
+
+    [Column("points_history_id")]
+    public int? PointsHistoryId { get; set; }
+
+    [ForeignKey(nameof(PointsHistoryId))]
+    public PointsHistory? PointsHistory { get; set; }
+
     [Column("description", TypeName = "text")]
     public string? Description { get; set; }
 }
