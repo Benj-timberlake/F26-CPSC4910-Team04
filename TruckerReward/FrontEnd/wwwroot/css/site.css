@@ -251,5 +251,5 @@ select,
 textarea,
 .tr-btn,
 .tr-btn-outline {
-    cursor: url('/images/truckmouse.png') 4 4, auto;
+    cursor: url('/images/truck-cursor-32.png') 4 4, auto;
 }
