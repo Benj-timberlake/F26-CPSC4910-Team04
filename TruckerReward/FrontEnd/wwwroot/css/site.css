@@ -227,3 +227,15 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+    .mouse-gradient-background {
+    min-height: 100vh;
+
+    background:
+        radial-gradient(
+            600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+            rgba(36, 85, 164, 0.32),
+            transparent 40%
+        ),
+        #f4f7fb;
+}
