@@ -5,6 +5,47 @@ public static class CartEndpoints
 {
     public static void MapCartEndpoints(this WebApplication app)
     {
+        app.MapGet("/users/{id:int}/orders", async (int id, AppDbContext db, TimeProvider clock) =>
+        {
+            if (!await db.Users.AnyAsync(user => user.Id == id)) return Results.NotFound();
+            var items = await db.CartItems.AsNoTracking().Include(item => item.PointsHistory)
+                .Where(item => item.UserId == id && item.WasOrdered && !item.InCart
+                    && item.PointsHistory != null && item.PointsHistory.UserId == id).ToListAsync();
+            var now = clock.GetUtcNow().UtcDateTime;
+            return Results.Ok(items.GroupBy(item => item.PointsHistoryId!.Value).Select(group =>
+            {
+                var history = group.First().PointsHistory!;
+                return new PastOrderDetails(history.Id, history.Timestamp, -(long)history.PointsDelta,
+                    CanRefund(history, now), group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList());
+            }).OrderByDescending(order => order.Timestamp).ThenByDescending(order => order.PointsHistoryId));
+        });
+
+        app.MapPost("/users/{id:int}/orders/{historyId:int}/refund", async (int id, int historyId, AppDbContext db, TimeProvider clock) =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            // Use the same balance lock as checkout to serialize refunds and purchases.
+            await db.Users.Where(user => user.Id == id)
+                .ExecuteUpdateAsync(update => update.SetProperty(user => user.Points, user => user.Points));
+            var user = await db.Users.SingleOrDefaultAsync(user => user.Id == id);
+            if (user is null) return Results.NotFound();
+            var history = await db.PointsHistory.SingleOrDefaultAsync(h => h.Id == historyId && h.UserId == id);
+            if (history is null) return Results.NotFound(new { message = "This order was not found or has already been refunded." });
+            if (!CanRefund(history, clock.GetUtcNow().UtcDateTime))
+                return Results.BadRequest(new { message = "Orders can only be refunded within 24 hours of purchase." });
+            var items = await db.CartItems.Where(item => item.PointsHistoryId == historyId).ToListAsync();
+            if (items.Count == 0 || items.Any(item => item.UserId != id || !item.WasOrdered || item.InCart))
+                return Results.BadRequest(new { message = "This history entry is not a refundable order." });
+            var balance = (long)user.Points - history.PointsDelta;
+            if (balance > int.MaxValue)
+                return Results.BadRequest(new { message = "The refund would exceed the maximum points balance." });
+            user.Points = (int)balance;
+            db.CartItems.RemoveRange(items);
+            db.PointsHistory.Remove(history);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return Results.NoContent();
+        });
+
         app.MapPost("/users/{id:int}/cart/send-order", async (int id, AppDbContext db, TimeProvider clock) =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
@@ -99,9 +140,13 @@ public static class CartEndpoints
             return removed == 0 ? Results.NotFound() : Results.NoContent();
         });
     }
+    private static bool CanRefund(PointsHistory history, DateTime now) =>
+        history.PointsDelta <= 0 && history.Timestamp is DateTime timestamp
+        && timestamp <= now && now - timestamp < TimeSpan.FromHours(24);
 }
 
 // Price in cart requests/responses is USD per item, not reward points.
 public record CartItemDetails(uint Id, string Name, decimal Price, string? Description, int Quantity = 1);
 public record UpdateCartQuantity(int Quantity);
 public record AddCartItem(string Name, decimal Price, string? Description);
+public record PastOrderDetails(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, List<CartItemDetails> Items);

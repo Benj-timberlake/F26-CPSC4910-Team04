@@ -1,8 +1,154 @@
 @page "/pastorders"
 @attribute [Authorize]
+@using System.Security.Claims
+@using FrontEnd.Shared
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Past Orders</PageTitle>
 
-<div class="tr-page">
+<div class="tr-page" inert="@(selected is not null)">
     <h1>Past Orders</h1>
+    @if (error is not null)
+    {
+        <p role="alert" class="tr-alert-error">@error</p>
+    }
+    @if (notice is not null)
+    {
+        <p role="status" class="tr-alert-success">@notice</p>
+    }
+    @if (orders is null && error is null)
+    {
+        <p role="status">Loading past orders...</p>
+    }
+    else if (orders is not null)
+    {
+        @if (orders.Count == 0)
+        {
+            <p>You have no past orders.</p>
+        }
+        else
+        {
+            <p>Purchases can be refunded within 24 hours. All timestamps are UTC.</p>
+            <div class="tr-table-wrap">
+                <table class="tr-table">
+                    <thead><tr><th>Points history ID</th><th>Purchased at (UTC)</th><th>Items</th><th>Total</th><th>Refund</th></tr></thead>
+                    <tbody>
+                        @foreach (var order in orders)
+                        {
+                            <tr>
+                                <td>@order.PointsHistoryId</td>
+                                <td>@(order.Timestamp?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Unavailable")</td>
+                                <td><ul>@foreach (var item in order.Items)
+                                    {
+                                        <li>@item.Name × @item.Quantity — @RewardPoints.Format(RewardPoints.FromDollars(item.Price) * item.Quantity)</li>
+                                    }</ul></td>
+                                <td>@RewardPoints.Format(order.TotalPoints)</td>
+                                <td>
+                                    @if (order.CanRefund)
+                                    {
+                                        <button type="button" class="tr-btn-outline" disabled="@saving" @onclick="() => selected = order">Refund purchase</button>
+                                    }
+                                    else
+                                    {
+                                        <span>Refund unavailable</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
 </div>
+
+@if (selected is not null)
+{
+    <div class="refund-backdrop">
+        <section class="refund-dialog" role="dialog" aria-modal="true" aria-labelledby="refund-title" aria-describedby="refund-description" @onkeydown="HandleKey">
+            <h2 id="refund-title">Refund purchase?</h2>
+            <p id="refund-description">This action is permanent. Refunding purchase @selected.PointsHistoryId will return @RewardPoints.Format(selected.TotalPoints) to your account and permanently delete this order and its points history. This cannot be undone.</p>
+            <div class="refund-actions">
+                <span tabindex="0" @onfocus="() => confirmButton.FocusAsync().AsTask()"></span>
+                <button @ref="cancelButton" type="button" class="tr-btn-outline" disabled="@saving" @onclick="() => selected = null">Cancel</button>
+                <button @ref="confirmButton" type="button" class="tr-btn" disabled="@saving" @onclick="Refund">@(saving ? "Refunding..." : "Confirm permanent refund")</button>
+                            <span tabindex="0" @onfocus="() => cancelButton.FocusAsync().AsTask()"></span>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+    private List<PastOrder>? orders;
+    private PastOrder? selected;
+    private PastOrder? focused;
+    private string? error;
+    private string? notice;
+    private int userId;
+    private bool saving;
+    private ElementReference cancelButton;
+    private ElementReference confirmButton;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (selected is not null && selected != focused)
+        {
+            focused = selected;
+            await cancelButton.FocusAsync();
+        }
+        if (selected is null) focused = null;
+    }
+
+    private void HandleKey(KeyboardEventArgs e) { if (e.Key == "Escape" && !saving) selected = null; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        if (user.Identity?.IsAuthenticated != true || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out userId))
+        {
+            error = "Please sign in to view past orders.";
+            return;
+        }
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            orders = await client.GetFromJsonAsync<List<PastOrder>>($"users/{userId}/orders") ?? new();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load past orders. Please refresh and try again.";
+        }
+    }
+
+    private async Task Refund()
+    {
+        if (selected is null || saving) return;
+        var order = selected;
+        saving = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PostAsync($"users/{userId}/orders/{order.PointsHistoryId}/refund", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.NotFound)
+                    error = (await response.Content.ReadFromJsonAsync<OrderError>())?.Message;
+                error ??= "Couldn't confirm the refund. Please refresh before trying again.";
+                return;
+            }
+            orders!.Remove(order);
+            notice = $"Purchase refunded. {RewardPoints.Format(order.TotalPoints)} returned to your account.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't confirm the refund. Please refresh before trying again.";
+        }
+        finally { saving = false; selected = null; }
+    }
+
+    private sealed record PastOrder(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, List<OrderItem> Items);
+    private sealed record OrderItem(uint Id, string Name, decimal Price, string? Description, int Quantity);
+    private sealed record OrderError(string Message);
+}
