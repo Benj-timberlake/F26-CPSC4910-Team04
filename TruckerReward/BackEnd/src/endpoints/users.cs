@@ -15,7 +15,7 @@ public static class UserEndpoints
                 .Where(s => s.UserId == id)
                 .Select(s => s.CompanyName)
                 .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.Email, user.PhoneNumber, user.Address, company, user.Points));
+            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.Email, user.PhoneNumber, user.Address ?? "", company, user.Points));
         });
 
         // this login, the one before it, failures in between, the last ten attempts and when the

@@ -92,7 +92,7 @@ public static class AuthEndpoints
 
     private static Task RecordAttempt(AppDbContext db, string username, int? userId, bool succeeded, string? ip, DateTime at)
     {
-        db.LoginAttempts.Add(new LoginAttempt { Username = username, UserId = userId, Succeeded = succeeded, IpAddress = ip, AttemptedAt = at });
+        db.LoginAttempts.Add(new LoginAttempt { Username = username, UserId = userId, Succeeded = succeeded, IpAddress = ip ?? "", AttemptedAt = at });
         return db.SaveChangesAsync();
     }
 
@@ -116,5 +116,5 @@ public record ExternalLoginRequest(string Provider, string Email, string? Name, 
 // what login and register hand back, the frontend turns it into the cookie claims
 public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address)
 {
-    public static UserProfile Of(User u) => new(u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address);
+    public static UserProfile Of(User u) => new(u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address ?? "");
 }
