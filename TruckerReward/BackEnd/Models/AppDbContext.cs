@@ -17,7 +17,7 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<AuditHistory> AuditHistories { get; set; }
 
-    public virtual DbSet<Cart> Carts { get; set; }
+    public virtual DbSet<CartItem> CartItems { get; set; }
 
     public virtual DbSet<Company> Companies { get; set; }
 
@@ -36,7 +36,6 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<Sponsor> Sponsors { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
-    public DbSet<CartItem> CartItems { get; set; }
     public DbSet<PointsHistory> PointsHistory { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -160,7 +159,7 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_audit_history_user");
         });
 
-        modelBuilder.Entity<Cart>(entity =>
+        modelBuilder.Entity<CartItem>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
 

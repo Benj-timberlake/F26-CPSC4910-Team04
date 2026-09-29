@@ -15,7 +15,7 @@ public partial class PointsHistory
 
     public virtual ICollection<AuditHistory> AuditHistories { get; set; } = new List<AuditHistory>();
 
-    public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
+    public virtual ICollection<CartItem> Carts { get; set; } = new List<CartItem>();
 
     public virtual User User { get; set; } = null!;
 }
