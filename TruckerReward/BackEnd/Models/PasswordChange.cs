@@ -9,6 +9,7 @@ public partial class PasswordChange
     public const string Changed = "changed";
     public const string ResetRequested = "reset_requested";
     public const string ResetCompleted = "reset_completed";
+    
     public int Id { get; set; }
 
     public int UserId { get; set; }
