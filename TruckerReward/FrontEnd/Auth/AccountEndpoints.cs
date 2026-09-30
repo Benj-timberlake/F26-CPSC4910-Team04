@@ -41,14 +41,13 @@ public static class AccountEndpoints
             [FromForm] string email,
             [FromForm] string password,
             [FromForm] string userType,
-            [FromForm] string? companyName,
             [FromForm] string? phoneNumber,
             [FromForm] string? address,
             HttpContext http,
             IHttpClientFactory clients) =>
         {
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/register",
-                new { username, firstName, lastName, email, password, userType, companyName, phoneNumber, address });
+                new { username, firstName, lastName, email, password, userType, phoneNumber, address });
 
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/register?error=" + await ErrorParam(response, "Could not create the account."));

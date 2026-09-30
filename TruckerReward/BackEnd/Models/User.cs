@@ -49,5 +49,4 @@ public partial class User
 
     public virtual ICollection<PointsHistory> PointsHistories { get; set; } = new List<PointsHistory>();
 
-    public virtual Sponsor? Sponsor { get; set; }
 }
