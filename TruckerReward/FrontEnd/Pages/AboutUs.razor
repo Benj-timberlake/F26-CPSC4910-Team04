@@ -1,36 +1,44 @@
 @page "/about-us"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>About Us | TruckerReward</PageTitle>
 
 <div class="tr-page about-page">
     <h1>About Us</h1>
-    <section class="tr-card about-intro">
-        <h2>Rewards for the road ahead</h2>
-        <p class="tr-subtitle">
-            TruckerReward is here to make life on the road a little more rewarding.
-            We bring truckers a place to discover products and enjoy benefits built
-            around the people who keep America moving.
-        </p>
-        <a class="tr-btn" href="products">Browse products</a>
-    </section>
+    @if (loading)
+    {
+        <p role="status" class="tr-muted">Loading About Us...</p>
+    }
+    else if (loadError is not null)
+    {
+        <p role="alert" class="tr-alert-error">@loadError</p>
+    }
+    else if (mainPage is null)
+    {
+        <p class="tr-muted">About Us information is not available yet.</p>
+    }
+    else
+    {
+        <section class="tr-card about-intro">
+            <h2>@mainPage.Title</h2>
+            <p class="tr-subtitle">@mainPage.Body</p>
+            <a class="tr-btn" href="products">Browse products</a>
+        </section>
 
-    <section class="tr-cards about-details" aria-label="About TruckerReward">
-        <article class="tr-card">
-            <h2>Made with truckers in mind</h2>
-            <p>
-                Long days and long miles deserve appreciation. Our goal is to make
-                finding useful products and rewards straightforward, wherever the
-                road takes you.
-            </p>
-        </article>
-        <article class="tr-card">
-            <h2>Our purpose</h2>
-            <p>
-                We want to help drivers get more value from the things they choose,
-                with a simple experience that keeps the focus on what matters.
-            </p>
-        </article>
-    </section>
+        @if (sections.Count > 0)
+        {
+            <section class="tr-cards about-details" aria-label="About TruckerReward">
+                @foreach (var section in sections)
+                {
+                    <article class="tr-card">
+                        <h2>@section.Title</h2>
+                        <p>@section.Body</p>
+                    </article>
+                }
+            </section>
+        }
+    }
 </div>
 
 <style>
@@ -61,3 +69,35 @@
         line-height: 1.6;
     }
 </style>
+
+@code {
+    private bool loading = true;
+    private string? loadError;
+    private AboutPageContent? mainPage;
+    private List<AboutPageContent> sections = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var pages = await client.GetFromJsonAsync<List<AboutPageContent>>("api/about") ?? new();
+            mainPage = pages.FirstOrDefault(page => page.Type == "main");
+            sections = pages.Where(page => page.Type != "main").ToList();
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't load About Us information right now. Try again in a moment.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            loadError = "About Us information couldn't be displayed right now.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private sealed record AboutPageContent(string Type, string Title, string Body);
+}

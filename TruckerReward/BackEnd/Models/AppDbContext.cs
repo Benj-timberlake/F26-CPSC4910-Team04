@@ -13,6 +13,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<AccountsHistory> AccountsHistories { get; set; }
 
+    public virtual DbSet<AboutPage> AboutPages { get; set; }
+
     public virtual DbSet<Application> Applications { get; set; }
 
     public virtual DbSet<AuditHistory> AuditHistories { get; set; }
@@ -40,6 +42,18 @@ public partial class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AboutPage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("about_page");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Type).HasMaxLength(32).HasColumnName("type");
+            entity.Property(e => e.Title).HasMaxLength(255).HasColumnName("title");
+            entity.Property(e => e.Body).HasColumnType("text").HasColumnName("body");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnType("datetime").HasColumnName("updated_at");
+        });
+
         modelBuilder.Entity<AccountsHistory>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
