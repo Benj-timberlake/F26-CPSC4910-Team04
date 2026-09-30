@@ -36,6 +36,8 @@ public static class AccountEndpoints
 
         app.MapPost("/account/register", async (
             [FromForm] string username,
+            [FromForm] string firstName,
+            [FromForm] string lastName,
             [FromForm] string email,
             [FromForm] string password,
             [FromForm] string userType,
@@ -46,7 +48,7 @@ public static class AccountEndpoints
             IHttpClientFactory clients) =>
         {
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/register",
-                new { username, email, password, userType, companyName, phoneNumber, address });
+                new { username, firstName, lastName, email, password, userType, companyName, phoneNumber, address });
 
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/register?error=" + await ErrorParam(response, "Could not create the account."));
