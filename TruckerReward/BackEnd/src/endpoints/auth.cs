@@ -16,8 +16,8 @@ public static class AuthEndpoints
 
         app.MapPost("/auth/register", async (RegisterRequest req, AppDbContext db) =>
         {
-            if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
-                return Results.BadRequest(new { message = "Username, email and password are required." });
+            if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.FirstName) || string.IsNullOrWhiteSpace(req.LastName) || string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
+                return Results.BadRequest(new { message = "Username, first name, last name, email and password are required." });
             if (PasswordPolicy.Check(req.Password) is { } weak)
                 return Results.BadRequest(new { message = weak });
             if (req.UserType != Driver && req.UserType != Sponsor)
@@ -36,6 +36,8 @@ public static class AuthEndpoints
             {
                 UserType = req.UserType,
                 Username = username,
+                FirstName = req.FirstName.Trim(),
+                LastName = req.LastName.Trim(),
                 Email = email,
                 PhoneNumber = req.PhoneNumber?.Trim() ?? "",
                 Address = req.Address?.Trim() ?? ""
@@ -107,7 +109,7 @@ public static class AuthEndpoints
     }
 }
 
-public record RegisterRequest(string Username, string Email, string Password, string UserType, string? CompanyName, string? PhoneNumber, string? Address);
+public record RegisterRequest(string Username, string FirstName, string LastName, string Email, string Password, string UserType, string? CompanyName, string? PhoneNumber, string? Address);
 
 public record LoginRequest(string Username, string Password, string? IpAddress);
 
