@@ -18,6 +18,8 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     private static object Driver(string username = "bob", string email = "bob@example.com") => new
     {
         username,
+        firstName = "Bob",
+        lastName = "Driver",
         email,
         password = "Hunter22x",
         userType = "driver",
@@ -78,40 +80,44 @@ public sealed class AuthEndpointTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task SponsorRegistrationCreatesSponsorRow()
+    public async Task SponsorRegistrationCreatesSponsorUser()
     {
         var client = await Start();
         var response = await client.PostAsJsonAsync("/auth/register", new
         {
             username = "acme",
-            email = "acme@example.com",
-            password = "Hunter22x",
-            userType = "sponsor",
-            companyName = "Acme Freight"
-        });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-
-        var sponsor = await Db().Sponsors.Include(s => s.User).SingleAsync();
-        Assert.Equal("Acme Freight", sponsor.CompanyName);
-        Assert.Equal("acme", sponsor.User.Username);
-        Assert.Equal("sponsor", sponsor.User.UserType);
-
-        using var details = JsonDocument.Parse(await client.GetStringAsync($"/users/{sponsor.UserId}"));
-        Assert.Equal("Acme Freight", details.RootElement.GetProperty("companyName").GetString());
-    }
-
-    [Fact]
-    public async Task SponsorWithoutCompanyIsRejected()
-    {
-        var client = await Start();
-        var response = await client.PostAsJsonAsync("/auth/register", new
-        {
-            username = "acme",
+            firstName = "Alex",
+            lastName = "Sponsor",
             email = "acme@example.com",
             password = "Hunter22x",
             userType = "sponsor"
         });
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var sponsor = await Db().Users.SingleAsync();
+        Assert.Equal("acme", sponsor.Username);
+        Assert.Equal("sponsor", sponsor.UserType);
+        Assert.Equal("Alex", sponsor.FirstName);
+        Assert.Equal("Sponsor", sponsor.LastName);
+
+        using var details = JsonDocument.Parse(await client.GetStringAsync($"/users/{sponsor.Id}"));
+        Assert.Equal("sponsor", details.RootElement.GetProperty("userType").GetString());
+    }
+
+    [Fact]
+    public async Task SponsorCanRegisterWithoutSeparateCompanyRecord()
+    {
+        var client = await Start();
+        var response = await client.PostAsJsonAsync("/auth/register", new
+        {
+            username = "acme",
+            firstName = "Alex",
+            lastName = "Sponsor",
+            email = "acme@example.com",
+            password = "Hunter22x",
+            userType = "sponsor"
+        });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     [Fact]

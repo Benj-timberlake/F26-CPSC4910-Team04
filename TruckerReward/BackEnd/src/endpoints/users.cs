@@ -6,16 +6,22 @@ public static class UserEndpoints
 {
     public static void MapUserEndpoints(this WebApplication app)
     {
+        app.MapGet("/companies", async (AppDbContext db) =>
+            Results.Ok(await db.Companies.AsNoTracking()
+                .OrderBy(c => c.Name)
+                .Select(c => new CompanyOption(c.Id, c.Name, c.Description))
+                .ToListAsync()));
+
         app.MapGet("/users/{id:int}", async (int id, AppDbContext db) =>
         {
             var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
             if (user is null)
                 return Results.NotFound();
-            var company = await db.Sponsors.AsNoTracking()
-                .Where(s => s.UserId == id)
-                .Select(s => s.CompanyName)
+            var company = await db.Companies.AsNoTracking()
+                .Where(c => c.Id == user.CompanyId)
+                .Select(c => c.Name)
                 .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company, user.Points));
+            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company, user.CompanyId, user.Points));
         });
 
         // this login, the one before it, failures in between, the last ten attempts and when the
@@ -47,7 +53,9 @@ public static class UserEndpoints
     }
 }
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int Points);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points);
+
+public record CompanyOption(int Id, string Name, string? Description);
 
 public record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
 

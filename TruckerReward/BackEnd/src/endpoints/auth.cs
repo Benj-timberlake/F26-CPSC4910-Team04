@@ -22,9 +22,6 @@ public static class AuthEndpoints
                 return Results.BadRequest(new { message = weak });
             if (req.UserType != Driver && req.UserType != Sponsor)
                 return Results.BadRequest(new { message = "Account type must be driver or sponsor." });
-            if (req.UserType == Sponsor && string.IsNullOrWhiteSpace(req.CompanyName))
-                return Results.BadRequest(new { message = "Sponsors need a company name." });
-
             var username = req.Username.Trim();
             var email = req.Email.Trim();
             if (await db.Users.AnyAsync(u => u.Username == username))
@@ -44,8 +41,6 @@ public static class AuthEndpoints
             };
             user.Password = Passwords.Hash(user, req.Password);
             db.Users.Add(user);
-            if (req.UserType == Sponsor)
-                db.Sponsors.Add(new Sponsor { User = user, CompanyName = req.CompanyName!.Trim() });
             await db.SaveChangesAsync();
 
             return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
@@ -109,7 +104,7 @@ public static class AuthEndpoints
     }
 }
 
-public record RegisterRequest(string Username, string FirstName, string LastName, string Email, string Password, string UserType, string? CompanyName, string? PhoneNumber, string? Address);
+public record RegisterRequest(string Username, string FirstName, string LastName, string Email, string Password, string UserType, string? PhoneNumber, string? Address);
 
 public record LoginRequest(string Username, string Password, string? IpAddress);
 

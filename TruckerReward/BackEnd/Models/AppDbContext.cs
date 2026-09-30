@@ -35,8 +35,6 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<PointsHistory> PointsHistories { get; set; }
 
-    public virtual DbSet<Sponsor> Sponsors { get; set; }
-
     public virtual DbSet<User> Users { get; set; }
     public DbSet<PointsHistory> PointsHistory { get; set; }
 
@@ -376,25 +374,6 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("points_history_ibfk_1");
-        });
-
-        modelBuilder.Entity<Sponsor>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PRIMARY");
-
-            entity.ToTable("sponsors");
-
-            entity.HasIndex(e => e.UserId, "uq_sponsors_user").IsUnique();
-
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.CompanyName)
-                .HasMaxLength(255)
-                .HasColumnName("company_name");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-
-            entity.HasOne(d => d.User).WithOne(p => p.Sponsor)
-                .HasForeignKey<Sponsor>(d => d.UserId)
-                .HasConstraintName("fk_sponsors_user");
         });
 
         modelBuilder.Entity<User>(entity =>
