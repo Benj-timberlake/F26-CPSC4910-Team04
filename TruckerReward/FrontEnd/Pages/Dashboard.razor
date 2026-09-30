@@ -46,6 +46,8 @@
                         <dt>Company</dt>
                         <dd>@Shown(account.CompanyName)</dd>
                     }
+                    <dt>Name</dt>
+                    <dd>@account.FirstName @account.LastName</dd>
                     <dt>Email</dt>
                     <dd>@account.Email</dd>
                     <dt>Phone</dt>
@@ -202,7 +204,7 @@
         return rel == "" ? abs : $"{abs} ({rel})";
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, string? CompanyName, int Points);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int Points);
     private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
     private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
 }
