@@ -25,6 +25,10 @@ Then `make` builds, starts both apps (BackEnd 8080, FrontEnd 8081) and opens the
 Admins are made by setting `user_type = 'admin'` on the user row. Emails (reset links, security
 notices) print to the backend log unless `SMTP_HOST` or `EMAIL_FROM` is set.
 
+Emails to a user go through `Notifications` (`BackEnd/src/Notifications.cs`), which also saves a copy
+in `notifications_history`. A new notification is one more method there; inject `Notifications`
+into the endpoint and call it.
+
 Optional user secrets, never appsettings:
 
 | Key | Project | Effect |

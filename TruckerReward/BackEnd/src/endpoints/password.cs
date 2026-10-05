@@ -10,7 +10,7 @@ public static class PasswordEndpoints
 
     public static void MapPasswordEndpoints(this WebApplication app)
     {
-        app.MapPost("/users/{id:int}/password", async (int id, ChangePasswordRequest req, AppDbContext db, IEmailSender email, TimeProvider clock) =>
+        app.MapPost("/users/{id:int}/password", async (int id, ChangePasswordRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             var user = await db.Users.FindAsync(id);
             if (user is null)
@@ -22,12 +22,11 @@ public static class PasswordEndpoints
                 return Results.BadRequest(new { message = weak });
 
             await SetPassword(db, user, req.NewPassword, PasswordChange.Changed, req.IpAddress, clock);
-            await email.SendAsync(user.Email, "Your TruckerReward password was changed",
-                $"Hi {user.Username},\n\nYour password was just changed. If that wasn't you, reset it right away from the login page.");
+            await notifications.PasswordChanged(user, byReset: false);
             return Results.NoContent();
         });
 
-        app.MapPost("/auth/forgot", async (ForgotPasswordRequest req, AppDbContext db, IEmailSender email, TimeProvider clock, IConfiguration config) =>
+        app.MapPost("/auth/forgot", async (ForgotPasswordRequest req, AppDbContext db, IEmailSender email, Notifications notifications, TimeProvider clock, IConfiguration config) =>
         {
             // same answer whether or not the email exists, so this can't be used to find accounts
             var reply = Results.Ok(new { message = "If that email has an account, a reset link is on its way." });
@@ -43,14 +42,13 @@ public static class PasswordEndpoints
             await db.SaveChangesAsync();
 
             var link = $"{config["FRONTEND_URL"]?.TrimEnd('/')}/reset-password?token={token}";
-            await email.SendAsync(user.Email, "Reset your TruckerReward password",
-                $"Hi {user.Username},\n\nUse this link within the next hour to choose a new password:\n{link}\n\nIf you didn't ask for this, ignore this email and your password stays the same.");
+            await notifications.ResetLinkSent(user, link);
             await Notify.Admins(db, email, $"Password reset requested for {user.Username}",
                 $"A password reset was requested for {user.Username} ({user.Email}) from {req.IpAddress ?? "an unknown address"}.");
             return reply;
         });
 
-        app.MapPost("/auth/reset", async (ResetPasswordRequest req, AppDbContext db, IEmailSender email, TimeProvider clock) =>
+        app.MapPost("/auth/reset", async (ResetPasswordRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             var now = clock.GetUtcNow().UtcDateTime;
             var hash = Hash(req.Token ?? "");
@@ -63,8 +61,7 @@ public static class PasswordEndpoints
             var user = await db.Users.FindAsync(reset.UserId);
             reset.UsedAt = now;
             await SetPassword(db, user!, req.NewPassword, PasswordChange.ResetCompleted, req.IpAddress, clock);
-            await email.SendAsync(user!.Email, "Your TruckerReward password was reset",
-                $"Hi {user.Username},\n\nYour password was just reset. If that wasn't you, contact your sponsor or an administrator.");
+            await notifications.PasswordChanged(user!, byReset: true);
             return Results.NoContent();
         });
     }

@@ -17,6 +17,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<EbayClient>();
 builder.AddEmail();
+builder.Services.AddScoped<Notifications>();
 
 var app = builder.Build();
 

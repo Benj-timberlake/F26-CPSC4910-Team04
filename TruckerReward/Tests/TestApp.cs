@@ -26,6 +26,7 @@ public sealed class TestApp : IAsyncDisposable
         builder.Configuration["FRONTEND_URL"] = "http://frontend";
         builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlite(connection));
         builder.Services.AddSingleton<IEmailSender>(Email);
+        builder.Services.AddScoped<Notifications>();
         builder.Services.AddSingleton<TimeProvider>(Clock);
         configure?.Invoke(builder);
         app = builder.Build();
