@@ -12,8 +12,8 @@ public sealed class LockoutTests : IAsyncDisposable
     private async Task<HttpClient> Start()
     {
         var client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x", userType = "driver" });
-        await client.PostAsJsonAsync("/auth/register", new { username = "root", firstName = "Root", lastName = "Admin", email = "root@example.com", password = "Hunter22x", userType = "driver" });
+        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.PostAsJsonAsync("/auth/register", new { username = "root", firstName = "Root", lastName = "Admin", email = "root@example.com", password = "Hunter22x!", userType = "driver" });
         using var db = app.Db();
         (await db.Users.SingleAsync(u => u.Username == "root")).UserType = "admin";
         await db.SaveChangesAsync();
@@ -37,7 +37,7 @@ public sealed class LockoutTests : IAsyncDisposable
     {
         var client = await Start();
         await Fail(client, Lockout.MaxFailures - 1);
-        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x"));
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x!"));
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class LockoutTests : IAsyncDisposable
     {
         var client = await Start();
         await Fail(client, Lockout.MaxFailures);
-        var response = await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x" });
+        var response = await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x!" });
         Assert.Equal(HttpStatusCode.Locked, response.StatusCode);
         // the refused attempt is still logged as a failure
         Assert.Equal(Lockout.MaxFailures + 1, await app.Db().LoginAttempts.CountAsync(a => !a.Succeeded));
@@ -57,9 +57,9 @@ public sealed class LockoutTests : IAsyncDisposable
         var client = await Start();
         await Fail(client, Lockout.MaxFailures);
         app.Clock.Advance(Lockout.Duration - TimeSpan.FromSeconds(30));
-        Assert.Equal(HttpStatusCode.Locked, await Login(client, "Hunter22x"));
+        Assert.Equal(HttpStatusCode.Locked, await Login(client, "Hunter22x!"));
         app.Clock.Advance(TimeSpan.FromSeconds(31));
-        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x"));
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x!"));
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed class LockoutTests : IAsyncDisposable
             app.Clock.Advance(TimeSpan.FromSeconds(8));
         }
         app.Clock.Advance(lockStart + Lockout.Duration + TimeSpan.FromSeconds(1) - app.Clock.GetUtcNow().UtcDateTime);
-        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x"));
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x!"));
     }
 
     [Fact]
@@ -83,9 +83,9 @@ public sealed class LockoutTests : IAsyncDisposable
     {
         var client = await Start();
         await Fail(client, Lockout.MaxFailures - 1);
-        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x"));
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x!"));
         await Fail(client, Lockout.MaxFailures - 1);
-        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x"));
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x!"));
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public sealed class LockoutTests : IAsyncDisposable
         await Fail(client, Lockout.MaxFailures - 1);
         app.Clock.Advance(Lockout.Duration + TimeSpan.FromSeconds(1));
         await Fail(client, 1);
-        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x"));
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x!"));
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public sealed class LockoutTests : IAsyncDisposable
     {
         var client = await Start();
         await Fail(client, Lockout.MaxFailures);
-        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x", username: "root"));
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x!", username: "root"));
     }
 
     [Fact]

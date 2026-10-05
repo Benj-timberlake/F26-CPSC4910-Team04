@@ -115,6 +115,23 @@ public static class AccountEndpoints
             return Results.Redirect("/dashboard?password=changed");
         }).RequireAuthorization().DisableAntiforgery();
 
+        app.MapPost("/account/change-username", async (
+            [FromForm] string? currentPassword,
+            [FromForm] string username,
+            HttpContext http,
+            IHttpClientFactory clients) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/username",
+                new { currentPassword, newUsername = username });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/account/username?error=" + await ErrorParam(response, "Could not change the username."));
+            // refresh the cookie so the new name shows right away
+            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
+            await TruckerSignIn.SignInAsync(http, user!);
+            return Results.Redirect("/dashboard?username=changed");
+        }).RequireAuthorization().DisableAntiforgery();
+
         app.MapPost("/account/logout", async (HttpContext http) =>
         {
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);

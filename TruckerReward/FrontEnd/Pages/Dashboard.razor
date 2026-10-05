@@ -54,7 +54,10 @@
                         <dd>@account.CompanyName</dd>
                     }
                     <dt>Username</dt>
-                    <dd>@account.Username</dd>
+                    <dd>
+                        @account.Username
+                        <a href="account/username">Change username</a>
+                    </dd>
                     <dt>Name</dt>
                     <dd>@account.FirstName @account.LastName</dd>
                     <dt>Email</dt>
@@ -275,6 +278,8 @@
     {
         if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["password"] == "changed")
             notice = "Your password has been changed.";
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["username"] == "changed")
+            notice = "Your username has been changed.";
 
         var user = (await AuthState).User;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);

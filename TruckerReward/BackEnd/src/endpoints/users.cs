@@ -50,8 +50,38 @@ public static class UserEndpoints
 
             return Results.Ok(new SecuritySummary(last?.AttemptedAt, last?.IpAddress, previous?.AttemptedAt, failedSincePrevious, recent, passwordChangedAt));
         });
+
+        app.MapPost("/users/{id:int}/username", async (int id, ChangeUsernameRequest req, AppDbContext db, IEmailSender email) =>
+        {
+            var user = await db.Users.FindAsync(id);
+            if (user is null)
+                return Results.NotFound();
+            // sso-only accounts have no password yet, so there's nothing to confirm
+            if (user.Password is not null && !Passwords.Verify(user, req.CurrentPassword))
+                return Results.Json(new { message = "Current password is wrong." }, statusCode: StatusCodes.Status401Unauthorized);
+
+            var username = req.NewUsername?.Trim() ?? "";
+            if (username.Length is 0 or > MaxUsernameLength)
+                return Results.BadRequest(new { message = $"Usernames are 1 to {MaxUsernameLength} characters." });
+            if (username == user.Username)
+                return Results.BadRequest(new { message = "That is already your username." });
+            if (await db.Users.AnyAsync(u => u.Username == username && u.Id != id))
+                return Results.Conflict(new { message = "That username is already taken." });
+
+            var old = user.Username;
+            user.Username = username;
+            await db.SaveChangesAsync();
+            await email.SendAsync(user.Email, "Your TruckerReward username was changed",
+                $"Hi {username},\n\nYour username was just changed from {old} to {username}. If that wasn't you, reset your password right away from the login page.");
+            return Results.Ok(UserProfile.Of(user));
+        });
     }
+
+    // users.username is varchar(255)
+    private const int MaxUsernameLength = 255;
 }
+
+public record ChangeUsernameRequest(string? CurrentPassword, string? NewUsername);
 
 public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points);
 
