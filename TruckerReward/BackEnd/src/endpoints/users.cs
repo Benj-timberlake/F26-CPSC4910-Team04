@@ -75,6 +75,29 @@ public static class UserEndpoints
                 $"Hi {username},\n\nYour username was just changed from {old} to {username}. If that wasn't you, reset your password right away from the login page.");
             return Results.Ok(UserProfile.Of(user));
         });
+
+        app.MapPut("/users/{id:int}/profile", async (int id, UpdateUserProfileRequest req, AppDbContext db) =>
+        {
+            var user = await db.Users.FindAsync(id);
+            if (user is null)
+                return Results.NotFound();
+
+            var firstName = req.FirstName?.Trim() ?? "";
+            var lastName = req.LastName?.Trim() ?? "";
+            var phoneNumber = req.PhoneNumber?.Trim() ?? "";
+            var address = req.Address?.Trim() ?? "";
+            if (firstName.Length is 0 or > 100 || lastName.Length is 0 or > 100)
+                return Results.BadRequest(new { message = "First and last names are required and must be 100 characters or fewer." });
+            if (phoneNumber.Length > 20 || address.Length > 255)
+                return Results.BadRequest(new { message = "Phone number must be 20 characters or fewer and address must be 255 characters or fewer." });
+
+            user.FirstName = firstName;
+            user.LastName = lastName;
+            user.PhoneNumber = phoneNumber;
+            user.Address = address;
+            await db.SaveChangesAsync();
+            return Results.Ok();
+        });
     }
 
     // users.username is varchar(255)
@@ -82,6 +105,7 @@ public static class UserEndpoints
 }
 
 public record ChangeUsernameRequest(string? CurrentPassword, string? NewUsername);
+public record UpdateUserProfileRequest(string? FirstName, string? LastName, string? PhoneNumber, string? Address);
 
 public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points);
 

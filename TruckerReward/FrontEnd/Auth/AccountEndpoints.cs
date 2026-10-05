@@ -132,6 +132,22 @@ public static class AccountEndpoints
             return Results.Redirect("/dashboard?username=changed");
         }).RequireAuthorization().DisableAntiforgery();
 
+        app.MapPost("/account/update-profile", async (
+            [FromForm] string firstName,
+            [FromForm] string lastName,
+            [FromForm] string? phoneNumber,
+            [FromForm] string? address,
+            HttpContext http,
+            IHttpClientFactory clients) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var response = await clients.CreateClient("Backend").PutAsJsonAsync($"users/{id}/profile",
+                new { firstName, lastName, phoneNumber, address });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/account/profile?error=" + await ErrorParam(response, "Could not update your account."));
+            return Results.Redirect("/dashboard?profile=updated");
+        }).RequireAuthorization().DisableAntiforgery();
+
         app.MapPost("/account/logout", async (HttpContext http) =>
         {
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);

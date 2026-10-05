@@ -46,7 +46,10 @@
             }
 
             <section class="tr-card">
-                <h2>@AccountLabel(account.UserType)</h2>
+                <div class="account-heading">
+                    <h2>@AccountLabel(account.UserType)</h2>
+                    <a class="tr-btn account-edit" href="account/profile">Edit</a>
+                </div>
                 <dl class="tr-kv">
                     @if (account.UserType == "sponsor" && !string.IsNullOrWhiteSpace(account.CompanyName))
                     {
@@ -184,6 +187,21 @@
         margin-left: 8px;
     }
 
+    .account-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .account-heading h2 {
+        margin-bottom: 12px;
+    }
+
+    .account-edit {
+        margin-bottom: 12px;
+    }
+
     details {
         margin-top: 14px;
     }
@@ -280,6 +298,8 @@
             notice = "Your password has been changed.";
         if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["username"] == "changed")
             notice = "Your username has been changed.";
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["profile"] == "updated")
+            notice = "Your account information has been updated.";
 
         var user = (await AuthState).User;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
