@@ -9,7 +9,7 @@ namespace TruckerReward.Tests;
 public sealed class ProductsPageTests : TestContext
 {
     [Theory]
-    [InlineData("driver", "products", false)]
+    [InlineData("driver", "Product Catalog", true)]
     [InlineData("sponsor", "Product Catalog", true)]
     public void ProductsPageDisplaysContentForAccountRole(string role, string heading, bool hasCatalog)
     {
@@ -22,6 +22,6 @@ public sealed class ProductsPageTests : TestContext
 
         Assert.Equal(heading, page.Find("h1").TextContent);
         Assert.Equal(hasCatalog, page.FindAll(".search-bar").Count > 0);
-        Assert.Equal(!hasCatalog, page.HasComponent<DriverProducts>());
+        Assert.Equal(role == "driver", page.HasComponent<DriverProducts>());
     }
 }

@@ -10,6 +10,35 @@ namespace TruckerReward.Tests;
 public sealed class CatalogEndpointTests
 {
     [Fact]
+    public async Task DriverCatalogOnlyIncludesSponsorsInTheirCompany()
+    {
+        await using var app = new TestApp();
+        using var client = await app.Start(builder => builder.Logging.ClearProviders());
+        using var db = app.Db();
+        var company = new Company { Name = "Driver company" };
+        var otherCompany = new Company { Name = "Other company" };
+        db.Companies.AddRange(company, otherCompany);
+        await db.SaveChangesAsync();
+        var driver = NewUser("driver");
+        var sponsor = NewUser("sponsor");
+        var other = NewUser("sponsor");
+        other.Username = "other";
+        other.Email = "other@example.com";
+        driver.CompanyId = sponsor.CompanyId = company.Id;
+        other.CompanyId = otherCompany.Id;
+        db.Users.AddRange(driver, sponsor, other);
+        await db.SaveChangesAsync();
+        db.CatalogItems.AddRange(
+            new CatalogItem { SponsorId = sponsor.Id, ItemId = "v1|123|0" },
+            new CatalogItem { SponsorId = other.Id, ItemId = "v1|456|0" });
+        await db.SaveChangesAsync();
+        Assert.Equal(new[] { "v1|123|0" }, await client.GetFromJsonAsync<string[]>($"/users/{driver.Id}/catalog"));
+        driver.CompanyId = null;
+        await db.SaveChangesAsync();
+        Assert.Empty((await client.GetFromJsonAsync<string[]>($"/users/{driver.Id}/catalog"))!);
+    }
+
+    [Fact]
     public async Task AddStoresItemIdForSponsorAndAvoidsDuplicates()
     {
         await using var app = new TestApp();
