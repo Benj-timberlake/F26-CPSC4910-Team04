@@ -1,0 +1,103 @@
+@page "/sponsor/orders"
+@attribute [Authorize(Roles = "sponsor")]
+@using System.Security.Claims
+@using System.Globalization
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Driver orders</PageTitle>
+<div class="tr-page">
+    <h1>Driver orders</h1>
+    @if (notice is not null)
+    {
+        <p role="status" class="tr-alert-success">@notice</p>
+    }
+    @if (error is not null)
+    {
+        <p role="alert" class="tr-alert-error">@error</p>
+    }
+    else if (orders is null)
+    {
+        <p role="status">Loading orders...</p>
+    }
+    else if (orders.Count == 0)
+    {
+        <p>No driver orders have been placed for your company.</p>
+    }
+    else
+    {
+        <p>Prices are in USD. Order times are UTC.</p>
+        @foreach (var order in orders)
+        {
+            <section class="tr-card">
+                <h2>Order #@order.OrderId — @order.DriverName</h2>
+                <p>@(order.Timestamp?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Time unavailable")</p>
+                <div class="tr-table-wrap">
+                    <table class="tr-table">
+                        <thead><tr><th>Item</th><th>Quantity</th><th>Unit price</th><th>Total</th></tr></thead>
+                        <tbody>
+                            @foreach (var item in order.Items)
+                            {
+                                <tr><td>@item.Name</td><td>@item.Quantity</td><td>@Dollars(item.Price)</td><td>@Dollars(item.Price * item.Quantity)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p><strong>Order total: @Dollars(order.TotalPrice)</strong></p>
+                <button type="button" class="tr-btn" disabled="@saving" @onclick="() => Buy(order)">Buy — @Dollars(order.TotalPrice)</button>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+    private List<DriverOrder>? orders;
+    private string? error;
+    private string? notice;
+    private bool saving;
+    private int sponsorId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        if (!user.IsInRole("sponsor") || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+        {
+            error = "Please log in as a sponsor to view driver orders.";
+            return;
+        }
+        try
+        {
+            sponsorId = id;
+            using var client = HttpClientFactory.CreateClient("Backend");
+            orders = await client.GetFromJsonAsync<List<DriverOrder>>($"users/{id}/driver-orders") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException)
+        {
+            error = "Could not load driver orders. Please refresh to try again.";
+        }
+    }
+
+    private async Task Buy(DriverOrder order)
+    {
+        if (saving) return;
+        saving = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PostAsync($"users/{sponsorId}/driver-orders/{order.OrderId}/buy", null);
+            response.EnsureSuccessStatusCode();
+            orders!.Remove(order);
+            notice = $"Order #{order.OrderId} successfully marked as ordered.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            error = "Could not update this order. Please refresh before trying again.";
+        }
+        finally { saving = false; }
+    }
+
+    private static string Dollars(decimal price) => price.ToString("C2", CultureInfo.GetCultureInfo("en-US"));
+    private sealed record DriverOrder(int OrderId, int DriverId, string DriverName, DateTime? Timestamp, decimal TotalPrice, List<OrderItem> Items);
+    private sealed record OrderItem(uint Id, string Name, decimal Price, string? Description, int Quantity);
+}
