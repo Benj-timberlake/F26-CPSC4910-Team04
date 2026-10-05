@@ -1,0 +1,10 @@
+@page "/products"
+
+<AuthorizeView Roles="driver">
+    <Authorized>
+        <DriverProducts />
+    </Authorized>
+    <NotAuthorized>
+        <Products />
+    </NotAuthorized>
+</AuthorizeView>
