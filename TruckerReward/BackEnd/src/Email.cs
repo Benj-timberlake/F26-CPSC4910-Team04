@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Mail;
 using Amazon.SimpleEmail;
 using Amazon.SimpleEmail.Model;
 
@@ -35,13 +37,60 @@ public sealed class SesEmailSender(IAmazonSimpleEmailService ses, string from, I
     }
 }
 
+// for when ses isn't available, e.g. gmail with an app password
+public sealed record SmtpSettings(string Host, int Port, string User, string Password);
+
+public sealed class SmtpEmailSender(SmtpSettings smtp, string from, ILogger<SmtpEmailSender> log) : IEmailSender
+{
+    // don't let a slow mail server hold up the request
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+
+    public async Task SendAsync(string to, string subject, string body)
+    {
+        try
+        {
+            using var client = new SmtpClient(smtp.Host, smtp.Port)
+            {
+                EnableSsl = true,
+                Credentials = new NetworkCredential(smtp.User, smtp.Password)
+            };
+            using var message = new MailMessage(from, to, subject, body);
+            using var cancel = new CancellationTokenSource(Timeout);
+            await client.SendMailAsync(message, cancel.Token);
+        }
+        catch (Exception ex) when (ex is SmtpException or FormatException or ArgumentException or OperationCanceledException)
+        {
+            // a mail failure shouldn't fail the request that triggered it
+            log.LogError(ex, "could not send email to {To}: {Subject}", to, subject);
+        }
+    }
+}
+
 public static class EmailSetup
 {
     public const string FromKey = "EMAIL_FROM";
+    public const string SmtpHostKey = "SMTP_HOST";
+    public const string SmtpPortKey = "SMTP_PORT";
+    public const string SmtpUserKey = "SMTP_USER";
+    public const string SmtpPasswordKey = "SMTP_PASSWORD";
 
+    // smtp if SMTP_HOST is set, else ses if EMAIL_FROM is set, else the log
     public static void AddEmail(this WebApplicationBuilder builder)
     {
-        var from = builder.Configuration[FromKey];
+        var config = builder.Configuration;
+        var from = config[FromKey];
+        if (!string.IsNullOrEmpty(config[SmtpHostKey]))
+        {
+            var smtp = new SmtpSettings(
+                config[SmtpHostKey]!,
+                int.TryParse(config[SmtpPortKey], out var port) ? port : 587,
+                config[SmtpUserKey] ?? "",
+                config[SmtpPasswordKey] ?? "");
+            var sender = string.IsNullOrEmpty(from) ? smtp.User : from;
+            builder.Services.AddSingleton<IEmailSender>(sp => new SmtpEmailSender(
+                smtp, sender, sp.GetRequiredService<ILogger<SmtpEmailSender>>()));
+            return;
+        }
         if (string.IsNullOrEmpty(from))
         {
             builder.Services.AddSingleton<IEmailSender, LogEmailSender>();

@@ -5,7 +5,7 @@ public static class PasswordPolicy
     public const int MinLength = 8;
 
     public const string Description =
-        "At least 8 characters with an upper case letter, a lower case letter and a number.";
+        "At least 8 characters with an upper case letter, a lower case letter, a number and a special character (like ! or #).";
 
     // null when the password is acceptable, otherwise a message that names the first rule it broke
     public static string? Check(string? password)
@@ -18,6 +18,11 @@ public static class PasswordPolicy
             return "Password needs a lower case letter.";
         if (!password.Any(char.IsDigit))
             return "Password needs a number.";
+        if (!password.Any(IsSpecial))
+            return "Password needs a special character, like ! or #.";
         return null;
     }
+
+    // anything that isn't a letter, a digit or a space
+    private static bool IsSpecial(char c) => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c);
 }

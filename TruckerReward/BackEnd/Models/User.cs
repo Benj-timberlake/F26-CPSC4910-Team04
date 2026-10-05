@@ -21,9 +21,9 @@ public partial class User
 
     public int Points { get; set; }
 
-    public string? FirstName { get; set; }
+    public string FirstName { get; set; } = null!;
 
-    public string? LastName { get; set; }
+    public string LastName { get; set; } = null!;
 
     public int? CompanyId { get; set; }
 
@@ -35,7 +35,7 @@ public partial class User
 
     public virtual ICollection<AuditHistory> AuditHistories { get; set; } = new List<AuditHistory>();
 
-    public virtual ICollection<Cart> Carts { get; set; } = new List<Cart>();
+    public virtual ICollection<CartItem> Carts { get; set; } = new List<CartItem>();
 
     public virtual Company? Company { get; set; }
 
@@ -49,5 +49,4 @@ public partial class User
 
     public virtual ICollection<PointsHistory> PointsHistories { get; set; } = new List<PointsHistory>();
 
-    public virtual Sponsor? Sponsor { get; set; }
 }

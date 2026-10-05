@@ -36,17 +36,18 @@ public static class AccountEndpoints
 
         app.MapPost("/account/register", async (
             [FromForm] string username,
+            [FromForm] string firstName,
+            [FromForm] string lastName,
             [FromForm] string email,
             [FromForm] string password,
             [FromForm] string userType,
-            [FromForm] string? companyName,
             [FromForm] string? phoneNumber,
             [FromForm] string? address,
             HttpContext http,
             IHttpClientFactory clients) =>
         {
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/register",
-                new { username, email, password, userType, companyName, phoneNumber, address });
+                new { username, firstName, lastName, email, password, userType, phoneNumber, address });
 
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/register?error=" + await ErrorParam(response, "Could not create the account."));
@@ -112,6 +113,55 @@ public static class AccountEndpoints
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/account/password?error=" + await ErrorParam(response, "Could not change the password."));
             return Results.Redirect("/dashboard?password=changed");
+        }).RequireAuthorization().DisableAntiforgery();
+
+        app.MapPost("/account/change-username", async (
+            [FromForm] string? currentPassword,
+            [FromForm] string username,
+            HttpContext http,
+            IHttpClientFactory clients) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/username",
+                new { currentPassword, newUsername = username });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/account/username?error=" + await ErrorParam(response, "Could not change the username."));
+            // refresh the cookie so the new name shows right away
+            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
+            await TruckerSignIn.SignInAsync(http, user!);
+            return Results.Redirect("/dashboard?username=changed");
+        }).RequireAuthorization().DisableAntiforgery();
+
+        app.MapPost("/account/change-email", async (
+            [FromForm] string? currentPassword,
+            [FromForm] string email,
+            HttpContext http,
+            IHttpClientFactory clients) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/email",
+                new { currentPassword, newEmail = email });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/account/email?error=" + await ErrorParam(response, "Could not change the email address."));
+            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
+            await TruckerSignIn.SignInAsync(http, user!);
+            return Results.Redirect("/dashboard?email=changed");
+        }).RequireAuthorization().DisableAntiforgery();
+
+        app.MapPost("/account/update-profile", async (
+            [FromForm] string firstName,
+            [FromForm] string lastName,
+            [FromForm] string? phoneNumber,
+            [FromForm] string? address,
+            HttpContext http,
+            IHttpClientFactory clients) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var response = await clients.CreateClient("Backend").PutAsJsonAsync($"users/{id}/profile",
+                new { firstName, lastName, phoneNumber, address });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/account/profile?error=" + await ErrorParam(response, "Could not update your account."));
+            return Results.Redirect("/dashboard?profile=updated");
         }).RequireAuthorization().DisableAntiforgery();
 
         app.MapPost("/account/logout", async (HttpContext http) =>

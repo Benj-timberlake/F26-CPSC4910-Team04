@@ -27,6 +27,15 @@
         }
 
         <div class="tr-cards">
+            @if (account.UserType == "sponsor" && account.CompanyId is null)
+            {
+                <section class="tr-card">
+                    <h2>Company</h2>
+                    <p>You are not currently associated with a company.</p>
+                    <button type="button" class="tr-btn" @onclick="ShowCompanyModal">Apply To Company</button>
+                </section>
+            }
+
             @if (account.UserType == "driver")
             {
                 <section class="tr-card points">
@@ -37,17 +46,24 @@
             }
 
             <section class="tr-card">
-                <h2>@AccountLabel(account.UserType)</h2>
+                <div class="account-heading">
+                    <h2>@AccountLabel(account.UserType)</h2>
+                    <a class="tr-btn account-edit" href="account/profile">Edit</a>
+                </div>
                 <dl class="tr-kv">
-                    <dt>Username</dt>
-                    <dd>@account.Username</dd>
-                    @if (account.UserType == "sponsor")
+                    @if (account.UserType == "sponsor" && !string.IsNullOrWhiteSpace(account.CompanyName))
                     {
                         <dt>Company</dt>
-                        <dd>@Shown(account.CompanyName)</dd>
+                        <dd>@account.CompanyName</dd>
                     }
+                    <dt>Username</dt>
+                    <dd>@account.Username</dd>
                     <dt>Email</dt>
                     <dd>@account.Email</dd>
+                    <dt>Password</dt>
+                    <dd>---------------</dd>
+                    <dt>Name</dt>
+                    <dd>@account.FirstName @account.LastName</dd>
                     <dt>Phone</dt>
                     <dd>@Shown(account.PhoneNumber)</dd>
                     <dt>Address</dt>
@@ -70,10 +86,7 @@
                     <dt>Previous sign-in</dt>
                     <dd>@(activity.PreviousLoginAt is null ? "This is your first sign-in." : When(activity.PreviousLoginAt))</dd>
                     <dt>Password</dt>
-                    <dd>
-                        @(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))
-                        <a href="account/password">Change password</a>
-                    </dd>
+                    <dd>@(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))</dd>
                 </dl>
 
                 @if (activity.Recent.Count > 0)
@@ -103,6 +116,43 @@
                 }
             </section>
         </div>
+
+        @if (showCompanyModal)
+        {
+            <div class="company-backdrop" @onclick="CloseCompanyModal">
+                <section class="company-dialog" role="dialog" aria-modal="true" aria-labelledby="company-title" @onclick:stopPropagation="true">
+                    <h2 id="company-title">Apply To Company</h2>
+                    <p>Select a company:</p>
+                    @if (companyLoadError is not null)
+                    {
+                        <p role="alert" class="tr-alert-error">@companyLoadError</p>
+                    }
+                    else if (companies is { Count: 0 })
+                    {
+                        <p>No companies are available.</p>
+                    }
+                    else
+                    {
+                        <fieldset class="company-options">
+                            <legend class="visually-hidden">Available companies</legend>
+                            @foreach (var company in companies ?? [])
+                            {
+                                <button type="button" role="radio" aria-checked="@(selectedCompanyId == company.Id)"
+                                        class="company-option @(selectedCompanyId == company.Id ? "selected" : "")"
+                                        @onclick="() => selectedCompanyId = company.Id">
+                                    <span class="company-option-name">@company.Name</span>
+                                    <span class="company-option-description">@(string.IsNullOrWhiteSpace(company.Description) ? "No description available." : company.Description)</span>
+                                </button>
+                            }
+                        </fieldset>
+                    }
+                    <div class="company-actions">
+                        <button type="button" class="tr-btn-outline" @onclick="CloseCompanyModal">Cancel</button>
+                        <button type="button" class="tr-btn" disabled="@(selectedCompanyId is null || companyLoadError is not null || companies is not { Count: > 0 })">Apply (not functional)</button>
+                    </div>
+                </section>
+            </div>
+        }
     }
 </div>
 
@@ -133,6 +183,21 @@
         margin-left: 8px;
     }
 
+    .account-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .account-heading h2 {
+        margin-bottom: 12px;
+    }
+
+    .account-edit {
+        margin-bottom: 12px;
+    }
+
     details {
         margin-top: 14px;
     }
@@ -145,6 +210,69 @@
     details .tr-table {
         margin-top: 8px;
     }
+
+    .company-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        background: #0009;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .company-dialog {
+        background: white;
+        color: #222;
+        border-radius: 12px;
+        padding: 24px;
+        width: 100%;
+        max-width: 520px;
+        max-height: 90vh;
+        overflow: auto;
+        box-shadow: 0 12px 40px #0005;
+    }
+
+    .company-options {
+        display: grid;
+        gap: 10px;
+        margin: 0 0 20px;
+        border: 0;
+        padding: 0;
+    }
+
+    .company-option {
+        display: grid;
+        gap: 5px;
+        width: 100%;
+        padding: 12px 14px;
+        text-align: left;
+        color: #222;
+        background: white;
+        border: 1px solid #b8c0cc;
+        border-radius: 8px;
+    }
+
+    .company-option.selected {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 2px var(--brand);
+    }
+
+    .company-option-name {
+        font-weight: 700;
+    }
+
+    .company-option-description {
+        color: #555;
+        font-weight: 400;
+    }
+
+    .company-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+    }
 </style>
 
 @code {
@@ -155,11 +283,21 @@
     private SecuritySummary? activity;
     private string? loadError;
     private string? notice;
+    private List<CompanyOption>? companies;
+    private int? selectedCompanyId;
+    private bool showCompanyModal;
+    private string? companyLoadError;
 
     protected override async Task OnInitializedAsync()
     {
         if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["password"] == "changed")
             notice = "Your password has been changed.";
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["username"] == "changed")
+            notice = "Your username has been changed.";
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["profile"] == "updated")
+            notice = "Your account information has been updated.";
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["email"] == "changed")
+            notice = "Your email address has been changed.";
 
         var user = (await AuthState).User;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -183,6 +321,27 @@
         _ => "Account"
     };
 
+    private async Task ShowCompanyModal()
+    {
+        selectedCompanyId = null;
+        companyLoadError = null;
+        if (companies is null)
+        {
+            try
+            {
+                using var client = HttpClientFactory.CreateClient("Backend");
+                companies = await client.GetFromJsonAsync<List<CompanyOption>>("companies") ?? [];
+            }
+            catch (HttpRequestException)
+            {
+                companyLoadError = "Couldn't load companies right now. Try again in a moment.";
+            }
+        }
+        showCompanyModal = true;
+    }
+
+    private void CloseCompanyModal() => showCompanyModal = false;
+
     private static string Shown(string? value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
 
     private static string Ip(string? ip) => string.IsNullOrEmpty(ip) ? "" : $" from {ip}";
@@ -202,7 +361,8 @@
         return rel == "" ? abs : $"{abs} ({rel})";
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, string? CompanyName, int Points);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points);
+    private sealed record CompanyOption(int Id, string Name, string? Description);
     private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
     private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
 }

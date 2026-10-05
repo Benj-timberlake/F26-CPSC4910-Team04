@@ -1,0 +1,142 @@
+@page "/account/profile"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Edit account</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card closable-card">
+        <a class="close-button" href="dashboard" aria-label="Close and return to dashboard" title="Close">×</a>
+        <h1>Edit account</h1>
+        @if (error is not null)
+        {
+            <p role="alert" class="tr-alert-error">@error</p>
+        }
+        @if (loadError is not null)
+        {
+            <p role="alert" class="tr-alert-error">@loadError</p>
+        }
+        else if (account is null)
+        {
+            <p role="status"><em>Loading your account...</em></p>
+        }
+        else
+        {
+            <form class="tr-form" method="post" action="account/update-profile">
+                <label for="username">Username</label>
+                <div class="readonly-row" id="username">
+                    <span class="readonly-value">@account.Username</span>
+                    <a class="tr-btn" href="account/username">Change Username</a>
+                </div>
+
+                <label for="email">Email</label>
+                <div class="readonly-row" id="email">
+                    <span class="readonly-value">@account.Email</span>
+                    <a class="tr-btn" href="account/email">Change Email</a>
+                </div>
+
+                <label for="password-action">Password</label>
+                <div class="readonly-row" id="password-action">
+                    <span class="readonly-value">---------------</span>
+                    <a class="tr-btn" href="account/password">Change Password</a>
+                </div>
+
+                <label for="firstName">First name</label>
+                <input id="firstName" name="firstName" type="text" required maxlength="100" autocomplete="given-name" value="@account.FirstName" />
+
+                <label for="lastName">Last name</label>
+                <input id="lastName" name="lastName" type="text" required maxlength="100" autocomplete="family-name" value="@account.LastName" />
+
+                <label for="phoneNumber">Phone</label>
+                <input id="phoneNumber" name="phoneNumber" type="tel" maxlength="20" autocomplete="tel" value="@account.PhoneNumber" />
+
+                <label for="address">Address</label>
+                <input id="address" name="address" type="text" maxlength="255" autocomplete="street-address" value="@account.Address" />
+
+                <button type="submit" class="tr-btn tr-btn-block">Done</button>
+            </form>
+        }
+    </div>
+</div>
+
+<style>
+    .readonly-value {
+        padding: 10px 0;
+        overflow-wrap: anywhere;
+    }
+
+    .readonly-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .readonly-row .tr-btn {
+        flex: 0 0 auto;
+    }
+
+    .closable-card {
+        position: relative;
+    }
+
+    .close-button {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #b8bec7;
+        border-radius: 9px;
+        background: #f1f2f4;
+        color: #666;
+        font-size: 24px;
+        line-height: 1;
+        text-decoration: none;
+    }
+
+    .close-button:hover {
+        background: #e5e7eb;
+        color: #444;
+    }
+
+    @@media (max-width: 420px) {
+        .readonly-row {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private Account? account;
+    private string? error;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        error = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["error"];
+        var user = (await AuthState).User;
+        var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            account = await client.GetFromJsonAsync<Account>($"users/{id}");
+            if (account is null)
+                loadError = "Couldn't load your account right now. Try again in a moment.";
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't load your account right now. Try again in a moment.";
+        }
+    }
+
+    private sealed record Account(string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address);
+}

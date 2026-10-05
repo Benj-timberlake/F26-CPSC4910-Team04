@@ -13,11 +13,13 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<AccountsHistory> AccountsHistories { get; set; }
 
+    public virtual DbSet<AboutPage> AboutPages { get; set; }
+
     public virtual DbSet<Application> Applications { get; set; }
 
     public virtual DbSet<AuditHistory> AuditHistories { get; set; }
 
-    public virtual DbSet<Cart> Carts { get; set; }
+    public virtual DbSet<CartItem> CartItems { get; set; }
 
     public virtual DbSet<Company> Companies { get; set; }
 
@@ -33,14 +35,23 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<PointsHistory> PointsHistories { get; set; }
 
-    public virtual DbSet<Sponsor> Sponsors { get; set; }
-
     public virtual DbSet<User> Users { get; set; }
-    public DbSet<CartItem> CartItems { get; set; }
     public DbSet<PointsHistory> PointsHistory { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AboutPage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("about_page");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Type).HasMaxLength(32).HasColumnName("type");
+            entity.Property(e => e.Title).HasMaxLength(255).HasColumnName("title");
+            entity.Property(e => e.Body).HasColumnType("text").HasColumnName("body");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnType("datetime").HasColumnName("updated_at");
+        });
+
         modelBuilder.Entity<AccountsHistory>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -160,7 +171,7 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_audit_history_user");
         });
 
-        modelBuilder.Entity<Cart>(entity =>
+        modelBuilder.Entity<CartItem>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
 
@@ -363,25 +374,6 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("points_history_ibfk_1");
-        });
-
-        modelBuilder.Entity<Sponsor>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PRIMARY");
-
-            entity.ToTable("sponsors");
-
-            entity.HasIndex(e => e.UserId, "uq_sponsors_user").IsUnique();
-
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.CompanyName)
-                .HasMaxLength(255)
-                .HasColumnName("company_name");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-
-            entity.HasOne(d => d.User).WithOne(p => p.Sponsor)
-                .HasForeignKey<Sponsor>(d => d.UserId)
-                .HasConstraintName("fk_sponsors_user");
         });
 
         modelBuilder.Entity<User>(entity =>

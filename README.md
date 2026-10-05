@@ -23,7 +23,11 @@ Then `make` builds, starts both apps (BackEnd 8080, FrontEnd 8081) and opens the
 `make test`, `make stop`, `make logs`. VS Code's Run All does the same as `make`.
 
 Admins are made by setting `user_type = 'admin'` on the user row. Emails (reset links, security
-notices) print to the backend log unless `EMAIL_FROM` is set.
+notices) print to the backend log unless `SMTP_HOST` or `EMAIL_FROM` is set.
+
+Emails to a user go through `Notifications` (`BackEnd/src/Notifications.cs`), which also saves a copy
+in `notifications_history`. A new notification is one more method there; inject `Notifications`
+into the endpoint and call it.
 
 Optional user secrets, never appsettings:
 
@@ -50,7 +54,9 @@ Environment properties on the Beanstalk environment:
 | `ConnectionStrings__DefaultConnection` | same as local, database `Team04_DB` |
 | `BACKEND_API_KEY` | one random string; the BackEnd refuses requests without it |
 | `FRONTEND_URL` | the public https address; reset links are built from it |
-| `EMAIL_FROM` | an SES-verified sender; the instance role needs `ses:SendEmail` |
+| `SMTP_HOST`, `SMTP_PORT` | `smtp.gmail.com`, `587`; mail goes out through Gmail when set |
+| `SMTP_USER`, `SMTP_PASSWORD` | `TruckerRewards@gmail.com` and its Google app password |
+| `EMAIL_FROM` | the sender address; without `SMTP_HOST` it means SES instead (verified sender, instance role needs `ses:SendEmail`) |
 | `Authentication__Google__*`, `Authentication__Microsoft__*` | as above, with `__` for `:` |
 
 ### HTTPS

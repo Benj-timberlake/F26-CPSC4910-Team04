@@ -1,0 +1,103 @@
+@page "/about-us"
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>About Us | TruckerReward</PageTitle>
+
+<div class="tr-page about-page">
+    <h1>About Us</h1>
+    @if (loading)
+    {
+        <p role="status" class="tr-muted">Loading About Us...</p>
+    }
+    else if (loadError is not null)
+    {
+        <p role="alert" class="tr-alert-error">@loadError</p>
+    }
+    else if (mainPage is null)
+    {
+        <p class="tr-muted">About Us information is not available yet.</p>
+    }
+    else
+    {
+        <section class="tr-card about-intro">
+            <h2>@mainPage.Title</h2>
+            <p class="tr-subtitle">@mainPage.Body</p>
+            <a class="tr-btn" href="products">Browse products</a>
+        </section>
+
+        @if (sections.Count > 0)
+        {
+            <section class="tr-cards about-details" aria-label="About TruckerReward">
+                @foreach (var section in sections)
+                {
+                    <article class="tr-card">
+                        <h2>@section.Title</h2>
+                        <p>@section.Body</p>
+                    </article>
+                }
+            </section>
+        }
+    }
+</div>
+
+<style>
+    .about-intro {
+        margin-bottom: 24px;
+        border-left: 4px solid var(--brand);
+    }
+
+    .about-intro h2 {
+        margin: 0 0 12px;
+        font-size: 24px;
+    }
+
+    .about-intro p {
+        max-width: 650px;
+        margin: 0 0 20px;
+        line-height: 1.6;
+    }
+
+    .about-details h2 {
+        margin: 0 0 12px;
+        font-size: 20px;
+    }
+
+    .about-details p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+    }
+</style>
+
+@code {
+    private bool loading = true;
+    private string? loadError;
+    private AboutPageContent? mainPage;
+    private List<AboutPageContent> sections = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var pages = await client.GetFromJsonAsync<List<AboutPageContent>>("api/about") ?? new();
+            mainPage = pages.FirstOrDefault(page => page.Type == "main");
+            sections = pages.Where(page => page.Type != "main").ToList();
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't load About Us information right now. Try again in a moment.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            loadError = "About Us information couldn't be displayed right now.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private sealed record AboutPageContent(string Type, string Title, string Body);
+}
