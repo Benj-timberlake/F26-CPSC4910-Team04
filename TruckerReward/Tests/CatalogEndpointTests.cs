@@ -33,6 +33,12 @@ public sealed class CatalogEndpointTests
             new CatalogItem { SponsorId = other.Id, ItemId = "v1|456|0" });
         await db.SaveChangesAsync();
         Assert.Equal(new[] { "v1|123|0" }, await client.GetFromJsonAsync<string[]>($"/users/{driver.Id}/catalog"));
+        Assert.Equal(new[] { "v1|123|0" }, await client.GetFromJsonAsync<string[]>($"/users/{sponsor.Id}/catalog"));
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/users/{sponsor.Id}/catalog?itemId=v1%7C456%7C0")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.DeleteAsync($"/users/{driver.Id}/catalog?itemId=v1%7C123%7C0")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/users/{sponsor.Id}/catalog?itemId=v1%7C123%7C0")).StatusCode);
+        Assert.Empty((await client.GetFromJsonAsync<string[]>($"/users/{driver.Id}/catalog"))!);
+        Assert.Equal("v1|456|0", Assert.Single(await db.CatalogItems.AsNoTracking().ToListAsync()).ItemId);
         driver.CompanyId = null;
         await db.SaveChangesAsync();
         Assert.Empty((await client.GetFromJsonAsync<string[]>($"/users/{driver.Id}/catalog"))!);

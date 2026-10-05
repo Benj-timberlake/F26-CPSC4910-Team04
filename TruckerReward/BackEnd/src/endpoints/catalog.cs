@@ -9,6 +9,9 @@ public static class CatalogEndpoints
         {
             var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
             if (user is null) return Results.NotFound();
+            if (user.UserType == "sponsor")
+                return Results.Ok(await db.CatalogItems.AsNoTracking().Where(item => item.SponsorId == id)
+                    .OrderBy(item => item.Id).Select(item => item.ItemId).Distinct().ToListAsync());
             if (user.UserType != "driver")
                 return Results.Json(new { message = "Only drivers can browse this catalog." }, statusCode: 403);
             if (user.CompanyId is null) return Results.Ok(Array.Empty<string>());
@@ -18,6 +21,17 @@ public static class CatalogEndpoints
                 .OrderBy(item => item.Id).Select(item => item.ItemId).Distinct().ToListAsync();
             return Results.Ok(itemIds);
         });
+        app.MapDelete("/users/{id:int}/catalog", async (int id, string itemId, AppDbContext db) =>
+        {
+            var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
+            if (sponsor is null) return Results.NotFound();
+            if (sponsor.UserType != "sponsor")
+                return Results.Json(new { message = "Only sponsors can remove catalog items." }, statusCode: 403);
+            var removed = await db.CatalogItems.Where(item => item.SponsorId == id && item.ItemId == itemId)
+                .ExecuteDeleteAsync();
+            return removed == 0 ? Results.NotFound() : Results.NoContent();
+        });
+
         app.MapPost("/users/{id:int}/catalog", async (int id, AddCatalogItem request, AppDbContext db) =>
         {
             if (string.IsNullOrWhiteSpace(request.ItemId) || request.ItemId.Length > 255)

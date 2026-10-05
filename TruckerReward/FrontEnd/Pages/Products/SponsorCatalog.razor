@@ -1,0 +1,110 @@
+@page "/catalog"
+@attribute [Authorize(Roles = "sponsor")]
+@using System.Security.Claims
+@using System.Text.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Catalog</PageTitle>
+<div class="tr-page">
+    <h1>Catalog</h1>
+    <p><a class="tr-btn" href="products">Add products</a></p>
+    @if (error is not null)
+    {
+        <p role="alert" class="tr-alert-error">@error</p>
+    }
+    @if (loading)
+    {
+        <p role="status">Loading catalog...</p>
+    }
+    else if (items.Count == 0 && error is null)
+    {
+        <p>Your catalog is empty.</p>
+    }
+    <div class="catalog-grid">
+        @foreach (var entry in items)
+        {
+            <article class="tr-card" @key="entry.ItemId">
+                @if (!string.IsNullOrWhiteSpace(entry.Product?.Image?.ImageUrl))
+                {
+                    <img src="@entry.Product.Image.ImageUrl" alt="@entry.Product.Title" loading="lazy" />
+                }
+                <h2>@(entry.Product?.Title ?? "Unavailable product")</h2>
+                <p>@entry.ItemId</p>
+                @if (entry.Product is not null)
+                {
+                    <p>@(entry.Product.Price?.Display ?? "Price unavailable")</p>
+                    <a href="@("/product?itemId=" + Uri.EscapeDataString(entry.ItemId))">View product</a>
+                }
+                else
+                {
+                    <p>Product details could not be loaded.</p>
+                }
+                <button type="button" class="tr-btn" disabled="@(removing is not null)" @onclick="() => Remove(entry)">
+                    @(removing == entry.ItemId ? "Removing..." : "Remove from catalog")
+                </button>
+            </article>
+        }
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+    private readonly List<CatalogEntry> items = [];
+    private bool loading = true;
+    private string? error;
+    private string? removing;
+    private int sponsorId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var user = (await AuthState).User;
+            if (!user.IsInRole("sponsor") || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out sponsorId))
+            {
+                error = "Please log in as a sponsor to manage your catalog.";
+                return;
+            }
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var ids = await client.GetFromJsonAsync<List<string>>($"users/{sponsorId}/catalog") ?? [];
+            foreach (var id in ids.Distinct())
+            {
+                Products.Product? product = null;
+                try
+                {
+                    using var response = await client.GetAsync("api/products/detail?itemId=" + Uri.EscapeDataString(id));
+                    if (response.IsSuccessStatusCode)
+                        product = JsonSerializer.Deserialize<Products.Product>(await response.Content.ReadAsStringAsync());
+                }
+                catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException) { }
+                items.Add(new CatalogEntry(id, product));
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
+        {
+            error = "Could not load your catalog. Please reload the page to try again.";
+        }
+        finally { loading = false; }
+    }
+
+    private async Task Remove(CatalogEntry entry)
+    {
+        if (removing is not null) return;
+        removing = entry.ItemId;
+        error = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.DeleteAsync($"users/{sponsorId}/catalog?itemId=" + Uri.EscapeDataString(entry.ItemId));
+            if (response.StatusCode != System.Net.HttpStatusCode.NotFound) response.EnsureSuccessStatusCode();
+            items.Remove(entry);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            error = "Could not remove this item. Please try again.";
+        }
+        finally { removing = null; }
+    }
+
+    private sealed record CatalogEntry(string ItemId, Products.Product? Product);
+}
