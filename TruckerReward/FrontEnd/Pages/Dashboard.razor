@@ -60,6 +60,8 @@
                     <dd>@account.Username</dd>
                     <dt>Email</dt>
                     <dd>@account.Email</dd>
+                    <dt>Password</dt>
+                    <dd>---------------</dd>
                     <dt>Name</dt>
                     <dd>@account.FirstName @account.LastName</dd>
                     <dt>Phone</dt>
@@ -84,10 +86,7 @@
                     <dt>Previous sign-in</dt>
                     <dd>@(activity.PreviousLoginAt is null ? "This is your first sign-in." : When(activity.PreviousLoginAt))</dd>
                     <dt>Password</dt>
-                    <dd>
-                        @(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))
-                        <a href="account/password">Change password</a>
-                    </dd>
+                    <dd>@(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))</dd>
                 </dl>
 
                 @if (activity.Recent.Count > 0)
