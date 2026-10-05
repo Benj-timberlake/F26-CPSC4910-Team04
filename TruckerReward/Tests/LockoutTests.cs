@@ -12,8 +12,8 @@ public sealed class LockoutTests : IAsyncDisposable
     private async Task<HttpClient> Start()
     {
         var client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", email = "bob@example.com", password = "Hunter22x", userType = "driver" });
-        await client.PostAsJsonAsync("/auth/register", new { username = "root", email = "root@example.com", password = "Hunter22x", userType = "driver" });
+        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x", userType = "driver" });
+        await client.PostAsJsonAsync("/auth/register", new { username = "root", firstName = "Root", lastName = "Admin", email = "root@example.com", password = "Hunter22x", userType = "driver" });
         using var db = app.Db();
         (await db.Users.SingleAsync(u => u.Username == "root")).UserType = "admin";
         await db.SaveChangesAsync();
