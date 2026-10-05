@@ -7,7 +7,8 @@
 <PageTitle>Edit account</PageTitle>
 
 <div class="tr-page-narrow">
-    <div class="tr-card">
+    <div class="tr-card closable-card">
+        <a class="close-button" href="dashboard" aria-label="Close and return to dashboard" title="Close">×</a>
         <h1>Edit account</h1>
         @if (error is not null)
         {
@@ -24,6 +25,18 @@
         else
         {
             <form class="tr-form" method="post" action="account/update-profile">
+                <label for="username">Username</label>
+                <div class="readonly-row" id="username">
+                    <span class="readonly-value">@account.Username</span>
+                    <a class="tr-btn" href="account/username">Change Username</a>
+                </div>
+
+                <label for="email">Email</label>
+                <div class="readonly-row" id="email">
+                    <span class="readonly-value">@account.Email</span>
+                    <a class="tr-btn" href="account/email">Change Email</a>
+                </div>
+
                 <label for="firstName">First name</label>
                 <input id="firstName" name="firstName" type="text" required maxlength="100" autocomplete="given-name" value="@account.FirstName" />
 
@@ -36,23 +49,60 @@
                 <label for="address">Address</label>
                 <input id="address" name="address" type="text" maxlength="255" autocomplete="street-address" value="@account.Address" />
 
-                <label for="username">Username</label>
-                <div class="readonly-value" id="username">@account.Username <a href="account/username">Change username</a></div>
-
-                <label for="email">Email</label>
-                <div class="readonly-value" id="email">@account.Email</div>
-
                 <button type="submit" class="tr-btn tr-btn-block">Done</button>
             </form>
         }
     </div>
-    <p class="tr-alt"><a href="dashboard">Back to dashboard</a></p>
 </div>
 
 <style>
     .readonly-value {
         padding: 10px 0;
         overflow-wrap: anywhere;
+    }
+
+    .readonly-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .readonly-row .tr-btn {
+        flex: 0 0 auto;
+    }
+
+    .closable-card {
+        position: relative;
+    }
+
+    .close-button {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #b8bec7;
+        border-radius: 9px;
+        background: #f1f2f4;
+        color: #666;
+        font-size: 24px;
+        line-height: 1;
+        text-decoration: none;
+    }
+
+    .close-button:hover {
+        background: #e5e7eb;
+        color: #444;
+    }
+
+    @@media (max-width: 420px) {
+        .readonly-row {
+            align-items: flex-start;
+            flex-direction: column;
+        }
     }
 </style>
 

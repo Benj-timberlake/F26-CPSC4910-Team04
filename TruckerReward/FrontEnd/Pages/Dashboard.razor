@@ -57,14 +57,11 @@
                         <dd>@account.CompanyName</dd>
                     }
                     <dt>Username</dt>
-                    <dd>
-                        @account.Username
-                        <a href="account/username">Change username</a>
-                    </dd>
-                    <dt>Name</dt>
-                    <dd>@account.FirstName @account.LastName</dd>
+                    <dd>@account.Username</dd>
                     <dt>Email</dt>
                     <dd>@account.Email</dd>
+                    <dt>Name</dt>
+                    <dd>@account.FirstName @account.LastName</dd>
                     <dt>Phone</dt>
                     <dd>@Shown(account.PhoneNumber)</dd>
                     <dt>Address</dt>
@@ -300,6 +297,8 @@
             notice = "Your username has been changed.";
         if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["profile"] == "updated")
             notice = "Your account information has been updated.";
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["email"] == "changed")
+            notice = "Your email address has been changed.";
 
         var user = (await AuthState).User;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);

@@ -132,6 +132,22 @@ public static class AccountEndpoints
             return Results.Redirect("/dashboard?username=changed");
         }).RequireAuthorization().DisableAntiforgery();
 
+        app.MapPost("/account/change-email", async (
+            [FromForm] string? currentPassword,
+            [FromForm] string email,
+            HttpContext http,
+            IHttpClientFactory clients) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/email",
+                new { currentPassword, newEmail = email });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/account/email?error=" + await ErrorParam(response, "Could not change the email address."));
+            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
+            await TruckerSignIn.SignInAsync(http, user!);
+            return Results.Redirect("/dashboard?email=changed");
+        }).RequireAuthorization().DisableAntiforgery();
+
         app.MapPost("/account/update-profile", async (
             [FromForm] string firstName,
             [FromForm] string lastName,

@@ -76,6 +76,30 @@ public static class UserEndpoints
             return Results.Ok(UserProfile.Of(user));
         });
 
+        app.MapPost("/users/{id:int}/email", async (int id, ChangeEmailRequest req, AppDbContext db, IEmailSender email) =>
+        {
+            var user = await db.Users.FindAsync(id);
+            if (user is null)
+                return Results.NotFound();
+            if (user.Password is not null && !Passwords.Verify(user, req.CurrentPassword))
+                return Results.Json(new { message = "Current password is wrong." }, statusCode: StatusCodes.Status401Unauthorized);
+
+            var address = req.NewEmail?.Trim() ?? "";
+            if (address.Length is 0 or > 255 || !System.Net.Mail.MailAddress.TryCreate(address, out var parsed) || parsed.Address != address)
+                return Results.BadRequest(new { message = "Enter a valid email address of 255 characters or fewer." });
+            if (string.Equals(address, user.Email, StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest(new { message = "That is already your email address." });
+            if (await db.Users.AnyAsync(u => u.Email == address && u.Id != id))
+                return Results.Conflict(new { message = "That email address is already in use." });
+
+            var oldAddress = user.Email;
+            user.Email = address;
+            await db.SaveChangesAsync();
+            await email.SendAsync(oldAddress, "Your TruckerReward email was changed",
+                $"Hi {user.Username},\n\nYour account email was just changed from {oldAddress} to {address}. If that wasn't you, reset your password right away from the login page.");
+            return Results.Ok(UserProfile.Of(user));
+        });
+
         app.MapPut("/users/{id:int}/profile", async (int id, UpdateUserProfileRequest req, AppDbContext db) =>
         {
             var user = await db.Users.FindAsync(id);
@@ -105,6 +129,7 @@ public static class UserEndpoints
 }
 
 public record ChangeUsernameRequest(string? CurrentPassword, string? NewUsername);
+public record ChangeEmailRequest(string? CurrentPassword, string? NewEmail);
 public record UpdateUserProfileRequest(string? FirstName, string? LastName, string? PhoneNumber, string? Address);
 
 public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points);
