@@ -59,6 +59,34 @@ public sealed class NotificationsTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AdminsAreToldAboutNewAccountsOnTheSiteOnly()
+    {
+        var client = await app.Start();
+        foreach (var name in new[] { "ann", "max" })
+            await client.PostAsJsonAsync("/auth/register", new { username = name, firstName = name, lastName = "Admin", email = $"{name}@example.com", password = "Hunter22x!", userType = "driver" });
+        using (var db = app.Db())
+        {
+            await db.Users.ExecuteUpdateAsync(u => u.SetProperty(x => x.UserType, "admin"));
+        }
+
+        var response = await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var saved = await app.Db().NotificationsHistories.Include(n => n.User).ToListAsync();
+        Assert.Equal(["ann", "max"], saved.Select(n => n.User.Username).Order());
+        Assert.All(saved, n => Assert.Equal("New driver account: bob", n.Subject));
+        Assert.All(saved, n => Assert.Contains("Bob Driver (bob, bob@example.com)", n.Body));
+        Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
+    public async Task NoAdminsMeansNoNewAccountNotification()
+    {
+        await StartWithBob();
+        Assert.Empty(await app.Db().NotificationsHistories.ToListAsync());
+    }
+
+    [Fact]
     public async Task HistoryFailureStillEmailsAndSucceeds()
     {
         var (client, _) = await StartWithBob();

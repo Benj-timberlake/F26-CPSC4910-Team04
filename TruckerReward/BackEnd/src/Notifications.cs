@@ -7,17 +7,32 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
     public Task ResetLinkSent(User user, string link) =>
         Send(user, "Reset your TruckerReward password",
             $"Hi {user.Username},\n\nUse this link within the next hour to choose a new password:\n{link}\n\nIf you didn't ask for this, ignore this email and your password stays the same.",
+            emailed: true,
             // keeps the reset link out of the database
             stored: "A link to reset your password was emailed to you. It works for one hour.");
 
     public Task PasswordChanged(User user, bool byReset) => byReset
         ? Send(user, "Your TruckerReward password was reset",
-            $"Hi {user.Username},\n\nYour password was just reset. If that wasn't you, contact your sponsor or an administrator.")
+            $"Hi {user.Username},\n\nYour password was just reset. If that wasn't you, contact your sponsor or an administrator.",
+            emailed: true)
         : Send(user, "Your TruckerReward password was changed",
-            $"Hi {user.Username},\n\nYour password was just changed. If that wasn't you, reset it right away from the login page.");
+            $"Hi {user.Username},\n\nYour password was just changed. If that wasn't you, reset it right away from the login page.",
+            emailed: true);
+
+    public Task AccountCreated(User user) =>
+        ToAdmins($"New {user.UserType} account: {user.Username}",
+            $"{user.FirstName} {user.LastName} ({user.Username}, {user.Email}) created a {user.UserType} account.",
+            emailed: false);
+
+    private async Task ToAdmins(string subject, string body, bool emailed)
+    {
+        var admins = await db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Admin).ToListAsync();
+        foreach (var admin in admins)
+            await Send(admin, subject, body, emailed);
+    }
 
     // stored goes in the history instead of a body with a secret in it
-    private async Task Send(User user, string subject, string body, string? stored = null)
+    private async Task Send(User user, string subject, string body, bool emailed, string? stored = null)
     {
         var row = new NotificationsHistory
         {
@@ -37,7 +52,8 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             db.Entry(row).State = EntityState.Detached;
             log.LogError(ex, "could not save notification for user {Id}: {Subject}", user.Id, subject);
         }
-        await email.SendAsync(user.Email, subject, body);
+        if (emailed)
+            await email.SendAsync(user.Email, subject, body);
     }
 
     // notifications_history.subject is varchar(100)
