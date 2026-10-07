@@ -24,11 +24,34 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             $"{user.FirstName} {user.LastName} ({user.Username}, {user.Email}) created a {user.UserType} account.",
             emailed: false);
 
+    public async Task PointsChanged(User user, int delta, string reason)
+    {
+        await Send(user, delta >= 0 ? $"{delta:N0} points added" : $"{-delta:N0} points deducted",
+            $"{reason} Your balance is now {user.Points:N0} points.",
+            emailed: false);
+        if (user.Points < 0)
+            await ToSponsorsOf(user.CompanyId, $"{user.Username} is negative on points",
+                $"{user.FirstName} {user.LastName} ({user.Username}) has a balance of {user.Points:N0} points.",
+                emailed: true);
+    }
+
     private async Task ToAdmins(string subject, string body, bool emailed)
     {
         var admins = await db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Admin).ToListAsync();
         foreach (var admin in admins)
             await Send(admin, subject, body, emailed);
+    }
+
+    // a driver's sponsors are the sponsor accounts in the driver's company
+    private async Task ToSponsorsOf(int? companyId, string subject, string body, bool emailed)
+    {
+        if (companyId is null)
+            return;
+        var sponsors = await db.Users.AsNoTracking()
+            .Where(u => u.UserType == AuthEndpoints.Sponsor && u.CompanyId == companyId)
+            .ToListAsync();
+        foreach (var sponsor in sponsors)
+            await Send(sponsor, subject, body, emailed);
     }
 
     // stored goes in the history instead of a body with a secret in it
