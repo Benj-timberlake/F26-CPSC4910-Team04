@@ -1,0 +1,142 @@
+@page "/applications"
+@attribute [Authorize(Roles = "sponsor,admin")]
+
+<PageTitle>Applications</PageTitle>
+
+<div class="applications-page">
+    <header class="applications-heading">
+        <div>
+            <p class="eyebrow">SPONSOR WORKSPACE</p>
+            <h1>Applications</h1>
+            <p class="applications-subtitle">Review driver applications and track recent decisions.</p>
+        </div>
+        <span class="sample-label">Example screen</span>
+    </header>
+
+    <div class="application-columns">
+        <section class="application-panel active-panel" aria-labelledby="active-title">
+            <div class="panel-heading">
+                <div>
+                    <h2 id="active-title">Active applications</h2>
+                    <p>Waiting for review</p>
+                </div>
+                <span class="count active-count">3</span>
+            </div>
+            <div class="application-list">
+                <article class="application-card">
+                    <div class="applicant-avatar">JM</div>
+                    <div class="applicant-details">
+                        <h3>Jordan Miller</h3>
+                        <p>Driver application <span>·</span> Submitted Oct 4, 2026</p>
+                        <div class="application-meta"><span>CDL Class A</span><span>5 years experience</span></div>
+                    </div>
+                    <span class="status-pill pending">Pending</span>
+                </article>
+                <article class="application-card">
+                    <div class="applicant-avatar avatar-gold">AC</div>
+                    <div class="applicant-details">
+                        <h3>Alexis Chen</h3>
+                        <p>Driver application <span>·</span> Submitted Oct 2, 2026</p>
+                        <div class="application-meta"><span>CDL Class A</span><span>8 years experience</span></div>
+                    </div>
+                    <span class="status-pill pending">Pending</span>
+                </article>
+                <article class="application-card">
+                    <div class="applicant-avatar avatar-sage">RT</div>
+                    <div class="applicant-details">
+                        <h3>Riley Thompson</h3>
+                        <p>Driver application <span>·</span> Submitted Sep 29, 2026</p>
+                        <div class="application-meta"><span>CDL Class B</span><span>3 years experience</span></div>
+                    </div>
+                    <span class="status-pill pending">Pending</span>
+                </article>
+            </div>
+        </section>
+
+        <section class="application-panel decision-panel approved-panel" aria-labelledby="approved-title">
+            <div class="panel-heading">
+                <div>
+                    <h2 id="approved-title">Approved</h2>
+                    <p>Recently accepted</p>
+                </div>
+                <span class="count approved-count">2</span>
+            </div>
+            <div class="application-list compact-list">
+                <article class="decision-card">
+                    <div class="decision-top"><div class="applicant-avatar avatar-sage">SP</div><span class="status-pill approved">Approved</span></div>
+                    <h3>Sam Parker</h3>
+                    <p>Submitted Sep 22, 2026</p>
+                    <div class="decision-date">Approved Sep 25, 2026</div>
+                </article>
+                <article class="decision-card">
+                    <div class="decision-top"><div class="applicant-avatar avatar-lilac">DW</div><span class="status-pill approved">Approved</span></div>
+                    <h3>Devin Wilson</h3>
+                    <p>Submitted Sep 18, 2026</p>
+                    <div class="decision-date">Approved Sep 20, 2026</div>
+                </article>
+            </div>
+        </section>
+
+        <section class="application-panel decision-panel denied-panel" aria-labelledby="denied-title">
+            <div class="panel-heading">
+                <div>
+                    <h2 id="denied-title">Denied</h2>
+                    <p>Recent decisions</p>
+                </div>
+                <span class="count denied-count">1</span>
+            </div>
+            <div class="application-list compact-list">
+                <article class="decision-card">
+                    <div class="decision-top"><div class="applicant-avatar avatar-rose">MK</div><span class="status-pill denied">Denied</span></div>
+                    <h3>Morgan King</h3>
+                    <p>Submitted Sep 16, 2026</p>
+                    <div class="decision-date">Denied Sep 19, 2026</div>
+                </article>
+            </div>
+        </section>
+    </div>
+</div>
+
+<style>
+    .applications-page { max-width: 1500px; margin: 0 auto; padding: 36px clamp(20px, 4vw, 56px) 60px; color: #1f2937; }
+    .applications-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 28px; }
+    .eyebrow { color: var(--brand); font-weight: 700; font-size: 11px; letter-spacing: .12em; margin: 0 0 8px; }
+    .applications-heading h1 { margin: 0; font-size: clamp(30px, 3vw, 38px); font-weight: 700; letter-spacing: -.03em; }
+    .applications-subtitle { margin: 7px 0 0; color: #697586; }
+    .sample-label { padding: 7px 11px; border: 1px solid #dce5f1; background: #f7f9fc; color: #64748b; border-radius: 20px; font-size: 12px; white-space: nowrap; }
+    .application-columns { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 18px; align-items: stretch; }
+    .application-panel { background: #f8fafc; border: 1px solid #e3e9f0; border-radius: 14px; padding: 20px; min-width: 0; }
+    .active-panel { background: #f5f8fd; border-color: #dbe6f5; }
+    .approved-panel { background: #f7fbf8; border-color: #dcebe0; }
+    .denied-panel { background: #fdf8f7; border-color: #f0e1de; }
+    .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-bottom: 17px; border-bottom: 1px solid #e5eaf0; }
+    .panel-heading h2 { margin: 0; font-size: 17px; font-weight: 700; }
+    .panel-heading p { color: #7a8492; font-size: 12px; margin: 4px 0 0; }
+    .count { min-width: 28px; height: 28px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; border-radius: 20px; font-size: 12px; font-weight: 700; }
+    .active-count { color: #2455a4; background: #e3ecf9; }
+    .approved-count { color: #24734a; background: #e2f1e7; }
+    .denied-count { color: #a04438; background: #f8e8e5; }
+    .application-list { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; }
+    .application-card, .decision-card { background: #fff; border: 1px solid #e8edf2; border-radius: 10px; }
+    .application-card { display: flex; align-items: center; gap: 13px; padding: 15px; }
+    .applicant-avatar { flex: 0 0 40px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; color: #315b99; background: #e8eef8; font-size: 12px; font-weight: 700; }
+    .avatar-gold { color: #8a6532; background: #f6eedf; }
+    .avatar-sage { color: #397257; background: #e5f0e9; }
+    .avatar-lilac { color: #705a9c; background: #eee9f7; }
+    .avatar-rose { color: #9c5149; background: #f7e9e6; }
+    .applicant-details { min-width: 0; flex: 1; }
+    .application-card h3, .decision-card h3 { font-size: 14px; font-weight: 700; margin: 0; }
+    .application-card p, .decision-card p { color: #7a8492; font-size: 11px; margin: 4px 0 0; }
+    .application-card p span { padding: 0 3px; }
+    .application-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .application-meta span { padding: 4px 7px; border-radius: 5px; background: #f3f5f8; color: #626e7d; font-size: 10px; }
+    .status-pill { padding: 5px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+    .pending { color: #986922; background: #fbf2df; }
+    .approved { color: #28744c; background: #e5f3e9; }
+    .denied { color: #a04438; background: #f8e8e5; }
+    .decision-card { padding: 14px; }
+    .decision-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
+    .decision-date { border-top: 1px solid #edf0f3; margin-top: 12px; padding-top: 10px; color: #6f7b89; font-size: 10px; }
+    @@media (max-width: 850px) { .application-columns { grid-template-columns: 1fr 1fr; } .active-panel { grid-column: 1 / -1; } }
+    @@media (max-width: 560px) { .applications-heading { align-items: flex-start; flex-direction: column; } .application-columns { grid-template-columns: 1fr; } .active-panel { grid-column: auto; } .application-card { align-items: flex-start; flex-wrap: wrap; } .application-card .status-pill { margin-left: 53px; } }
+</style>

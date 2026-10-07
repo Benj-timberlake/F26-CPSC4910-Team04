@@ -1,4 +1,6 @@
 @namespace FrontEnd.Shared
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
 
 <nav class="account-bar">
     <a href="">Home</a>
@@ -7,6 +9,13 @@
     <AuthorizeView>
         <Authorized>
             <a href="dashboard">Dashboard</a>
+            <AuthorizeView Roles="sponsor,admin" Context="applicationsNav">
+                @if (applicationsNav.User.IsInRole("admin") ||
+                    (applicationsNav.User.IsInRole("sponsor") && sponsorCompanyId is not null && sponsorCompanyLoaded))
+                {
+                    <a href="applications">Applications</a>
+                }
+            </AuthorizeView>
             <AuthorizeView Roles="admin" Context="admin">
                 <a href="admin/security">Security</a>
             </AuthorizeView>
@@ -24,6 +33,39 @@
         </NotAuthorized>
     </AuthorizeView>
 </nav>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private int? sponsorCompanyId;
+    private bool sponsorCompanyLoaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        if (!user.IsInRole("sponsor"))
+            return;
+
+        var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(id))
+            return;
+
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var account = await client.GetFromJsonAsync<SponsorAccount>($"users/{id}");
+            sponsorCompanyId = account?.CompanyId;
+            sponsorCompanyLoaded = account is not null;
+        }
+        catch (HttpRequestException)
+        {
+            // Fail closed: don't show this tab if sponsor company status can't be confirmed.
+        }
+    }
+
+    private sealed record SponsorAccount(int? CompanyId);
+}
 
 <style>
     .account-bar {

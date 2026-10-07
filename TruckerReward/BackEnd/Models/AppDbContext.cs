@@ -107,40 +107,31 @@ public partial class AppDbContext : DbContext
 
             entity.HasIndex(e => e.CompanyId, "fk_applications_company");
 
-            entity.HasIndex(e => e.SponsorId, "fk_applications_sponsor");
+            entity.HasIndex(e => e.ReviewerId, "fk_applications_sponsor");
 
-            entity.HasIndex(e => e.DriverId, "uq_applications_driver_id").IsUnique();
+            entity.HasIndex(e => e.ApplicantId, "uq_applications_driver_id").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.ApplicationDate)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .HasColumnType("datetime")
-                .HasColumnName("application_date");
-            entity.Property(e => e.CompanyId).HasColumnName("company_id");
-            entity.Property(e => e.DriverId).HasColumnName("driver_id");
-            entity.Property(e => e.ExtraInfo)
+            entity.Property(e => e.ApplicantExtraInfo)
                 .HasColumnType("text")
-                .HasColumnName("extra_info");
-            entity.Property(e => e.SponsorId).HasColumnName("sponsor_id");
+                .HasColumnName("applicant_extra_info");
+            entity.Property(e => e.ApplicantId).HasColumnName("applicant_id");
+            entity.Property(e => e.ApplicationTimestamp)
+                .HasColumnType("datetime")
+                .HasColumnName("application_timestamp");
+            entity.Property(e => e.CompanyId).HasColumnName("company_id");
+            entity.Property(e => e.ResponseTimestamp)
+                .HasColumnType("datetime")
+                .HasColumnName("response_timestamp");
+            entity.Property(e => e.ReviewerId).HasColumnName("reviewer_id");
+            entity.Property(e => e.ReviewerReasoning)
+                .HasColumnType("text")
+                .HasColumnName("reviewer_reasoning");
             entity.Property(e => e.Status)
                 .HasDefaultValueSql("'created'")
                 .HasColumnType("enum('created','approved','rejected')")
                 .HasColumnName("status");
 
-            entity.HasOne(d => d.Company).WithMany(p => p.Applications)
-                .HasForeignKey(d => d.CompanyId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_applications_company");
-
-            entity.HasOne(d => d.Driver).WithOne(p => p.ApplicationDriver)
-                .HasForeignKey<Application>(d => d.DriverId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_applications_driver");
-
-            entity.HasOne(d => d.Sponsor).WithMany(p => p.ApplicationSponsors)
-                .HasForeignKey(d => d.SponsorId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_applications_sponsor");
         });
 
         modelBuilder.Entity<AuditHistory>(entity =>
@@ -415,6 +406,11 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Company).WithMany(p => p.Users)
                 .HasForeignKey(d => d.CompanyId)
                 .HasConstraintName("fk_users_company");
+
+            // These legacy navigations are not columns or relationships in the users mapping.
+            // Ignore them to prevent EF from inferring a shadow ApplicationDriverId column.
+            entity.Ignore(user => user.ApplicationDriver);
+            entity.Ignore(user => user.ApplicationSponsors);
         });
 
         OnModelCreatingPartial(modelBuilder);

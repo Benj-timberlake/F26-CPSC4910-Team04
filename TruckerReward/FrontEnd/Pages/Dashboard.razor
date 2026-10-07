@@ -27,7 +27,7 @@
         }
 
         <div class="tr-cards">
-            @if (account.UserType == "sponsor" && account.CompanyId is null)
+            @if ((account.UserType == "sponsor" || account.UserType == "driver") && account.CompanyId is null)
             {
                 <section class="tr-card">
                     <h2>Company</h2>
@@ -36,7 +36,7 @@
                 </section>
             }
 
-            @if (account.UserType == "driver")
+            @if (account.UserType == "driver" && account.CompanyId is not null)
             {
                 <section class="tr-card points">
                     <h2>Points</h2>
