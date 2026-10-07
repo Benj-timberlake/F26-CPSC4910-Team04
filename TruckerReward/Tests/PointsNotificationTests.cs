@@ -99,6 +99,49 @@ public sealed class PointsNotificationTests : IAsyncDisposable
         Assert.Equal(["sue@example.com", "tom@example.com"], app.Email.Sent.Select(m => m.To).Order());
     }
 
+    [Fact]
+    public async Task SponsorsAreToldOnTheSiteWhenADriverBuys()
+    {
+        var (client, id) = await StartWithBob(1000);
+        using (var db = app.Db())
+        {
+            var acme = new Company { Name = "Acme" };
+            db.Add(acme);
+            await db.SaveChangesAsync();
+            db.Users.Add(User("sue", "sponsor", acme.Id));
+            (await db.Users.SingleAsync(u => u.Id == id)).CompanyId = acme.Id;
+            await db.SaveChangesAsync();
+        }
+        await client.PostAsJsonAsync($"/users/{id}/cart", new { name = "Mug", price = 3.50m, description = "A mug" });
+        await client.PostAsJsonAsync($"/users/{id}/cart", new { name = "Hat", price = 1.00m, description = "A hat" });
+
+        await client.PostAsync($"/users/{id}/cart/send-order", null);
+
+        var sponsor = await app.Db().NotificationsHistories.Include(n => n.User).SingleAsync(n => n.User.Username == "sue");
+        Assert.Equal("bob placed an order", sponsor.Subject);
+        Assert.Equal("Bob Driver (bob) spent 450 points on Mug, Hat.", sponsor.Body);
+        Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
+    public async Task DriverWithoutACompanyAlertsNoSponsor()
+    {
+        var (client, id) = await StartWithBob(1000);
+        using (var db = app.Db())
+        {
+            var acme = new Company { Name = "Acme" };
+            db.Add(acme);
+            await db.SaveChangesAsync();
+            db.Users.Add(User("sue", "sponsor", acme.Id));
+            await db.SaveChangesAsync();
+        }
+        await client.PostAsJsonAsync($"/users/{id}/cart", new { name = "Mug", price = 3.50m, description = "A mug" });
+
+        await client.PostAsync($"/users/{id}/cart/send-order", null);
+
+        Assert.Single(await app.Db().NotificationsHistories.ToListAsync());
+    }
+
     private static User User(string name, string type, int companyId, int points = 0) => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",

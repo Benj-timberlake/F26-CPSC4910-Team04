@@ -35,6 +35,12 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
                 emailed: true);
     }
 
+    public Task DriverPurchased(User driver, IReadOnlyList<CartItem> items, int points) =>
+        ToSponsorsOf(driver.CompanyId, $"{driver.Username} placed an order",
+            $"{driver.FirstName} {driver.LastName} ({driver.Username}) spent {points:N0} points on " +
+            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
+            emailed: false);
+
     private async Task ToAdmins(string subject, string body, bool emailed)
     {
         var admins = await db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Admin).ToListAsync();
