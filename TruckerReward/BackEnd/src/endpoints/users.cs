@@ -12,6 +12,31 @@ public static class UserEndpoints
                 .Select(c => new CompanyOption(c.Id, c.Name, c.Description))
                 .ToListAsync()));
 
+        app.MapPost("/users/{id:int}/applications", async (int id, CreateApplicationRequest request, AppDbContext db) =>
+        {
+            var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == id);
+            if (applicant is null)
+                return Results.NotFound();
+            if ((applicant.UserType != "driver" && applicant.UserType != "sponsor") || applicant.CompanyId is not null)
+                return Results.BadRequest(new { message = "Only drivers or sponsors without a company can apply." });
+            if (!await db.Companies.AnyAsync(company => company.Id == request.CompanyId))
+                return Results.BadRequest(new { message = "The selected company does not exist." });
+            if (await db.Applications.AnyAsync(application => application.ApplicantId == id))
+                return Results.Conflict(new { message = "An application already exists for this driver." });
+
+            db.Applications.Add(new Application
+            {
+                ApplicantId = id,
+                CompanyId = request.CompanyId,
+                ApplicantExtraInfo = string.IsNullOrWhiteSpace(request.ApplicantExtraInfo)
+                    ? null
+                    : request.ApplicantExtraInfo.Trim()
+            });
+
+            await db.SaveChangesAsync();
+            return Results.Created($"/users/{id}/applications", new { message = "Application submitted." });
+        });
+
         app.MapGet("/users/{id:int}", async (int id, AppDbContext db) =>
         {
             var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
@@ -21,7 +46,11 @@ public static class UserEndpoints
                 .Where(c => c.Id == user.CompanyId)
                 .Select(c => c.Name)
                 .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company, user.CompanyId, user.Points));
+            var pendingCompany = await db.Applications.AsNoTracking()
+                .Where(application => application.ApplicantId == id && application.Status == "created")
+                .Join(db.Companies.AsNoTracking(), application => application.CompanyId, c => c.Id, (application, c) => c.Name)
+                .FirstOrDefaultAsync();
+            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company, user.CompanyId, user.Points, pendingCompany));
         });
 
         // this login, the one before it, failures in between, the last ten attempts and when the
@@ -131,8 +160,9 @@ public static class UserEndpoints
 public record ChangeUsernameRequest(string? CurrentPassword, string? NewUsername);
 public record ChangeEmailRequest(string? CurrentPassword, string? NewEmail);
 public record UpdateUserProfileRequest(string? FirstName, string? LastName, string? PhoneNumber, string? Address);
+public record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName);
 
 public record CompanyOption(int Id, string Name, string? Description);
 

@@ -31,8 +31,16 @@
             {
                 <section class="tr-card">
                     <h2>Company</h2>
-                    <p>You are not currently associated with a company.</p>
-                    <button type="button" class="tr-btn" @onclick="ShowCompanyModal">Apply To Company</button>
+                    @if (!string.IsNullOrWhiteSpace(account.PendingCompanyName))
+                    {
+                        <p class="pending-company-name">@account.PendingCompanyName <span class="pending-badge">Pending...</span></p>
+                        <p class="pending-help">Your application is waiting for review.</p>
+                    }
+                    else
+                    {
+                        <p>You are not currently associated with a company.</p>
+                        <button type="button" class="tr-btn" @onclick="ShowCompanyModal">Apply To Company</button>
+                    }
                 </section>
             }
 
@@ -51,7 +59,8 @@
                     <a class="tr-btn account-edit" href="account/profile">Edit</a>
                 </div>
                 <dl class="tr-kv">
-                    @if ((account.UserType == "sponsor" || account.UserType == "driver") && !string.IsNullOrWhiteSpace(account.CompanyName))
+                    @if ((account.UserType == "sponsor" || account.UserType == "driver") &&
+                        !string.IsNullOrWhiteSpace(account.CompanyName))
                     {
                         <dt>Company</dt>
                         <dd>@account.CompanyName</dd>
@@ -121,6 +130,7 @@
         {
             <div class="company-backdrop" @onclick="CloseCompanyModal">
                 <section class="company-dialog" role="dialog" aria-modal="true" aria-labelledby="company-title" @onclick:stopPropagation="true">
+                    <button type="button" class="company-close-button" aria-label="Close" title="Close" @onclick="CloseCompanyModal">×</button>
                     <h2 id="company-title">Apply To Company</h2>
                     <p>Select a company:</p>
                     @if (companyLoadError is not null)
@@ -137,19 +147,31 @@
                             <legend class="visually-hidden">Available companies</legend>
                             @foreach (var company in companies ?? [])
                             {
-                                <button type="button" role="radio" aria-checked="@(selectedCompanyId == company.Id)"
-                                        class="company-option @(selectedCompanyId == company.Id ? "selected" : "")"
-                                        @onclick="() => selectedCompanyId = company.Id">
-                                    <span class="company-option-name">@company.Name</span>
-                                    <span class="company-option-description">@(string.IsNullOrWhiteSpace(company.Description) ? "No description available." : company.Description)</span>
-                                </button>
+                                <div class="company-option-group">
+                                    <button type="button" role="radio" aria-checked="@(selectedCompanyId == company.Id)"
+                                            class="company-option @(selectedCompanyId == company.Id ? "selected" : "")"
+                                            @onclick="() => SelectCompany(company.Id)">
+                                        <span class="company-option-name">@company.Name</span>
+                                        <span class="company-option-description">@(string.IsNullOrWhiteSpace(company.Description) ? "No description available." : company.Description)</span>
+                                    </button>
+                                    @if (selectedCompanyId == company.Id)
+                                    {
+                                        <div class="selected-company-application">
+                                            <label class="extra-info-label" for="application-extra-info">Extra Info <span>(optional)</span></label>
+                                            <textarea id="application-extra-info" class="extra-info-input" @bind="applicantExtraInfo" rows="4" maxlength="4000"></textarea>
+                                            @if (applicationError is not null)
+                                            {
+                                                <p role="alert" class="tr-alert-error">@applicationError</p>
+                                            }
+                                            <button type="button" class="tr-btn" disabled="@isSubmitting" @onclick="SubmitApplication">
+                                                @(isSubmitting ? "Submitting..." : "Apply")
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
                             }
                         </fieldset>
                     }
-                    <div class="company-actions">
-                        <button type="button" class="tr-btn-outline" @onclick="CloseCompanyModal">Cancel</button>
-                        <button type="button" class="tr-btn" disabled="@(selectedCompanyId is null || companyLoadError is not null || companies is not { Count: > 0 })">Apply (not functional)</button>
-                    </div>
                 </section>
             </div>
         }
@@ -178,6 +200,10 @@
         margin: 8px 0 0;
         opacity: 0.9;
     }
+
+    .pending-company-name { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 18px; font-weight: 600; margin: 0; }
+    .pending-help { color: #725a2b; margin: 8px 0 0; }
+    .pending-badge { display: inline-block; padding: 4px 9px; border-radius: 20px; background: #fbf0cf; color: #8a641e; font-size: 12px; font-weight: 700; vertical-align: middle; }
 
     .tr-kv dd a {
         margin-left: 8px;
@@ -223,6 +249,7 @@
     }
 
     .company-dialog {
+        position: relative;
         background: white;
         color: #222;
         border-radius: 12px;
@@ -234,6 +261,25 @@
         box-shadow: 0 12px 40px #0005;
     }
 
+    .company-close-button {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #b8bec7;
+        border-radius: 9px;
+        background: #f1f2f4;
+        color: #666;
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .company-close-button:hover { background: #e5e7eb; color: #444; }
+
     .company-options {
         display: grid;
         gap: 10px;
@@ -241,6 +287,8 @@
         border: 0;
         padding: 0;
     }
+
+    .company-option-group { display: grid; gap: 0; }
 
     .company-option {
         display: grid;
@@ -257,6 +305,17 @@
     .company-option.selected {
         border-color: var(--brand);
         box-shadow: 0 0 0 2px var(--brand);
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    .selected-company-application {
+        padding: 14px;
+        border: 1px solid var(--brand);
+        border-top: 0;
+        border-bottom-left-radius: 8px;
+        border-bottom-right-radius: 8px;
+        background: #f8faff;
     }
 
     .company-option-name {
@@ -268,11 +327,9 @@
         font-weight: 400;
     }
 
-    .company-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-    }
+    .extra-info-label { display: block; font-weight: 600; margin: 0 0 6px; }
+    .extra-info-label span { color: #687385; font-size: 13px; font-weight: 400; }
+    .extra-info-input { display: block; width: 100%; resize: vertical; padding: 10px; border: 1px solid #b8c0cc; border-radius: 8px; margin-bottom: 14px; font: inherit; }
 </style>
 
 @code {
@@ -287,6 +344,9 @@
     private int? selectedCompanyId;
     private bool showCompanyModal;
     private string? companyLoadError;
+    private string? applicantExtraInfo;
+    private string? applicationError;
+    private bool isSubmitting;
 
     protected override async Task OnInitializedAsync()
     {
@@ -324,6 +384,8 @@
     private async Task ShowCompanyModal()
     {
         selectedCompanyId = null;
+        applicantExtraInfo = null;
+        applicationError = null;
         companyLoadError = null;
         if (companies is null)
         {
@@ -338,6 +400,60 @@
             }
         }
         showCompanyModal = true;
+    }
+
+    private void SelectCompany(int companyId)
+    {
+        selectedCompanyId = companyId;
+        applicantExtraInfo = null;
+        applicationError = null;
+    }
+
+    private async Task SubmitApplication()
+    {
+        if (selectedCompanyId is null || isSubmitting)
+            return;
+
+        var user = (await AuthState).User;
+        var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            applicationError = "Couldn't identify your account. Please sign in again.";
+            return;
+        }
+
+        isSubmitting = true;
+        applicationError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/applications",
+                new CreateApplicationRequest(selectedCompanyId.Value, applicantExtraInfo));
+            if (response.IsSuccessStatusCode)
+            {
+                var pendingCompanyName = companies?.FirstOrDefault(company => company.Id == selectedCompanyId.Value)?.Name;
+                if (account is not null)
+                    account = account with { PendingCompanyName = pendingCompanyName };
+                showCompanyModal = false;
+                notice = "Your company application has been submitted.";
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                applicationError = "You already have an application on file.";
+            }
+            else
+            {
+                applicationError = "Couldn't submit your application. Please try again.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            applicationError = "Couldn't submit your application right now. Please try again.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
     }
 
     private void CloseCompanyModal() => showCompanyModal = false;
@@ -361,8 +477,9 @@
         return rel == "" ? abs : $"{abs} ({rel})";
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName);
     private sealed record CompanyOption(int Id, string Name, string? Description);
     private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
     private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
+    private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
 }

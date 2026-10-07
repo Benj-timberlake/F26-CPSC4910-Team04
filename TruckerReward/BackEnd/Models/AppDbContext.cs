@@ -117,6 +117,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("applicant_extra_info");
             entity.Property(e => e.ApplicantId).HasColumnName("applicant_id");
             entity.Property(e => e.ApplicationTimestamp)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("datetime")
                 .HasColumnName("application_timestamp");
             entity.Property(e => e.CompanyId).HasColumnName("company_id");
