@@ -37,6 +37,7 @@ app.MapUserEndpoints();
 app.MapCartEndpoints();
 app.MapAdminEndpoints();
 app.MapAboutEndpoints();
+app.MapNotificationEndpoints();
 
 // a real query, so this fails when the database is asleep or unreachable
 app.MapGet("/health", async (AppDbContext db) =>
