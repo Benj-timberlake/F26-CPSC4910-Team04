@@ -1,101 +1,132 @@
 @page "/applications"
 @attribute [Authorize(Roles = "sponsor,admin")]
+@using System.Net.Http.Json
+@using System.Security.Claims
+
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Applications</PageTitle>
 
 <div class="applications-page">
     <header class="applications-heading">
         <div>
-            <p class="eyebrow">SPONSOR WORKSPACE</p>
+            <p class="eyebrow">APPLICATION REVIEW</p>
             <h1>Applications</h1>
-            <p class="applications-subtitle">Review driver applications and track recent decisions.</p>
+            <p class="applications-subtitle">Review applications and applicant details.</p>
         </div>
-        <span class="sample-label">Example screen</span>
     </header>
 
-    <div class="application-columns">
-        <section class="application-panel active-panel" aria-labelledby="active-title">
-            <div class="panel-heading">
-                <div>
-                    <h2 id="active-title">Active applications</h2>
-                    <p>Waiting for review</p>
-                </div>
-                <span class="count active-count">3</span>
-            </div>
-            <div class="application-list">
-                <article class="application-card">
-                    <div class="applicant-avatar">JM</div>
-                    <div class="applicant-details">
-                        <h3>Jordan Miller</h3>
-                        <p>Driver application <span>·</span> Submitted Oct 4, 2026</p>
-                        <div class="application-meta"><span>CDL Class A</span><span>5 years experience</span></div>
-                    </div>
-                    <span class="status-pill pending">Pending</span>
-                </article>
-                <article class="application-card">
-                    <div class="applicant-avatar avatar-gold">AC</div>
-                    <div class="applicant-details">
-                        <h3>Alexis Chen</h3>
-                        <p>Driver application <span>·</span> Submitted Oct 2, 2026</p>
-                        <div class="application-meta"><span>CDL Class A</span><span>8 years experience</span></div>
-                    </div>
-                    <span class="status-pill pending">Pending</span>
-                </article>
-                <article class="application-card">
-                    <div class="applicant-avatar avatar-sage">RT</div>
-                    <div class="applicant-details">
-                        <h3>Riley Thompson</h3>
-                        <p>Driver application <span>·</span> Submitted Sep 29, 2026</p>
-                        <div class="application-meta"><span>CDL Class B</span><span>3 years experience</span></div>
-                    </div>
-                    <span class="status-pill pending">Pending</span>
-                </article>
-            </div>
-        </section>
+    @if (isAdmin)
+    {
+        <div class="application-switch" role="tablist" aria-label="Application type">
+            <button type="button" role="tab" aria-selected="@(selectedView == "sponsor")"
+                    class="application-tab @(selectedView == "sponsor" ? "selected" : "")"
+                    @onclick="ShowSponsorApplications">Sponsor Applications</button>
+            <button type="button" role="tab" aria-selected="@(selectedView == "driver")"
+                    class="application-tab @(selectedView == "driver" ? "selected" : "")"
+                    @onclick="ShowDriverApplications">Driver Applications</button>
+        </div>
+    }
 
-        <section class="application-panel decision-panel approved-panel" aria-labelledby="approved-title">
-            <div class="panel-heading">
-                <div>
-                    <h2 id="approved-title">Approved</h2>
-                    <p>Recently accepted</p>
-                </div>
-                <span class="count approved-count">2</span>
-            </div>
-            <div class="application-list compact-list">
-                <article class="decision-card">
-                    <div class="decision-top"><div class="applicant-avatar avatar-sage">SP</div><span class="status-pill approved">Approved</span></div>
-                    <h3>Sam Parker</h3>
-                    <p>Submitted Sep 22, 2026</p>
-                    <div class="decision-date">Approved Sep 25, 2026</div>
-                </article>
-                <article class="decision-card">
-                    <div class="decision-top"><div class="applicant-avatar avatar-lilac">DW</div><span class="status-pill approved">Approved</span></div>
-                    <h3>Devin Wilson</h3>
-                    <p>Submitted Sep 18, 2026</p>
-                    <div class="decision-date">Approved Sep 20, 2026</div>
-                </article>
-            </div>
-        </section>
+    @if (notice is not null)
+    {
+        <p role="status" class="tr-alert-success">@notice</p>
+    }
 
-        <section class="application-panel decision-panel denied-panel" aria-labelledby="denied-title">
-            <div class="panel-heading">
-                <div>
-                    <h2 id="denied-title">Denied</h2>
-                    <p>Recent decisions</p>
+    @if (loadError is not null)
+    {
+        <p role="alert" class="tr-alert-error">@loadError</p>
+    }
+    else if (isLoading)
+    {
+        <p role="status"><em>Loading applications...</em></p>
+    }
+    else
+    {
+        <div class="application-columns">
+            <section class="application-panel active-panel" aria-labelledby="active-title">
+                <div class="panel-heading">
+                    <div><h2 id="active-title">Active applications</h2><p>Waiting for review</p></div>
+                    <span class="count active-count">@ActiveApplications.Count</span>
                 </div>
-                <span class="count denied-count">1</span>
+                <div class="application-list">
+                    @foreach (var application in ActiveApplications)
+                    {
+                        @RenderApplication(application)
+                    }
+                    @if (ActiveApplications.Count == 0)
+                    {
+                        <p class="empty-state">No active applications.</p>
+                    }
+                </div>
+            </section>
+
+            <section class="application-panel decision-panel approved-panel" aria-labelledby="approved-title">
+                <div class="panel-heading">
+                    <div><h2 id="approved-title">Approved</h2><p>Accepted applications</p></div>
+                    <span class="count approved-count">@ApprovedApplications.Count</span>
+                </div>
+                <div class="application-list">
+                    @foreach (var application in ApprovedApplications)
+                    {
+                        @RenderApplication(application)
+                    }
+                    @if (ApprovedApplications.Count == 0)
+                    {
+                        <p class="empty-state">No approved applications.</p>
+                    }
+                </div>
+            </section>
+
+            <section class="application-panel decision-panel denied-panel" aria-labelledby="denied-title">
+                <div class="panel-heading">
+                    <div><h2 id="denied-title">Denied</h2><p>Rejected applications</p></div>
+                    <span class="count denied-count">@DeniedApplications.Count</span>
+                </div>
+                <div class="application-list">
+                    @foreach (var application in DeniedApplications)
+                    {
+                        @RenderApplication(application)
+                    }
+                    @if (DeniedApplications.Count == 0)
+                    {
+                        <p class="empty-state">No denied applications.</p>
+                    }
+                </div>
+            </section>
+        </div>
+    }
+</div>
+
+@if (activeReview is not null)
+{
+    <div class="review-backdrop" @onclick="CloseReview">
+        <section class="review-dialog" role="dialog" aria-modal="true" aria-labelledby="review-title" @onclick:stopPropagation="true">
+            <button type="button" class="review-close" aria-label="Close" title="Close" @onclick="CloseReview">×</button>
+            <h2 id="review-title">@(reviewDecision == "approved" ? "Accept application" : reviewDecision == "rejected" ? "Deny application" : "Revert application decision")</h2>
+            <div class="review-applicant-info">
+                <h3>@activeReview.ApplicantName</h3>
+                <p>@activeReview.ApplicantEmail</p>
+                <p><strong>Company:</strong> @activeReview.CompanyName</p>
+                @if (!string.IsNullOrWhiteSpace(activeReview.ApplicantExtraInfo))
+                {
+                    <div class="review-extra"><strong>Extra Info</strong><p>@activeReview.ApplicantExtraInfo</p></div>
+                }
             </div>
-            <div class="application-list compact-list">
-                <article class="decision-card">
-                    <div class="decision-top"><div class="applicant-avatar avatar-rose">MK</div><span class="status-pill denied">Denied</span></div>
-                    <h3>Morgan King</h3>
-                    <p>Submitted Sep 16, 2026</p>
-                    <div class="decision-date">Denied Sep 19, 2026</div>
-                </article>
-            </div>
+            <form @onsubmit="SubmitReview" @onsubmit:preventDefault="true">
+                <label for="review-reason">Reason for @(reviewDecision == "approved" ? "Acceptance" : reviewDecision == "rejected" ? "Denial" : "Reversion") <span>(required)</span></label>
+                <textarea id="review-reason" @bind="reviewReason" required rows="5" maxlength="4000"></textarea>
+                @if (reviewError is not null)
+                {
+                    <p role="alert" class="tr-alert-error">@reviewError</p>
+                }
+                <button type="submit" class="tr-btn @(reviewDecision == "approved" ? "accept-button" : "deny-button")" disabled="@isSubmitting">
+                    @(isSubmitting ? "Saving..." : reviewDecision == "approved" ? "Accept" : reviewDecision == "rejected" ? "Deny" : "Revert")
+                </button>
+            </form>
         </section>
     </div>
-</div>
+}
 
 <style>
     .applications-page { max-width: 1500px; margin: 0 auto; padding: 36px clamp(20px, 4vw, 56px) 60px; color: #1f2937; }
@@ -103,8 +134,10 @@
     .eyebrow { color: var(--brand); font-weight: 700; font-size: 11px; letter-spacing: .12em; margin: 0 0 8px; }
     .applications-heading h1 { margin: 0; font-size: clamp(30px, 3vw, 38px); font-weight: 700; letter-spacing: -.03em; }
     .applications-subtitle { margin: 7px 0 0; color: #697586; }
-    .sample-label { padding: 7px 11px; border: 1px solid #dce5f1; background: #f7f9fc; color: #64748b; border-radius: 20px; font-size: 12px; white-space: nowrap; }
-    .application-columns { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 18px; align-items: stretch; }
+    .application-switch { display: flex; gap: 4px; width: fit-content; padding: 4px; margin-bottom: 20px; border-radius: 10px; background: #edf1f6; }
+    .application-tab { padding: 9px 15px; border: 0; border-radius: 7px; color: #596779; background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .application-tab.selected { color: #2455a4; background: white; box-shadow: 0 1px 3px #18283d20; }
+    .application-columns { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 18px; align-items: start; }
     .application-panel { background: #f8fafc; border: 1px solid #e3e9f0; border-radius: 14px; padding: 20px; min-width: 0; }
     .active-panel { background: #f5f8fd; border-color: #dbe6f5; }
     .approved-panel { background: #f7fbf8; border-color: #dcebe0; }
@@ -117,26 +150,204 @@
     .approved-count { color: #24734a; background: #e2f1e7; }
     .denied-count { color: #a04438; background: #f8e8e5; }
     .application-list { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; }
-    .application-card, .decision-card { background: #fff; border: 1px solid #e8edf2; border-radius: 10px; }
-    .application-card { display: flex; align-items: center; gap: 13px; padding: 15px; }
-    .applicant-avatar { flex: 0 0 40px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; color: #315b99; background: #e8eef8; font-size: 12px; font-weight: 700; }
-    .avatar-gold { color: #8a6532; background: #f6eedf; }
-    .avatar-sage { color: #397257; background: #e5f0e9; }
-    .avatar-lilac { color: #705a9c; background: #eee9f7; }
-    .avatar-rose { color: #9c5149; background: #f7e9e6; }
-    .applicant-details { min-width: 0; flex: 1; }
-    .application-card h3, .decision-card h3 { font-size: 14px; font-weight: 700; margin: 0; }
-    .application-card p, .decision-card p { color: #7a8492; font-size: 11px; margin: 4px 0 0; }
-    .application-card p span { padding: 0 3px; }
-    .application-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
-    .application-meta span { padding: 4px 7px; border-radius: 5px; background: #f3f5f8; color: #626e7d; font-size: 10px; }
-    .status-pill { padding: 5px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; white-space: nowrap; }
-    .pending { color: #986922; background: #fbf2df; }
-    .approved { color: #28744c; background: #e5f3e9; }
-    .denied { color: #a04438; background: #f8e8e5; }
-    .decision-card { padding: 14px; }
-    .decision-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
-    .decision-date { border-top: 1px solid #edf0f3; margin-top: 12px; padding-top: 10px; color: #6f7b89; font-size: 10px; }
+    .application-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; background: white; border: 1px solid #e8edf2; border-radius: 10px; padding: 15px; min-width: 0; }
+    .application-main { min-width: 0; flex: 1; }
+    .application-actions { display: flex; flex-direction: column; gap: 7px; flex: 0 0 auto; }
+    .application-actions button { min-width: 76px; padding: 6px 10px; border: 0; border-radius: 6px; color: white; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .accept-button, .application-actions .accept-button { background: #21834d; border-color: #21834d; color: white; }
+    .deny-button, .application-actions .deny-button { background: #bd3b36; border-color: #bd3b36; color: white; }
+    .application-actions .revert-button { background: #bd3b36; }
+    .application-card h3 { font-size: 14px; font-weight: 700; margin: 0; }
+    .application-email { margin: 5px 0 0; color: #526173; font-size: 12px; overflow-wrap: anywhere; }
+    .application-company { margin: 9px 0 0; color: #315b99; font-size: 12px; font-weight: 600; }
+    .application-extra { margin: 9px 0 0; color: #626e7d; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .application-extra-label { display: block; margin-bottom: 3px; color: #7a8492; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .reviewer-attribution, .reviewer-reason { margin: 10px 0 0; color: #626e7d; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .reviewer-attribution strong, .reviewer-reason strong { color: #394555; }
+    .empty-state { color: #7a8492; font-size: 13px; margin: 0; padding: 4px 0; }
+    .review-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0009; }
+    .review-dialog { position: relative; width: 100%; max-width: 560px; max-height: 90vh; overflow: auto; padding: 26px; border-radius: 12px; background: white; color: #1f2937; box-shadow: 0 12px 40px #0005; }
+    .review-dialog h2 { margin: 0 42px 18px 0; font-size: 22px; }
+    .review-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border: 1px solid #b8bec7; border-radius: 9px; background: #f1f2f4; color: #666; font-size: 24px; line-height: 1; cursor: pointer; }
+    .review-applicant-info { margin-bottom: 18px; padding: 15px; border: 1px solid #e5eaf0; border-radius: 9px; background: #f8fafc; }
+    .review-applicant-info h3 { margin: 0; font-size: 16px; }
+    .review-applicant-info p { margin: 5px 0 0; color: #596779; overflow-wrap: anywhere; }
+    .review-extra { margin-top: 12px; font-size: 13px; }
+    .review-extra p { white-space: pre-wrap; }
+    .review-dialog form label { display: block; margin-bottom: 6px; font-weight: 700; }
+    .review-dialog form label span { color: #687385; font-size: 12px; font-weight: 400; }
+    .review-dialog textarea { display: block; width: 100%; margin-bottom: 14px; padding: 10px; border: 1px solid #b8c0cc; border-radius: 8px; font: inherit; resize: vertical; }
+    .review-dialog form button { display: block; margin-left: auto; }
+    @@media (max-width: 560px) { .application-card { flex-direction: column; } .application-actions { flex-direction: row; } }
     @@media (max-width: 850px) { .application-columns { grid-template-columns: 1fr 1fr; } .active-panel { grid-column: 1 / -1; } }
-    @@media (max-width: 560px) { .applications-heading { align-items: flex-start; flex-direction: column; } .application-columns { grid-template-columns: 1fr; } .active-panel { grid-column: auto; } .application-card { align-items: flex-start; flex-wrap: wrap; } .application-card .status-pill { margin-left: 53px; } }
+    @@media (max-width: 560px) { .application-columns { grid-template-columns: 1fr; } .active-panel { grid-column: auto; } .application-switch { width: 100%; } .application-tab { flex: 1; padding-inline: 8px; } }
 </style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string selectedView = "driver";
+    private bool isAdmin;
+    private bool isLoading = true;
+    private string? loadError;
+    private string? notice;
+    private string? reviewError;
+    private int? reviewerId;
+    private ApplicationRow? activeReview;
+    private string? reviewDecision;
+    private string reviewReason = "";
+    private bool isSubmitting;
+    private List<ApplicationRow> applications = [];
+
+    private List<ApplicationRow> ActiveApplications => applications.Where(application => application.Status == "created").ToList();
+    private List<ApplicationRow> ApprovedApplications => applications.Where(application => application.Status == "approved").ToList();
+    private List<ApplicationRow> DeniedApplications => applications.Where(application => application.Status == "rejected").ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        isAdmin = user.IsInRole("admin");
+        if (int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+            reviewerId = id;
+        selectedView = isAdmin ? "sponsor" : "driver";
+        await LoadApplications();
+    }
+
+    private async Task ShowSponsorApplications()
+    {
+        selectedView = "sponsor";
+        await LoadApplications();
+    }
+
+    private async Task ShowDriverApplications()
+    {
+        selectedView = "driver";
+        await LoadApplications();
+    }
+
+    private async Task LoadApplications()
+    {
+        isLoading = true;
+        loadError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            if (reviewerId is null)
+                throw new HttpRequestException("Missing reviewer identity.");
+            applications = await client.GetFromJsonAsync<List<ApplicationRow>>($"users/{reviewerId}/applications/{selectedView}") ?? [];
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't load applications right now. Please try again.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenAccept(ApplicationRow application) => OpenReview(application, "approved");
+
+    private void OpenDeny(ApplicationRow application) => OpenReview(application, "rejected");
+
+    private void OpenRevert(ApplicationRow application) => OpenReview(application, "created");
+
+    private void OpenReview(ApplicationRow application, string decision)
+    {
+        activeReview = application;
+        reviewDecision = decision;
+        reviewReason = "";
+        reviewError = null;
+    }
+
+    private void CloseReview()
+    {
+        if (!isSubmitting)
+            activeReview = null;
+    }
+
+    private async Task SubmitReview()
+    {
+        if (activeReview is null || reviewDecision is null || reviewerId is null || isSubmitting)
+            return;
+        if (string.IsNullOrWhiteSpace(reviewReason))
+        {
+            reviewError = "Please enter a reason before submitting.";
+            return;
+        }
+
+        isSubmitting = true;
+        reviewError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync(
+                $"users/{reviewerId}/applications/{activeReview.Id}/review",
+                new ReviewApplicationRequest(reviewDecision, reviewReason.Trim()));
+            if (!response.IsSuccessStatusCode)
+            {
+                reviewError = response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "You don't have permission to review this application."
+                    : "Couldn't save this decision. Please try again.";
+                return;
+            }
+
+            var decisionText = reviewDecision switch
+            {
+                "approved" => "accepted",
+                "rejected" => "denied",
+                _ => "decision reverted"
+            };
+            activeReview = null;
+            notice = $"Application {decisionText}.";
+            await LoadApplications();
+        }
+        catch (HttpRequestException)
+        {
+            reviewError = "Couldn't save this decision right now. Please try again.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private RenderFragment RenderApplication(ApplicationRow application) => @<article class="application-card">
+        <div class="application-main">
+            <h3>@application.ApplicantName</h3>
+            <p class="application-email">@application.ApplicantEmail</p>
+            <p class="application-company">Company: @application.CompanyName</p>
+            @if (!string.IsNullOrWhiteSpace(application.ApplicantExtraInfo))
+            {
+                <p class="application-extra"><span class="application-extra-label">Extra Info</span>@application.ApplicantExtraInfo</p>
+            }
+            @if (application.Status is "approved" or "rejected")
+            {
+                <p class="reviewer-attribution"><strong>@ReviewerLabel(application.ReviewerUserType):</strong> @(application.ReviewerName ?? "Unknown reviewer")</p>
+                <p class="reviewer-reason"><strong>Reason:</strong> @(application.ReviewerReasoning ?? "No reason recorded.")</p>
+            }
+        </div>
+        <div class="application-actions" aria-label="Review actions">
+            @if (application.Status == "created")
+            {
+                <button type="button" class="accept-button" @onclick="() => OpenAccept(application)">Accept</button>
+                <button type="button" class="deny-button" @onclick="() => OpenDeny(application)">Deny</button>
+            }
+            else
+            {
+                <button type="button" class="revert-button" @onclick="() => OpenRevert(application)">Revert</button>
+            }
+        </div>
+    </article>;
+
+    private static string ReviewerLabel(string? userType) => userType switch
+    {
+        "admin" => "Administrator",
+        "sponsor" => "Sponsor",
+        _ => "Reviewer"
+    };
+
+    private sealed record ApplicationRow(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerReasoning);
+    private sealed record ReviewApplicationRequest(string Decision, string Reasoning);
+}
