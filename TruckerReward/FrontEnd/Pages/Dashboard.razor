@@ -51,7 +51,7 @@
                     <a class="tr-btn account-edit" href="account/profile">Edit</a>
                 </div>
                 <dl class="tr-kv">
-                    @if (account.UserType == "sponsor" && !string.IsNullOrWhiteSpace(account.CompanyName))
+                    @if ((account.UserType == "sponsor" || account.UserType == "driver") && !string.IsNullOrWhiteSpace(account.CompanyName))
                     {
                         <dt>Company</dt>
                         <dd>@account.CompanyName</dd>
