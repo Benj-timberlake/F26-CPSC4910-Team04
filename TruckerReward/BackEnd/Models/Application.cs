@@ -7,21 +7,19 @@ public partial class Application
 {
     public int Id { get; set; }
 
-    public int DriverId { get; set; }
+    public int ApplicantId { get; set; }
 
     public int CompanyId { get; set; }
 
-    public int SponsorId { get; set; }
+    public int? ReviewerId { get; set; }
 
-    public string? ExtraInfo { get; set; }
+    public string? ApplicantExtraInfo { get; set; }
+
+    public string? ReviewerReasoning { get; set; }
 
     public string Status { get; set; } = null!;
 
-    public DateTime ApplicationDate { get; set; }
+    public DateTime ApplicationTimestamp { get; set; }
 
-    public virtual Company Company { get; set; } = null!;
-
-    public virtual User Driver { get; set; } = null!;
-
-    public virtual User Sponsor { get; set; } = null!;
+    public DateTime? ResponseTimestamp { get; set; }
 }
