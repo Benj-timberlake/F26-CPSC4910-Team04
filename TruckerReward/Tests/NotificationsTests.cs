@@ -58,5 +58,17 @@ public sealed class NotificationsTests : IAsyncDisposable
         Assert.Empty(await app.Db().NotificationsHistories.ToListAsync());
     }
 
+    [Fact]
+    public async Task HistoryFailureStillEmailsAndSucceeds()
+    {
+        var (client, _) = await StartWithBob();
+        await app.Db().Database.ExecuteSqlRawAsync("DROP TABLE notifications_history;");
+
+        var response = await client.PostAsJsonAsync("/auth/forgot", new { email = "bob@example.com" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(app.Email.Sent, m => m.To == "bob@example.com" && m.Body.Contains("reset-password?token="));
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }
