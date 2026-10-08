@@ -200,9 +200,18 @@
     private bool isSubmitting;
     private List<ApplicationRow> applications = [];
 
-    private List<ApplicationRow> ActiveApplications => applications.Where(application => application.Status == "created").ToList();
-    private List<ApplicationRow> ApprovedApplications => applications.Where(application => application.Status == "approved").ToList();
-    private List<ApplicationRow> DeniedApplications => applications.Where(application => application.Status == "rejected").ToList();
+    private List<ApplicationRow> ActiveApplications => applications
+        .Where(application => application.Status == "active")
+        .OrderBy(application => application.ApplicationTimestamp)
+        .ToList();
+    private List<ApplicationRow> ApprovedApplications => applications
+        .Where(application => application.Status == "approved")
+        .OrderByDescending(application => application.ResponseTimestamp ?? application.ApplicationTimestamp)
+        .ToList();
+    private List<ApplicationRow> DeniedApplications => applications
+        .Where(application => application.Status == "rejected")
+        .OrderByDescending(application => application.ResponseTimestamp ?? application.ApplicationTimestamp)
+        .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -251,7 +260,7 @@
 
     private void OpenDeny(ApplicationRow application) => OpenReview(application, "rejected");
 
-    private void OpenRevert(ApplicationRow application) => OpenReview(application, "created");
+    private void OpenRevert(ApplicationRow application) => OpenReview(application, "active");
 
     private void OpenReview(ApplicationRow application, string decision)
     {
@@ -329,12 +338,12 @@
             }
         </div>
         <div class="application-actions" aria-label="Review actions">
-            @if (application.Status == "created")
+            @if (application.Status == "active")
             {
                 <button type="button" class="accept-button" @onclick="() => OpenAccept(application)">Accept</button>
                 <button type="button" class="deny-button" @onclick="() => OpenDeny(application)">Deny</button>
             }
-            else
+            else if (application.CanRevert)
             {
                 <button type="button" class="revert-button" @onclick="() => OpenRevert(application)">Revert</button>
             }
@@ -348,6 +357,6 @@
         _ => "Reviewer"
     };
 
-    private sealed record ApplicationRow(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerReasoning);
+    private sealed record ApplicationRow(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
     private sealed record ReviewApplicationRequest(string Decision, string Reasoning);
 }

@@ -30,7 +30,13 @@
             @if ((account.UserType == "sponsor" || account.UserType == "driver") && account.CompanyId is null)
             {
                 <section class="tr-card">
-                    <h2>Company</h2>
+                    <div class="company-card-heading">
+                        <h2>Company</h2>
+                        @if (!string.IsNullOrWhiteSpace(account.PendingCompanyName))
+                        {
+                            <button type="button" class="cancel-application-button" @onclick="OpenCancelApplication">Cancel</button>
+                        }
+                    </div>
                     @if (!string.IsNullOrWhiteSpace(account.PendingCompanyName))
                     {
                         <p class="pending-company-name">@account.PendingCompanyName <span class="pending-badge">Pending...</span></p>
@@ -175,6 +181,28 @@
                 </section>
             </div>
         }
+
+        @if (showCancelApplicationModal)
+        {
+            <div class="company-backdrop" @onclick="CloseCancelApplication">
+                <section class="company-dialog" role="dialog" aria-modal="true" aria-labelledby="cancel-application-title" @onclick:stopPropagation="true">
+                    <button type="button" class="company-close-button" aria-label="Close" title="Close" @onclick="CloseCancelApplication">×</button>
+                    <h2 id="cancel-application-title">Cancel company application</h2>
+                    <p>Cancel your application to @account.PendingCompanyName?</p>
+                    <form @onsubmit="CancelPendingApplication" @onsubmit:preventDefault="true">
+                        <label class="extra-info-label" for="cancel-application-reason">Response reason <span>(required)</span></label>
+                        <textarea id="cancel-application-reason" class="extra-info-input" @bind="cancellationReason" rows="4" maxlength="4000" required></textarea>
+                        @if (cancellationError is not null)
+                        {
+                            <p role="alert" class="tr-alert-error">@cancellationError</p>
+                        }
+                        <button type="submit" class="cancel-submit-button" disabled="@isCancelling">
+                            @(isCancelling ? "Canceling..." : "Cancel Application")
+                        </button>
+                    </form>
+                </section>
+            </div>
+        }
     }
 </div>
 
@@ -204,6 +232,11 @@
     .pending-company-name { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 18px; font-weight: 600; margin: 0; }
     .pending-help { color: #725a2b; margin: 8px 0 0; }
     .pending-badge { display: inline-block; padding: 4px 9px; border-radius: 20px; background: #fbf0cf; color: #8a641e; font-size: 12px; font-weight: 700; vertical-align: middle; }
+    .company-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .company-card-heading h2 { margin: 0 0 12px; }
+    .cancel-application-button, .cancel-submit-button { border: 1px solid #b42318; border-radius: 6px; background: #b42318; color: white; padding: 6px 11px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .cancel-submit-button { display: block; margin-left: auto; padding: 9px 14px; }
+    .cancel-application-button:disabled, .cancel-submit-button:disabled { opacity: .65; cursor: wait; }
 
     .tr-kv dd a {
         margin-left: 8px;
@@ -347,6 +380,10 @@
     private string? applicantExtraInfo;
     private string? applicationError;
     private bool isSubmitting;
+    private bool showCancelApplicationModal;
+    private string cancellationReason = "";
+    private string? cancellationError;
+    private bool isCancelling;
 
     protected override async Task OnInitializedAsync()
     {
@@ -458,6 +495,67 @@
 
     private void CloseCompanyModal() => showCompanyModal = false;
 
+    private void OpenCancelApplication()
+    {
+        cancellationReason = "";
+        cancellationError = null;
+        showCancelApplicationModal = true;
+    }
+
+    private void CloseCancelApplication()
+    {
+        if (!isCancelling)
+            showCancelApplicationModal = false;
+    }
+
+    private async Task CancelPendingApplication()
+    {
+        if (isCancelling)
+            return;
+        if (string.IsNullOrWhiteSpace(cancellationReason))
+        {
+            cancellationError = "Please provide a response reason.";
+            return;
+        }
+
+        var user = (await AuthState).User;
+        var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            cancellationError = "Couldn't identify your account. Please sign in again.";
+            return;
+        }
+
+        isCancelling = true;
+        cancellationError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/applications/cancel",
+                new CancelApplicationRequest(cancellationReason.Trim()));
+            if (!response.IsSuccessStatusCode)
+            {
+                cancellationError = response.StatusCode == System.Net.HttpStatusCode.Conflict
+                    ? "No active application was found to cancel."
+                    : "Couldn't cancel your application. Please try again.";
+                return;
+            }
+
+            if (account is not null)
+                account = account with { PendingCompanyName = null };
+            showCancelApplicationModal = false;
+            notice = "Your company application was canceled.";
+        }
+        catch (HttpRequestException)
+        {
+            cancellationError = "Couldn't cancel your application right now. Please try again.";
+        }
+        finally
+        {
+            isCancelling = false;
+        }
+    }
+
     private static string Shown(string? value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
 
     private static string Ip(string? ip) => string.IsNullOrEmpty(ip) ? "" : $" from {ip}";
@@ -482,4 +580,5 @@
     private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
     private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
+    private sealed record CancelApplicationRequest(string Reasoning);
 }

@@ -33,7 +33,7 @@ public partial class Team04DbContext : DbContext
 
             entity.HasIndex(e => e.ReviewerId, "fk_applications_sponsor");
 
-            entity.HasIndex(e => e.ApplicantId, "uq_applications_driver_id").IsUnique();
+            entity.HasIndex(e => e.ApplicantId, "idx_applications_applicant_id");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.ApplicantExtraInfo)
@@ -52,8 +52,8 @@ public partial class Team04DbContext : DbContext
                 .HasColumnType("text")
                 .HasColumnName("reviewer_reasoning");
             entity.Property(e => e.Status)
-                .HasDefaultValueSql("'created'")
-                .HasColumnType("enum('created','approved','rejected')")
+                .HasDefaultValueSql("'active'")
+                .HasColumnType("enum('active','approved','rejected','canceled')")
                 .HasColumnName("status");
         });
 
