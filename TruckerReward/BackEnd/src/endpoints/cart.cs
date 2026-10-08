@@ -20,7 +20,7 @@ public static class CartEndpoints
             }).OrderByDescending(order => order.Timestamp).ThenByDescending(order => order.PointsHistoryId));
         });
 
-        app.MapPost("/users/{id:int}/orders/{historyId:int}/refund", async (int id, int historyId, AppDbContext db, TimeProvider clock) =>
+        app.MapPost("/users/{id:int}/orders/{historyId:int}/refund", async (int id, int historyId, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             // Use the same balance lock as checkout to serialize refunds and purchases.
@@ -43,10 +43,11 @@ public static class CartEndpoints
             db.PointsHistory.Remove(history);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
+            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was refunded.");
             return Results.NoContent();
         });
 
-        app.MapPost("/users/{id:int}/cart/send-order", async (int id, AppDbContext db, TimeProvider clock) =>
+        app.MapPost("/users/{id:int}/cart/send-order", async (int id, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             // Lock this user's balance before reading the cart so duplicate submissions
@@ -85,6 +86,8 @@ public static class CartEndpoints
             }
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
+            await notifications.PointsChanged(user, history.PointsDelta, "Your order was placed.");
+            await notifications.DriverPurchased(user, items, -history.PointsDelta);
             return Results.NoContent();
         });
 
