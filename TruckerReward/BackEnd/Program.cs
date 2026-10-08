@@ -6,7 +6,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 
-// user secrets locally, an environment property on beanstalk, never appsettings
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not set, see README.md");
 
@@ -35,8 +34,10 @@ app.MapAuthEndpoints();
 app.MapPasswordEndpoints();
 app.MapUserEndpoints();
 app.MapCartEndpoints();
+app.MapCatalogEndpoints();
 app.MapAdminEndpoints();
 app.MapAboutEndpoints();
+app.MapNotificationEndpoints();
 
 // a real query, so this fails when the database is asleep or unreachable
 app.MapGet("/health", async (AppDbContext db) =>

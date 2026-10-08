@@ -1,0 +1,4 @@
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 20px; }
+.catalog-grid img { width: 100%; height: 200px; object-fit: contain; }
+.catalog-grid p, .catalog-grid h2 { overflow-wrap: anywhere; }
+.catalog-grid .tr-btn { display: block; margin-top: 16px; }

@@ -22,6 +22,25 @@ public sealed class ProductDetailTests : TestContext
     }
 
     [Fact]
+    public void SponsorAddsItemIdToCatalogWithoutBuying()
+    {
+        auth.SetAuthorized("sponsor");
+        auth.SetRoles("sponsor");
+        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        handler.Body = """{"itemId":"v1|123|0","title":"GPS"}""";
+        var component = RenderComponent<ProductDetail>();
+        component.WaitForAssertion(() => Assert.Equal("Add to catalog", component.Find(".buy-button").TextContent));
+        component.Find(".buy-button").Click();
+        component.WaitForAssertion(() => Assert.Contains("Item added to catalog", component.Markup));
+        Assert.Equal("http://backend/users/7/catalog", handler.Url);
+        Assert.Equal(HttpMethod.Post, handler.Method);
+        using var payload = System.Text.Json.JsonDocument.Parse(handler.RequestBody!);
+        Assert.Equal("v1|123|0", payload.RootElement.GetProperty("itemId").GetString());
+        Assert.True(component.Find(".buy-button").HasAttribute("disabled"));
+        Assert.Contains("/product?", Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri);
+    }
+
+    [Fact]
     public void BuyPostsProductForSignedInUserAndOpensCart()
     {
         auth.SetAuthorized("buyer");

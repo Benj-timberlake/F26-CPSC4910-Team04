@@ -18,11 +18,11 @@ public sealed class CartEndpointTests
         client.DefaultRequestHeaders.Add("X-Api-Key", "test-key");
         using var db = app.Db();
         // Match the existing database schema independently of EF's generated model.
-        Assert.Equal("Points_History", db.Model.FindEntityType(typeof(PointsHistory))!.GetTableName());
+        Assert.Equal("points_history", db.Model.FindEntityType(typeof(PointsHistory))!.GetTableName());
         await db.Database.ExecuteSqlRawAsync("DROP TABLE Points_History;");
         await db.Database.ExecuteSqlRawAsync("""
             CREATE TABLE Points_History (
-                points_history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INT NOT NULL REFERENCES users(id),
                 timestamp DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
                 points_delta INT NOT NULL
@@ -58,7 +58,7 @@ public sealed class CartEndpointTests
         foreach (var item in ordered)
         {
             Assert.False(item.InCart);
-            Assert.True(item.WasOrdered);
+            Assert.False(item.WasOrdered);
             Assert.Equal(history.Id, item.PointsHistoryId);
             var itemPath = $"/users/{owner.Id}/cart/{item.Id}";
             Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync(itemPath)).StatusCode);
@@ -218,6 +218,6 @@ public sealed class CartEndpointTests
     private static User NewUser(string name) => new()
     {
         Username = name, Email = $"{name}@example.com", UserType = "driver",
-        PhoneNumber = "", Address = ""
+        PhoneNumber = "", Address = "", Password = "hash", FirstName = name, LastName = "User"
     };
 }

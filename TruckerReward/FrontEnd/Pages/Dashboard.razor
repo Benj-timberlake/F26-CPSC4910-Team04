@@ -20,7 +20,14 @@
     else
     {
         <h1>My TruckerReward Dashboard</h1>
-        <p><a class="tr-btn" href="pastorders">Past Orders</a></p>
+        @if (account.UserType == "sponsor")
+        {
+            <p><a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a></p>
+        }
+        else
+        {
+            <p><a class="tr-btn" href="pastorders">Past Orders</a></p>
+        }
         @if (notice is not null)
         {
             <p role="status" class="tr-alert-success">@notice</p>

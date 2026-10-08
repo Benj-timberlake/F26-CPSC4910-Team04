@@ -1,8 +1,8 @@
-@page "/products"
 @using System.Net.Http
 @using System.Net.Http.Json
 @using System.Text.Json
 @using System.Text.Json.Serialization
+@using System.Security.Claims
 @inject IHttpClientFactory HttpClientFactory
 
 
@@ -52,7 +52,7 @@
     }
     else if (products.Count == 0)
     {
-        <p>No products found. Enter a search or adjust your filters.</p>
+        <p>@(DriverCatalog ? "No catalog products found. Your sponsor may not have added items yet, or no items match your filters." : "No products found. Enter a search or adjust your filters.")</p>
     }
     else
     {
@@ -93,6 +93,8 @@
 </div>
 
 @code {
+    [Parameter] public bool DriverCatalog { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
     private string search = "";
     private string sort = "";
     private bool availableOnly;
@@ -120,6 +122,11 @@
         {
             using var client = HttpClientFactory.CreateClient("Backend");
             var query = search.Trim();
+            if (DriverCatalog)
+            {
+                await LoadDriverCatalog(client, query);
+                return;
+            }
             if (query.Length == 0)
             {
                 return;
@@ -156,6 +163,54 @@
             loading = false;
         }
     }
+    private async Task LoadDriverCatalog(HttpClient client, string query)
+    {
+        var user = (await AuthState).User;
+        if (!user.IsInRole("driver") || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+        {
+            error = "Please log in as a driver to view your catalog.";
+            return;
+        }
+        var itemIds = await client.GetFromJsonAsync<List<string>>($"users/{id}/catalog") ?? [];
+        var savedProducts = new List<Product>();
+        foreach (var itemId in itemIds.Distinct())
+        {
+            using var response = await client.GetAsync("api/products/detail?itemId=" + Uri.EscapeDataString(itemId));
+            if (!response.IsSuccessStatusCode)
+            {
+                notice = "Some catalog items are unavailable. Please try again later.";
+                continue;
+            }
+            var item = JsonSerializer.Deserialize<Product>(await response.Content.ReadAsStringAsync());
+            if (item is not null && item.ItemId == itemId) savedProducts.Add(item);
+        }
+        IEnumerable<Product> filtered = savedProducts.Where(item => query.Length == 0
+            || item.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || (item.ShortDescription?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false));
+        if (availableOnly) filtered = filtered.Where(item => item.Availability is "IN_STOCK" or "LIMITED_STOCK"
+            || item.EstimatedAvailabilities?.Any(stock => stock.Status is "IN_STOCK" or "LIMITED_STOCK") == true);
+        filtered = sort switch
+        {
+            "price" => filtered.OrderBy(item => PriceForSort(item) ?? decimal.MaxValue),
+            "-price" => filtered.OrderByDescending(item => PriceForSort(item) ?? decimal.MinValue),
+            "mostWatched" => filtered.OrderByDescending(item => item.WatchCount),
+            "newlyListed" => filtered.OrderByDescending(item => item.CreationDate),
+            "availability" => filtered.OrderBy(item => item.Availability is "IN_STOCK" or "LIMITED_STOCK"
+                || item.EstimatedAvailabilities?.Any(stock => stock.Status is "IN_STOCK" or "LIMITED_STOCK") == true ? 0 : 1),
+            _ => filtered
+        };
+        products = filtered.ToList();
+    }
+
+    private static decimal? PriceForSort(Product item) =>
+        item.Price is not null && item.Price.TryGetDollars(out var dollars) ? dollars : null;
+
+    public class StockAvailability
+    {
+        [JsonPropertyName("estimatedAvailabilityStatus")]
+        public string? Status { get; set; }
+    }
+
     public class ProductSearchResponse
     {
         [JsonPropertyName("catalogNotice")]
@@ -166,6 +221,10 @@
 
     public class Product
     {
+        [JsonPropertyName("estimatedAvailabilities")]
+        public List<StockAvailability>? EstimatedAvailabilities { get; set; }
+        [JsonPropertyName("itemCreationDate")]
+        public DateTimeOffset? CreationDate { get; set; }
         [JsonPropertyName("itemId")]
         public string? ItemId { get; set; }
 

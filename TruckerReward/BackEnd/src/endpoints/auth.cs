@@ -14,7 +14,7 @@ public static class AuthEndpoints
         // the frontend shows this next to every new-password box
         app.MapGet("/auth/password-policy", () => Results.Ok(new { description = PasswordPolicy.Description }));
 
-        app.MapPost("/auth/register", async (RegisterRequest req, AppDbContext db) =>
+        app.MapPost("/auth/register", async (RegisterRequest req, AppDbContext db, Notifications notifications) =>
         {
             if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.FirstName) || string.IsNullOrWhiteSpace(req.LastName) || string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
                 return Results.BadRequest(new { message = "Username, first name, last name, email and password are required." });
@@ -42,6 +42,7 @@ public static class AuthEndpoints
             user.Password = Passwords.Hash(user, req.Password);
             db.Users.Add(user);
             await db.SaveChangesAsync();
+            await notifications.AccountCreated(user);
 
             return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
         });
@@ -69,7 +70,7 @@ public static class AuthEndpoints
         });
 
         // after a google/microsoft sign in on the frontend. first time makes a driver account
-        app.MapPost("/auth/external", async (ExternalLoginRequest req, AppDbContext db, TimeProvider clock) =>
+        app.MapPost("/auth/external", async (ExternalLoginRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             if (string.IsNullOrWhiteSpace(req.Email))
                 return Results.BadRequest(new { message = "The sign in provider did not return an email." });
@@ -81,6 +82,7 @@ public static class AuthEndpoints
                 user = new User { UserType = Driver, Username = await UniqueUsername(db, email), Email = email, PhoneNumber = "", Address = "" };
                 db.Users.Add(user);
                 await db.SaveChangesAsync();
+                await notifications.AccountCreated(user);
             }
             await RecordAttempt(db, user.Username, user.Id, true, req.IpAddress, clock.GetUtcNow().UtcDateTime);
             return Results.Ok(UserProfile.Of(user));

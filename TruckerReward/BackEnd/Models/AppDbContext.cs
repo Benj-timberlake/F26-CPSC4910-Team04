@@ -6,6 +6,7 @@ namespace BackEnd.Models;
 
 public partial class AppDbContext : DbContext
 {
+    public DbSet<CatalogItem> CatalogItems { get; set; }
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
@@ -40,6 +41,14 @@ public partial class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<CatalogItem>(entity =>
+        {
+            entity.ToTable("catalog");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(e => e.SponsorId).HasColumnName("sponsor_id");
+            entity.Property(e => e.ItemId).HasColumnName("item_id").HasMaxLength(255).IsRequired();
+        });
         modelBuilder.Entity<AboutPage>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");

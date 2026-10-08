@@ -35,7 +35,18 @@
             <section>
                 <h1>@product.Title</h1>
                 <p class="detail-price">@(product.Price?.Display ?? "Price unavailable")</p>
-                <button type="button" class="buy-button" disabled="@addingToCart" @onclick="AddToCart">@(addingToCart ? "Adding..." : "Buy")</button>
+                <AuthorizeView Roles="sponsor">
+                    <Authorized>
+                        <button type="button" class="buy-button" disabled="@(addingToCart || addedToCatalog)" @onclick="AddToCatalog">@(addingToCart ? "Adding..." : addedToCatalog ? "Added to catalog" : "Add to catalog")</button>
+                    </Authorized>
+                    <NotAuthorized>
+                        <button type="button" class="buy-button" disabled="@addingToCart" @onclick="AddToCart">@(addingToCart ? "Adding..." : "Buy")</button>
+                    </NotAuthorized>
+                </AuthorizeView>
+                @if (addedToCatalog)
+                {
+                    <p role="status">Item added to catalog.</p>
+                }
                 @if (cartError is not null)
                 {
                     <p role="alert">@cartError</p>
@@ -67,9 +78,43 @@
     private CancellationTokenSource? requestCancellation;
     private bool addingToCart;
     private string? cartError;
+    private bool addedToCatalog;
 
     [CascadingParameter]
     private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private async Task AddToCatalog()
+    {
+        if (addingToCart || addedToCatalog || product is null) return;
+        cartError = null;
+        var user = (await AuthState).User;
+        if (!user.IsInRole("sponsor") || !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+        {
+            cartError = "Please log in as a sponsor to add catalog items.";
+            return;
+        }
+        addingToCart = true;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PostAsJsonAsync($"users/{id}/catalog", new { ItemId = product.ItemId });
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                cartError = "This product has an invalid item ID.";
+                return;
+            }
+            response.EnsureSuccessStatusCode();
+            addedToCatalog = true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            cartError = "Couldn't add this item to your catalog. Please try again.";
+        }
+        finally
+        {
+            addingToCart = false;
+        }
+    }
 
     private async Task AddToCart()
     {
@@ -119,6 +164,7 @@
         requestCancellation?.Dispose();
         var cancellation = requestCancellation = new CancellationTokenSource();
         product = null;
+        addedToCatalog = false;
         cartError = null;
         error = null;
         loading = true;
