@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "sponsor,admin")]
 @using System.Net.Http.Json
 @using System.Security.Claims
+@using System.Globalization
 
 @inject IHttpClientFactory HttpClientFactory
 
@@ -52,7 +53,7 @@
                 <div class="application-list">
                     @foreach (var application in ActiveApplications)
                     {
-                        @RenderApplication(application)
+                        @RenderApplication(application, "active")
                     }
                     @if (ActiveApplications.Count == 0)
                     {
@@ -69,7 +70,7 @@
                 <div class="application-list">
                     @foreach (var application in ApprovedApplications)
                     {
-                        @RenderApplication(application)
+                        @RenderApplication(application, "approved")
                     }
                     @if (ApprovedApplications.Count == 0)
                     {
@@ -86,7 +87,7 @@
                 <div class="application-list">
                     @foreach (var application in DeniedApplications)
                     {
-                        @RenderApplication(application)
+                        @RenderApplication(application, "denied")
                     }
                     @if (DeniedApplications.Count == 0)
                     {
@@ -150,7 +151,8 @@
     .approved-count { color: #24734a; background: #e2f1e7; }
     .denied-count { color: #a04438; background: #f8e8e5; }
     .application-list { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; }
-    .application-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; background: white; border: 1px solid #e8edf2; border-radius: 10px; padding: 15px; min-width: 0; }
+    .application-card { display: block; background: white; border: 1px solid #e8edf2; border-radius: 10px; padding: 13px 14px; min-width: 0; }
+    .application-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     .application-main { min-width: 0; flex: 1; }
     .application-actions { display: flex; flex-direction: column; gap: 7px; flex: 0 0 auto; }
     .application-actions button { min-width: 76px; padding: 6px 10px; border: 0; border-radius: 6px; color: white; font-size: 12px; font-weight: 700; cursor: pointer; }
@@ -158,12 +160,18 @@
     .deny-button, .application-actions .deny-button { background: #bd3b36; border-color: #bd3b36; color: white; }
     .application-actions .revert-button { background: #bd3b36; }
     .application-card h3 { font-size: 14px; font-weight: 700; margin: 0; }
+    .application-company { margin: 5px 0 0; color: #315b99; font-size: 12px; font-weight: 600; }
+    .expand-toggle { display: block; width: 100%; margin: 8px auto 0; padding: 2px 8px; border: 0; border-radius: 6px; background: #f4f6f9; color: #596779; font-size: 20px; line-height: 1.1; cursor: pointer; }
+    .expand-toggle:hover, .expand-toggle:focus-visible { background: #e9eef5; color: #2455a4; }
+    .application-details { margin-top: 10px; padding-top: 10px; border-top: 1px solid #edf0f3; }
+    .details-heading { margin: 0 0 7px; padding-bottom: 4px; border-bottom: 1px solid #9aa5b3; color: #394555; font-size: 12px; font-weight: 700; }
     .application-email { margin: 5px 0 0; color: #526173; font-size: 12px; overflow-wrap: anywhere; }
-    .application-company { margin: 9px 0 0; color: #315b99; font-size: 12px; font-weight: 600; }
     .application-extra { margin: 9px 0 0; color: #626e7d; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .application-extra-label { display: block; margin-bottom: 3px; color: #7a8492; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-    .reviewer-attribution, .reviewer-reason { margin: 10px 0 0; color: #626e7d; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .reviewer-attribution strong, .reviewer-reason strong { color: #394555; }
+    .application-extra strong, .application-email strong { color: #394555; }
+    .review-information { margin-top: 12px; }
+    .review-information-heading { margin: 0 0 7px; padding-bottom: 4px; border-bottom: 1px solid #9aa5b3; color: #394555; font-size: 12px; font-weight: 700; }
+    .reviewer-attribution, .reviewer-reason, .application-timestamp { margin: 5px 0 0; color: #626e7d; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .reviewer-attribution strong, .reviewer-reason strong, .application-timestamp strong { color: #394555; }
     .empty-state { color: #7a8492; font-size: 13px; margin: 0; padding: 4px 0; }
     .review-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0009; }
     .review-dialog { position: relative; width: 100%; max-width: 560px; max-height: 90vh; overflow: auto; padding: 26px; border-radius: 12px; background: white; color: #1f2937; box-shadow: 0 12px 40px #0005; }
@@ -178,7 +186,7 @@
     .review-dialog form label span { color: #687385; font-size: 12px; font-weight: 400; }
     .review-dialog textarea { display: block; width: 100%; margin-bottom: 14px; padding: 10px; border: 1px solid #b8c0cc; border-radius: 8px; font: inherit; resize: vertical; }
     .review-dialog form button { display: block; margin-left: auto; }
-    @@media (max-width: 560px) { .application-card { flex-direction: column; } .application-actions { flex-direction: row; } }
+    @@media (max-width: 560px) { .application-summary { gap: 8px; } .application-actions { flex-direction: row; } .application-actions button { min-width: 62px; padding: 6px 8px; } }
     @@media (max-width: 850px) { .application-columns { grid-template-columns: 1fr 1fr; } .active-panel { grid-column: 1 / -1; } }
     @@media (max-width: 560px) { .application-columns { grid-template-columns: 1fr; } .active-panel { grid-column: auto; } .application-switch { width: 100%; } .application-tab { flex: 1; padding-inline: 8px; } }
 </style>
@@ -192,6 +200,9 @@
     private bool isLoading = true;
     private string? loadError;
     private string? notice;
+    private int? expandedActiveApplicationId;
+    private int? expandedApprovedApplicationId;
+    private int? expandedDeniedApplicationId;
     private string? reviewError;
     private int? reviewerId;
     private ApplicationRow? activeReview;
@@ -322,41 +333,105 @@
         }
     }
 
-    private RenderFragment RenderApplication(ApplicationRow application) => @<article class="application-card">
-        <div class="application-main">
-            <h3>@application.ApplicantName</h3>
-            <p class="application-email">@application.ApplicantEmail</p>
-            <p class="application-company">Company: @application.CompanyName</p>
-            @if (!string.IsNullOrWhiteSpace(application.ApplicantExtraInfo))
-            {
-                <p class="application-extra"><span class="application-extra-label">Extra Info</span>@application.ApplicantExtraInfo</p>
-            }
-            @if (application.Status is "approved" or "rejected")
-            {
-                <p class="reviewer-attribution"><strong>@ReviewerLabel(application.ReviewerUserType):</strong> @(application.ReviewerName ?? "Unknown reviewer")</p>
-                <p class="reviewer-reason"><strong>Reason:</strong> @(application.ReviewerReasoning ?? "No reason recorded.")</p>
-            }
+    private RenderFragment RenderApplication(ApplicationRow application, string category) => @<article class="application-card">
+        <div class="application-summary">
+            <div class="application-main">
+                <h3>@application.ApplicantName</h3>
+                <p class="application-company">Company: @application.CompanyName</p>
+            </div>
+            <div class="application-actions" aria-label="Review actions">
+                @if (application.Status == "active")
+                {
+                    <button type="button" class="accept-button" @onclick="() => OpenAccept(application)">Accept</button>
+                    <button type="button" class="deny-button" @onclick="() => OpenDeny(application)">Deny</button>
+                }
+                else if (application.CanRevert)
+                {
+                    <button type="button" class="revert-button" @onclick="() => OpenRevert(application)">Revert</button>
+                }
+            </div>
         </div>
-        <div class="application-actions" aria-label="Review actions">
-            @if (application.Status == "active")
-            {
-                <button type="button" class="accept-button" @onclick="() => OpenAccept(application)">Accept</button>
-                <button type="button" class="deny-button" @onclick="() => OpenDeny(application)">Deny</button>
-            }
-            else if (application.CanRevert)
-            {
-                <button type="button" class="revert-button" @onclick="() => OpenRevert(application)">Revert</button>
-            }
-        </div>
+        <button type="button" class="expand-toggle" aria-expanded="@IsExpanded(application.Id, category)"
+                aria-label="@(IsExpanded(application.Id, category) ? "Collapse application details" : "Expand application details")"
+                @onclick="() => ToggleExpanded(application.Id, category)">
+            <span aria-hidden="true">@(IsExpanded(application.Id, category) ? "⌃" : "⌄")</span>
+        </button>
+        @if (IsExpanded(application.Id, category))
+        {
+            <div class="application-details">
+                <h4 class="details-heading">Application Information</h4>
+                <p class="application-email"><strong>Email:</strong> @application.ApplicantEmail</p>
+                @if (!string.IsNullOrWhiteSpace(application.ApplicantExtraInfo))
+                {
+                    <p class="application-extra"><strong>Extra Info:</strong> @application.ApplicantExtraInfo</p>
+                }
+                @if (application.Status is "approved" or "rejected" ||
+                    application.ResponseTimestamp.HasValue ||
+                    !string.IsNullOrWhiteSpace(application.ReviewerUserType) ||
+                    !string.IsNullOrWhiteSpace(application.ReviewerReasoning))
+                {
+                    <p class="application-timestamp"><strong>Timestamp:</strong> @FormatTimestamp(application.ApplicationTimestamp)</p>
+                    <div class="review-information">
+                        <h4 class="review-information-heading">Review Information</h4>
+                        <p class="reviewer-attribution"><strong>Reviewer Type:</strong> @ReviewerLabel(application.ReviewerUserType)</p>
+                        <p class="reviewer-attribution"><strong>Name:</strong> @(application.ReviewerName ?? "Unknown reviewer")</p>
+                        <p class="reviewer-attribution"><strong>Email:</strong> @(application.ReviewerEmail ?? "Unavailable")</p>
+                        <p class="reviewer-reason"><strong>Reasoning:</strong> @(application.ReviewerReasoning ?? "No reason recorded.")</p>
+                        <p class="application-timestamp"><strong>Timestamp:</strong> @FormatTimestamp(application.ResponseTimestamp ?? application.ApplicationTimestamp)</p>
+                    </div>
+                }
+                else
+                {
+                    <p class="application-timestamp"><strong>Timestamp:</strong> @FormatTimestamp(application.ApplicationTimestamp)</p>
+                }
+            </div>
+        }
     </article>;
+
+    private bool IsExpanded(int applicationId, string category) => category switch
+    {
+        "active" => expandedActiveApplicationId == applicationId,
+        "approved" => expandedApprovedApplicationId == applicationId,
+        _ => expandedDeniedApplicationId == applicationId
+    };
+
+    private void ToggleExpanded(int applicationId, string category)
+    {
+        switch (category)
+        {
+            case "active":
+                expandedActiveApplicationId = expandedActiveApplicationId == applicationId ? null : applicationId;
+                break;
+            case "approved":
+                expandedApprovedApplicationId = expandedApprovedApplicationId == applicationId ? null : applicationId;
+                break;
+            default:
+                expandedDeniedApplicationId = expandedDeniedApplicationId == applicationId ? null : applicationId;
+                break;
+        }
+    }
 
     private static string ReviewerLabel(string? userType) => userType switch
     {
-        "admin" => "Administrator",
+        "admin" => "Admin",
         "sponsor" => "Sponsor",
-        _ => "Reviewer"
+        _ => userType is null ? "Unknown" : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(userType)
     };
 
-    private sealed record ApplicationRow(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
+    private static readonly TimeZoneInfo EasternTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+        OperatingSystem.IsWindows() ? "Eastern Standard Time" : "America/New_York");
+
+    private static string FormatTimestamp(DateTime timestamp)
+    {
+        var utcTimestamp = DateTime.SpecifyKind(timestamp, DateTimeKind.Utc);
+        var easternTimestamp = TimeZoneInfo.ConvertTimeFromUtc(utcTimestamp, EasternTimeZone);
+        var time = easternTimestamp.ToString("h:mm", CultureInfo.InvariantCulture);
+        var meridiem = easternTimestamp.ToString("tt", CultureInfo.InvariantCulture).ToLowerInvariant();
+        var date = easternTimestamp.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+        var zone = EasternTimeZone.IsDaylightSavingTime(easternTimestamp) ? "EDT" : "EST";
+        return $"{time} {meridiem}, {date} {zone}";
+    }
+
+    private sealed record ApplicationRow(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
     private sealed record ReviewApplicationRequest(string Decision, string Reasoning);
 }

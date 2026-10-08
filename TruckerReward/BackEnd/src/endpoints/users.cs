@@ -128,6 +128,7 @@ public static class UserEndpoints
                     application.Status,
                     applicationReviewer?.UserType,
                     applicationReviewer is null ? null : $"{applicationReviewer.FirstName} {applicationReviewer.LastName}",
+                    applicationReviewer?.Email,
                     application.ReviewerReasoning,
                     application.Status == "approved" ||
                         (application.Status == "rejected" && !applicantsWithOpenOrAcceptedApplication.Contains(application.ApplicantId)),
@@ -175,7 +176,7 @@ public static class UserEndpoints
             application.ReviewerId = reviewer.Id;
             application.ReviewerReasoning = reasoning;
             application.Status = decision;
-            application.ResponseTimestamp = decision == "active" ? null : clock.GetUtcNow().UtcDateTime;
+            application.ResponseTimestamp = clock.GetUtcNow().UtcDateTime;
             if (decision == "approved")
                 applicant.CompanyId = application.CompanyId;
             else if (decision == "active" && applicant.CompanyId == application.CompanyId)
@@ -311,7 +312,7 @@ public record UpdateUserProfileRequest(string? FirstName, string? LastName, stri
 public record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
 public record CancelApplicationRequest(string? Reasoning);
 public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, int? ReviewerId, string? ReviewerReasoning, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
-public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
+public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
 public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName);
