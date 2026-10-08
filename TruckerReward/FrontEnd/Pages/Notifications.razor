@@ -1,0 +1,115 @@
+@page "/notifications"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Notifications</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Notifications</h1>
+
+        @if (loadError is not null)
+        {
+            <p role="alert" class="tr-alert-error">@loadError</p>
+        }
+        else if (notifications is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+        else if (notifications.Count == 0)
+        {
+            <p class="tr-muted">Nothing yet. Updates about your account, orders and points show up here.</p>
+        }
+        else
+        {
+            <ul class="notification-list">
+                @foreach (var n in notifications)
+                {
+                    <li class="@(n.Read ? "" : "unread")">
+                        <div class="notification-head">
+                            <strong>@n.Subject</strong>
+                            <span class="tr-muted">@n.Timestamp.ToString("yyyy-MM-dd HH:mm") UTC</span>
+                        </div>
+                        <p>@n.Body</p>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <p class="tr-alt"><a href="dashboard">Back to dashboard</a></p>
+</div>
+
+<style>
+    .notification-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .notification-list li {
+        border-top: 1px solid #e5e7eb;
+        padding: 12px 0;
+    }
+
+    .notification-list li.unread {
+        border-left: 3px solid #2563eb;
+        padding-left: 10px;
+    }
+
+    .notification-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: space-between;
+    }
+
+    .notification-list p {
+        margin: 6px 0 0;
+        white-space: pre-line;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private List<Notification>? notifications;
+    private string? loadError;
+    private string? id;
+    private bool markedRead;
+
+    protected override async Task OnInitializedAsync()
+    {
+        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            notifications = await client.GetFromJsonAsync<List<Notification>>($"users/{id}/notifications");
+        }
+        catch (HttpRequestException)
+        {
+            loadError = "Couldn't reach the backend. Try again in a moment.";
+        }
+    }
+
+    // marked read only once the page is interactive
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (markedRead || notifications is null || notifications.All(n => n.Read))
+            return;
+        markedRead = true;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            await client.PostAsync($"users/{id}/notifications/read", null);
+        }
+        catch (HttpRequestException)
+        {
+            // they stay unread until the next visit
+        }
+    }
+
+    private sealed record Notification(int Id, string Subject, string Body, DateTime Timestamp, bool Read);
+}
