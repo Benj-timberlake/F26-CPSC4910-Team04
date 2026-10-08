@@ -5,11 +5,49 @@ public static class CartEndpoints
 {
     public static void MapCartEndpoints(this WebApplication app)
     {
+        app.MapGet("/users/{id:int}/driver-orders", async (int id, AppDbContext db) =>
+        {
+            var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
+            if (sponsor is null) return Results.NotFound();
+            if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
+            if (sponsor.CompanyId is null) return Results.Ok(Array.Empty<SponsorOrderDetails>());
+            var items = await db.CartItems.AsNoTracking().Include(item => item.User).Include(item => item.PointsHistory)
+                .Where(item => item.User.UserType == "driver" && item.User.CompanyId == sponsor.CompanyId
+                    && !item.WasOrdered && !item.InCart && item.PointsHistory != null
+                    && item.PointsHistory.UserId == item.UserId).ToListAsync();
+            return Results.Ok(items.GroupBy(item => item.PointsHistoryId!.Value).Select(group =>
+            {
+                var first = group.First();
+                return new SponsorOrderDetails(group.Key, first.UserId,
+                    first.User.FirstName + " " + first.User.LastName, first.PointsHistory!.Timestamp,
+                    group.Sum(item => item.Price * item.Quantity),
+                    group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList());
+            }).OrderByDescending(order => order.Timestamp).ThenByDescending(order => order.OrderId));
+        });
+        app.MapPost("/users/{id:int}/driver-orders/{orderId:int}/buy", async (int id, int orderId, AppDbContext db) =>
+        {
+            var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
+            if (sponsor is null) return Results.NotFound();
+            if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
+            if (sponsor.CompanyId is null) return Results.NotFound();
+            // Materialize IDs before updating: MySQL forbids reading the target
+            // cart table from a subquery inside the same UPDATE statement.
+            var eligible = await db.CartItems.Where(item => item.PointsHistoryId == orderId
+                    && !item.InCart && !item.WasOrdered && item.User.UserType == "driver"
+                    && item.User.CompanyId == sponsor.CompanyId && item.PointsHistory != null
+                    && item.PointsHistory.UserId == item.UserId).Select(item => item.Id).ToListAsync();
+            if (eligible.Count == 0) return Results.NotFound();
+            var changed = await db.CartItems.Where(item => eligible.Contains(item.Id)
+                    && item.PointsHistoryId == orderId && !item.InCart && !item.WasOrdered)
+                .ExecuteUpdateAsync(update => update.SetProperty(item => item.WasOrdered, true));
+            return changed == 0 ? Results.NotFound() : Results.NoContent();
+        });
+
         app.MapGet("/users/{id:int}/orders", async (int id, AppDbContext db, TimeProvider clock) =>
         {
             if (!await db.Users.AnyAsync(user => user.Id == id)) return Results.NotFound();
             var items = await db.CartItems.AsNoTracking().Include(item => item.PointsHistory)
-                .Where(item => item.UserId == id && item.WasOrdered && !item.InCart
+                .Where(item => item.UserId == id && !item.InCart
                     && item.PointsHistory != null && item.PointsHistory.UserId == id).ToListAsync();
             var now = clock.GetUtcNow().UtcDateTime;
             return Results.Ok(items.GroupBy(item => item.PointsHistoryId!.Value).Select(group =>
@@ -33,7 +71,7 @@ public static class CartEndpoints
             if (!CanRefund(history, clock.GetUtcNow().UtcDateTime))
                 return Results.BadRequest(new { message = "Orders can only be refunded within 24 hours of purchase." });
             var items = await db.CartItems.Where(item => item.PointsHistoryId == historyId).ToListAsync();
-            if (items.Count == 0 || items.Any(item => item.UserId != id || !item.WasOrdered || item.InCart))
+            if (items.Count == 0 || items.Any(item => item.UserId != id || item.InCart))
                 return Results.BadRequest(new { message = "This history entry is not a refundable order." });
             var balance = (long)user.Points - history.PointsDelta;
             if (balance > int.MaxValue)
@@ -81,7 +119,7 @@ public static class CartEndpoints
             foreach (var item in items)
             {
                 item.InCart = false;
-                item.WasOrdered = true;
+                item.WasOrdered = false;
                 item.PointsHistory = history;
             }
             await db.SaveChangesAsync();
@@ -152,4 +190,5 @@ public static class CartEndpoints
 public record CartItemDetails(uint Id, string Name, decimal Price, string? Description, int Quantity = 1);
 public record UpdateCartQuantity(int Quantity);
 public record AddCartItem(string Name, decimal Price, string? Description);
+public record SponsorOrderDetails(int OrderId, int DriverId, string DriverName, DateTime? Timestamp, decimal TotalPrice, List<CartItemDetails> Items);
 public record PastOrderDetails(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, List<CartItemDetails> Items);
