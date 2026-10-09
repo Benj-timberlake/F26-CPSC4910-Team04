@@ -1,0 +1,193 @@
+@page "/manage-points"
+@attribute [Authorize(Roles = "sponsor,admin")]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Driver points</PageTitle>
+
+<div class="tr-page">
+    <h1>Driver points</h1>
+
+    @if (notice is not null)
+    {
+        <p role="status" class="tr-alert-success">@notice</p>
+    }
+    @if (error is not null)
+    {
+        <p role="alert" class="tr-alert-error">@error</p>
+    }
+
+    @if (noCompany)
+    {
+        <p>You aren't with a company yet, so there are no drivers to manage.</p>
+    }
+    else
+    {
+        <form class="search" @onsubmit="Search">
+            <label for="search" class="visually-hidden">Search drivers</label>
+            <input id="search" type="search" placeholder="Search by name or username" @bind="search" />
+            <button type="submit" class="tr-btn">Search</button>
+        </form>
+
+        @if (drivers is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+        else if (drivers.Count == 0)
+        {
+            <p class="tr-muted">No drivers found.</p>
+        }
+        else
+        {
+            <div class="tr-table-wrap">
+                <table class="tr-table">
+                    <thead>
+                        <tr>
+                            <th>Driver</th>
+                            <th>Email</th>
+                            <th>Points</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in drivers)
+                        {
+                            <tr>
+                                <td>@d.FirstName @d.LastName (@d.Username)</td>
+                                <td>@d.Email</td>
+                                <td class="balance">@d.Points.ToString("N0")</td>
+                                <td>
+                                    @if (editing == d.Id)
+                                    {
+                                        <div class="change">
+                                            <input type="number" aria-label="Points for @d.Username" placeholder="+100 or -50" @bind="amount" />
+                                            <input type="text" aria-label="Reason for @d.Username" placeholder="Reason" maxlength="500" @bind="reason" />
+                                            <button type="button" class="tr-btn" disabled="@busy" @onclick="() => Save(d)">Save</button>
+                                            <button type="button" class="tr-btn-outline" @onclick="() => editing = null">Cancel</button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="tr-btn-outline" @onclick="() => Edit(d)">Change points</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .search {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .search input {
+        flex: 1;
+        max-width: 360px;
+    }
+
+    .change {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .change input[type=number] {
+        width: 120px;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string? id;
+    private List<Driver>? drivers;
+    private string? search;
+    private int? editing;
+    private int? amount;
+    private string? reason;
+    private bool busy;
+    private bool noCompany;
+    private string? error;
+    private string? notice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await Load();
+    }
+
+    private async Task Search()
+    {
+        notice = null;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var url = $"users/{id}/points/drivers" + (string.IsNullOrWhiteSpace(search) ? "" : $"?search={Uri.EscapeDataString(search.Trim())}");
+            var response = await client.GetAsync(url);
+            // sponsors without a company get a 403
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                noCompany = true;
+                return;
+            }
+            response.EnsureSuccessStatusCode();
+            drivers = await response.Content.ReadFromJsonAsync<List<Driver>>() ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load drivers right now. Try again in a moment.";
+        }
+    }
+
+    private void Edit(Driver d)
+    {
+        editing = d.Id;
+        amount = null;
+        reason = null;
+        notice = null;
+    }
+
+    private async Task Save(Driver d)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/points/drivers/{d.Id}", new { points = amount ?? 0, reason });
+            if (response.IsSuccessStatusCode)
+            {
+                var updated = await response.Content.ReadFromJsonAsync<Driver>();
+                drivers = drivers!.Select(x => x.Id == d.Id && updated is not null ? updated : x).ToList();
+                notice = $"{d.Username} now has {updated?.Points.ToString("N0")} points.";
+                editing = null;
+            }
+            else
+            {
+                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points);
+    private sealed record Problem(string? Message);
+}
