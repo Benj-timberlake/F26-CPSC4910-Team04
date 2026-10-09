@@ -1,0 +1,176 @@
+@page "/audit"
+@attribute [Authorize(Roles = "sponsor,admin")]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Audit log</PageTitle>
+
+<div class="tr-page">
+    <h1>Audit log</h1>
+
+    @if (noCompany)
+    {
+        <p>You aren't with a company yet, so there's nothing to audit.</p>
+    }
+    else
+    {
+        <form class="filters" @onsubmit="Load">
+            <select aria-label="Category" @bind="category">
+                <option value="">All categories</option>
+                <option value="logins">Sign-ins</option>
+                <option value="passwords">Password changes</option>
+                <option value="points">Point changes</option>
+            </select>
+            @if (admin)
+            {
+                <select aria-label="Sponsor" @bind="companyId">
+                    <option value="0">All sponsors</option>
+                    @foreach (var c in companies)
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+            }
+            <select aria-label="Driver" @bind="driverId">
+                <option value="0">@(admin ? "All accounts" : "All drivers")</option>
+                @foreach (var d in drivers)
+                {
+                    <option value="@d.Id">@d.FirstName @d.LastName (@d.Username)</option>
+                }
+            </select>
+            <label>From <input type="date" @bind="from" /></label>
+            <label>To <input type="date" @bind="to" /></label>
+            <button type="submit" class="tr-btn">Apply</button>
+        </form>
+
+        @if (error is not null)
+        {
+            <p role="alert" class="tr-alert-error">@error</p>
+        }
+        else if (rows is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+        else if (rows.Count == 0)
+        {
+            <p class="tr-muted">Nothing in this range.</p>
+        }
+        else
+        {
+            <p class="tr-muted">Showing the newest @rows.Count entries.</p>
+            <div class="tr-table-wrap">
+                <table class="tr-table">
+                    <thead>
+                        <tr>
+                            <th>When (UTC)</th>
+                            <th>Category</th>
+                            <th>Account</th>
+                            <th>What happened</th>
+                            <th>By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in rows)
+                        {
+                            <tr>
+                                <td>@r.At.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@Label(r.Category)</td>
+                                <td>@r.Username</td>
+                                <td>@r.Detail</td>
+                                <td>@(r.By ?? "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string? id;
+    private bool admin;
+    private bool noCompany;
+    private List<Company> companies = [];
+    private List<Driver> drivers = [];
+    private List<Row>? rows;
+    private string category = "";
+    private int companyId;
+    private int driverId;
+    private DateOnly? from;
+    private DateOnly? to;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        admin = user.IsInRole("admin");
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.GetAsync($"users/{id}/points/drivers");
+            // sponsors without a company get a 403
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                noCompany = true;
+                return;
+            }
+            response.EnsureSuccessStatusCode();
+            drivers = await response.Content.ReadFromJsonAsync<List<Driver>>() ?? [];
+            if (admin)
+                companies = await client.GetFromJsonAsync<List<Company>>("companies") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load the audit log right now. Try again in a moment.";
+            return;
+        }
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        var query = new List<string>();
+        if (category != "") query.Add("category=" + category);
+        if (companyId != 0) query.Add("companyId=" + companyId);
+        if (driverId != 0) query.Add("driverId=" + driverId);
+        if (from is not null) query.Add("from=" + from.Value.ToString("yyyy-MM-dd"));
+        if (to is not null) query.Add("to=" + to.Value.ToString("yyyy-MM-dd"));
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            rows = await client.GetFromJsonAsync<List<Row>>($"users/{id}/audit" + (query.Count > 0 ? "?" + string.Join("&", query) : "")) ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load the audit log right now. Try again in a moment.";
+        }
+    }
+
+    private static string Label(string category) => category switch
+    {
+        "logins" => "Sign-in",
+        "passwords" => "Password",
+        "points" => "Points",
+        _ => category
+    };
+
+    private sealed record Company(int Id, string Name);
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName);
+    private sealed record Row(DateTime At, string Category, int? UserId, string Username, string Detail, string? By);
+}
