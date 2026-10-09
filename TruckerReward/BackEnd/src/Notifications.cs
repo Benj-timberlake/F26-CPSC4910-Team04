@@ -7,32 +7,32 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
     public Task ResetLinkSent(User user, string link) =>
         Send(user, "Reset your TruckerReward password",
             $"Hi {user.Username},\n\nUse this link within the next hour to choose a new password:\n{link}\n\nIf you didn't ask for this, ignore this email and your password stays the same.",
-            emailed: true,
+            null, emailed: true,
             // keeps the reset link out of the database
             stored: "A link to reset your password was emailed to you. It works for one hour.");
 
     public Task PasswordChanged(User user, bool byReset) => byReset
         ? Send(user, "Your TruckerReward password was reset",
             $"Hi {user.Username},\n\nYour password was just reset. If that wasn't you, contact your sponsor or an administrator.",
-            emailed: true)
+            null, emailed: true)
         : Send(user, "Your TruckerReward password was changed",
             $"Hi {user.Username},\n\nYour password was just changed. If that wasn't you, reset it right away from the login page.",
-            emailed: true);
+            null, emailed: true);
 
     public Task AccountCreated(User user) =>
         ToAdmins($"New {user.UserType} account: {user.Username}",
             $"{user.FirstName} {user.LastName} ({user.Username}, {user.Email}) created a {user.UserType} account.",
-            emailed: false);
+            NotificationCategory.NewAccounts);
 
     public async Task ApplicationReceived(User applicant, int companyId)
     {
         var company = await CompanyName(companyId);
         await Send(applicant, $"Your application to {company} was received",
             $"Hi {applicant.Username},\n\nWe received your application to {company}. You'll hear back once it's reviewed.",
-            emailed: true);
+            NotificationCategory.Applications);
     }
 
-    // previous is the status before the review, decision the status after it
+    // previous and decision are the statuses before and after the review
     public async Task ApplicationReviewed(User applicant, int companyId, string previous, string decision, string reasoning)
     {
         var company = await CompanyName(companyId);
@@ -43,48 +43,48 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             ("approved", _) => ($"You've been removed from {company}", $"You are no longer with {company}."),
             _ => ($"Your application to {company} is under review again", $"Your application to {company} is back under review.")
         };
-        await Send(applicant, subject, $"Hi {applicant.Username},\n\n{text}\n\nReason: {reasoning}", emailed: true);
+        await Send(applicant, subject, $"Hi {applicant.Username},\n\n{text}\n\nReason: {reasoning}", NotificationCategory.Applications);
     }
 
     public Task AccountLocked(string username, string? ip, DateTime until) =>
         ToAdmins($"Account locked: {username}",
             $"{Lockout.MaxFailures} failed sign-in attempts in a row for {username} from {ip ?? "an unknown address"}. The account is locked until {until:u}.",
-            emailed: true);
+            NotificationCategory.SecurityAlerts);
 
     public Task ResetRequested(User user, string? ip) =>
         ToAdmins($"Password reset requested for {user.Username}",
             $"A password reset was requested for {user.Username} ({user.Email}) from {ip ?? "an unknown address"}.",
-            emailed: true);
+            NotificationCategory.SecurityAlerts);
 
     public async Task PointsChanged(User user, int delta, string reason)
     {
         await Send(user, delta >= 0 ? $"{delta:N0} points added" : $"{-delta:N0} points deducted",
             $"{reason} Your balance is now {user.Points:N0} points.",
-            emailed: false);
+            NotificationCategory.Points);
         if (user.Points < 0)
             await ToSponsorsOf(user.CompanyId, $"{user.Username} is negative on points",
                 $"{user.FirstName} {user.LastName} ({user.Username}) has a balance of {user.Points:N0} points.",
-                emailed: true);
+                NotificationCategory.NegativeBalances);
     }
 
     public Task DriverPurchased(User driver, IReadOnlyList<CartItem> items, int points) =>
         ToSponsorsOf(driver.CompanyId, $"{driver.Username} placed an order",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) spent {points:N0} points on " +
             string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
-            emailed: false);
+            NotificationCategory.Purchases);
 
     private async Task<string> CompanyName(int companyId) =>
         await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "the company";
 
-    private async Task ToAdmins(string subject, string body, bool emailed)
+    private async Task ToAdmins(string subject, string body, NotificationCategory category)
     {
         var admins = await db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Admin).ToListAsync();
         foreach (var admin in admins)
-            await Send(admin, subject, body, emailed);
+            await Send(admin, subject, body, category);
     }
 
     // a driver's sponsors are the sponsor accounts in the driver's company
-    private async Task ToSponsorsOf(int? companyId, string subject, string body, bool emailed)
+    private async Task ToSponsorsOf(int? companyId, string subject, string body, NotificationCategory category)
     {
         if (companyId is null)
             return;
@@ -92,12 +92,32 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             .Where(u => u.UserType == AuthEndpoints.Sponsor && u.CompanyId == companyId)
             .ToListAsync();
         foreach (var sponsor in sponsors)
-            await Send(sponsor, subject, body, emailed);
+            await Send(sponsor, subject, body, category);
     }
 
-    // stored goes in the history instead of a body with a secret in it
-    private async Task Send(User user, string subject, string body, bool emailed, string? stored = null)
+    private Task Send(User user, string subject, string body, NotificationCategory category) =>
+        Send(user, subject, body, category, category.Emailed);
+
+    // no category means it can't be switched off
+    private async Task Send(User user, string subject, string body, NotificationCategory? category, bool emailed, string? stored = null)
     {
+        if (category is not null)
+        {
+            try
+            {
+                var pref = await db.NotificationPreferences.AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.UserId == user.Id && p.Category == category.Key);
+                if (pref is { Enabled: false })
+                    return;
+                emailed = pref?.Emailed ?? emailed;
+            }
+            catch (System.Data.Common.DbException ex)
+            {
+                // settings that can't be read fall back to the defaults
+                log.LogError(ex, "could not read notification settings for user {Id}", user.Id);
+            }
+        }
+
         var row = new NotificationsHistory
         {
             UserId = user.Id,
