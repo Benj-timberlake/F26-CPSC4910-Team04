@@ -24,6 +24,28 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             $"{user.FirstName} {user.LastName} ({user.Username}, {user.Email}) created a {user.UserType} account.",
             emailed: false);
 
+    public async Task ApplicationReceived(User applicant, int companyId)
+    {
+        var company = await CompanyName(companyId);
+        await Send(applicant, $"Your application to {company} was received",
+            $"Hi {applicant.Username},\n\nWe received your application to {company}. You'll hear back once it's reviewed.",
+            emailed: true);
+    }
+
+    // previous is the status before the review, decision the status after it
+    public async Task ApplicationReviewed(User applicant, int companyId, string previous, string decision, string reasoning)
+    {
+        var company = await CompanyName(companyId);
+        var (subject, text) = (previous, decision) switch
+        {
+            (_, "approved") => ($"You've been accepted by {company}", $"Your application to {company} was approved."),
+            (_, "rejected") => ($"Your application to {company} was rejected", $"Your application to {company} was rejected."),
+            ("approved", _) => ($"You've been removed from {company}", $"You are no longer with {company}."),
+            _ => ($"Your application to {company} is under review again", $"Your application to {company} is back under review.")
+        };
+        await Send(applicant, subject, $"Hi {applicant.Username},\n\n{text}\n\nReason: {reasoning}", emailed: true);
+    }
+
     public Task AccountLocked(string username, string? ip, DateTime until) =>
         ToAdmins($"Account locked: {username}",
             $"{Lockout.MaxFailures} failed sign-in attempts in a row for {username} from {ip ?? "an unknown address"}. The account is locked until {until:u}.",
@@ -50,6 +72,9 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) spent {points:N0} points on " +
             string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             emailed: false);
+
+    private async Task<string> CompanyName(int companyId) =>
+        await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "the company";
 
     private async Task ToAdmins(string subject, string body, bool emailed)
     {

@@ -12,7 +12,7 @@ public static class UserEndpoints
                 .Select(c => new CompanyOption(c.Id, c.Name, c.Description))
                 .ToListAsync()));
 
-        app.MapPost("/users/{id:int}/applications", async (int id, CreateApplicationRequest request, AppDbContext db) =>
+        app.MapPost("/users/{id:int}/applications", async (int id, CreateApplicationRequest request, AppDbContext db, Notifications notifications) =>
         {
             var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == id);
             if (applicant is null)
@@ -35,6 +35,7 @@ public static class UserEndpoints
             });
 
             await db.SaveChangesAsync();
+            await notifications.ApplicationReceived(applicant, request.CompanyId);
             return Results.Created($"/users/{id}/applications", new { message = "Application submitted." });
         });
 
@@ -140,7 +141,7 @@ public static class UserEndpoints
         });
 
         app.MapPost("/users/{reviewerId:int}/applications/{applicationId:int}/review", async
-            (int reviewerId, int applicationId, ReviewApplicationRequest request, AppDbContext db, TimeProvider clock) =>
+            (int reviewerId, int applicationId, ReviewApplicationRequest request, AppDbContext db, TimeProvider clock, Notifications notifications) =>
         {
             var reviewer = await db.Users.FirstOrDefaultAsync(user => user.Id == reviewerId);
             if (reviewer is null || (reviewer.UserType != "admin" && reviewer.UserType != "sponsor"))
@@ -173,6 +174,7 @@ public static class UserEndpoints
                 (item.Status == "active" || item.Status == "approved")))
                 return Results.Conflict(new { message = "This applicant already has an active or accepted application." });
 
+            var previous = application.Status;
             application.ReviewerId = reviewer.Id;
             application.ReviewerReasoning = reasoning;
             application.Status = decision;
@@ -183,6 +185,7 @@ public static class UserEndpoints
                 applicant.CompanyId = null;
 
             await db.SaveChangesAsync();
+            await notifications.ApplicationReviewed(applicant, application.CompanyId, previous, decision, reasoning);
             return Results.Ok();
         });
 
