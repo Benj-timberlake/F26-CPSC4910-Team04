@@ -29,6 +29,20 @@ public sealed class AdminAccountsPageTests : TestContext
     }
 
     [Fact]
+    public void BothAdminUrlsOpenThisPage()
+    {
+        var routes = typeof(AdminAccounts).Assembly.GetTypes()
+            .SelectMany(t => t.GetCustomAttributes(typeof(Microsoft.AspNetCore.Components.RouteAttribute), false)
+                .Cast<Microsoft.AspNetCore.Components.RouteAttribute>()
+                .Select(r => (r.Template, t)))
+            .Where(r => r.Template is "/admin/accounts" or "/admin/users")
+            .ToList();
+
+        Assert.Equal(2, routes.Count);
+        Assert.All(routes, r => Assert.Equal(typeof(AdminAccounts), r.t));
+    }
+
+    [Fact]
     public void ListsAccountsWithoutASelfDeactivateButton()
     {
         backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
