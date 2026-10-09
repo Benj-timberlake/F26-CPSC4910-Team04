@@ -7,8 +7,9 @@ public sealed record NotificationCategory(string Key, string Label, bool Emailed
     public static readonly NotificationCategory NegativeBalances = new("negative-balances", "Drivers with a negative balance", true, AuthEndpoints.Sponsor);
     public static readonly NotificationCategory NewAccounts = new("new-accounts", "New accounts", false, AuthEndpoints.Admin);
     public static readonly NotificationCategory SecurityAlerts = new("security-alerts", "Lockouts and password reset requests", true, AuthEndpoints.Admin);
+    public static readonly NotificationCategory AccountStatus = new("account-status", "Accounts deactivated or reactivated", false, AuthEndpoints.Admin);
 
-    public static readonly IReadOnlyList<NotificationCategory> All = [Points, Applications, Purchases, NegativeBalances, NewAccounts, SecurityAlerts];
+    public static readonly IReadOnlyList<NotificationCategory> All = [Points, Applications, Purchases, NegativeBalances, NewAccounts, SecurityAlerts, AccountStatus];
 
     public static IEnumerable<NotificationCategory> For(string userType) => All.Where(c => c.Roles.Contains(userType));
 }

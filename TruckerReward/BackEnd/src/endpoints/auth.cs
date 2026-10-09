@@ -55,8 +55,12 @@ public static class AuthEndpoints
             var lockedUntil = await Lockout.LockedUntil(db, username, now);
 
             var ok = Passwords.Verify(user, req.Password) && lockedUntil is null;
-            await RecordAttempt(db, username, user?.Id, ok, req.IpAddress, now);
+            // only someone with the right password learns the account is deactivated
+            var inactive = ok && user!.Status == User.Inactive;
+            await RecordAttempt(db, username, user?.Id, ok && !inactive, req.IpAddress, now);
 
+            if (inactive)
+                return Deactivated();
             if (ok)
                 return Results.Ok(UserProfile.Of(user!));
             if (lockedUntil is not null)
@@ -95,10 +99,15 @@ public static class AuthEndpoints
                 await db.SaveChangesAsync();
                 await notifications.AccountCreated(user);
             }
+            if (user.Status == User.Inactive)
+                return Deactivated();
             await RecordAttempt(db, user.Username, user.Id, true, req.IpAddress, clock.GetUtcNow().UtcDateTime);
             return Results.Ok(UserProfile.Of(user));
         });
     }
+
+    private static IResult Deactivated() =>
+        Results.Json(new { message = "This account has been deactivated." }, statusCode: StatusCodes.Status403Forbidden);
 
     private static Task RecordAttempt(AppDbContext db, string username, int? userId, bool succeeded, string? ip, DateTime at)
     {

@@ -85,13 +85,13 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         var (response, role) = await WhoAmI(client, cookie);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("sponsor", role);
-        Assert.Equal(1, backend.Calls);
+        Assert.Equal(2, backend.Calls);
         Assert.Equal("users/7", backend.LastPath);
         // and the refreshed cookie carries the new role and check time forward
         var renewed = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(".AspNetCore.Cookies=")).Split(';')[0];
         var (again, roleAgain) = await WhoAmI(client, renewed);
         Assert.Equal("sponsor", roleAgain);
-        Assert.Equal(1, backend.Calls);
+        Assert.Equal(2, backend.Calls);
     }
 
     [Fact]
@@ -105,6 +105,20 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         var (response, _) = await WhoAmI(client, cookie);
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Contains("/login", response.Headers.Location!.ToString());
+    }
+
+    [Fact]
+    public async Task DeactivatedAccountIsSignedOut()
+    {
+        var client = await Start();
+        var cookie = await SignIn(client);
+        backend.AccountStatus = "inactive";
+        clock.Advance(CookieRevalidation.Interval + TimeSpan.FromSeconds(1));
+
+        var (response, _) = await WhoAmI(client, cookie);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("/login", response.Headers.Location!.ToString());
+        Assert.Equal("users/7/status", backend.LastPath);
     }
 
     [Fact]
@@ -146,6 +160,7 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         private bool fail;
         public int Calls { get; private set; }
         public string? LastPath { get; private set; }
+        public string AccountStatus { get; set; } = "active";
 
         public void Respond(HttpStatusCode s, string b) { status = s; body = b; fail = false; }
         public void Fail() => fail = true;
@@ -155,6 +170,8 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
             Calls++;
             LastPath = request.RequestUri!.PathAndQuery.TrimStart('/');
             if (fail) throw new HttpRequestException("backend down");
+            if (LastPath.EndsWith("/status"))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$"""{"status":"{{AccountStatus}}"}""", Encoding.UTF8, "application/json") });
             return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
         }
     }

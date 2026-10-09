@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 namespace FrontEnd.Auth;
 
 // the role claim comes from user_type at login. re-check the row every Interval so a changed
-// type or a deleted account doesn't live on for the cookie's full 8 hours.
+// type, a deleted account or a deactivated one doesn't live on for the cookie's full 8 hours.
 public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider clock, ILogger<CookieRevalidation> log)
     : CookieAuthenticationEvents
 {
@@ -33,7 +33,15 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
         UserProfile? user;
         try
         {
-            using var response = await clients.CreateClient("Backend").GetAsync($"users/{id}");
+            var backend = clients.CreateClient("Backend");
+            using var status = await backend.GetAsync($"users/{id}/status");
+            if (status.IsSuccessStatusCode && (await status.Content.ReadFromJsonAsync<AccountStatus>())?.Status == "inactive")
+            {
+                log.LogInformation("user {Id} was deactivated, signing out", id);
+                await Reject(context);
+                return;
+            }
+            using var response = await backend.GetAsync($"users/{id}");
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 log.LogInformation("user {Id} no longer exists, signing out", id);
@@ -69,4 +77,6 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
         context.RejectPrincipal();
         await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     }
+
+    private sealed record AccountStatus(string Status);
 }

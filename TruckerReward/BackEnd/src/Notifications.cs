@@ -56,6 +56,11 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             $"A password reset was requested for {user.Username} ({user.Email}) from {ip ?? "an unknown address"}.",
             NotificationCategory.SecurityAlerts);
 
+    public Task AccountStatusChanged(User account, User admin) =>
+        ToAdmins($"Account {(account.Status == User.Active ? "reactivated" : "deactivated")}: {account.Username}",
+            $"{admin.Username} {(account.Status == User.Active ? "reactivated" : "deactivated")} the {account.UserType} account {account.Username} ({account.Email}).",
+            NotificationCategory.AccountStatus);
+
     public async Task PointsChanged(User user, int delta, string reason)
     {
         await Send(user, delta >= 0 ? $"{delta:N0} points added" : $"{-delta:N0} points deducted",
