@@ -18,7 +18,8 @@ public sealed class TestApp : IAsyncDisposable
     public FakeEmail Email { get; } = new();
     public FakeClock Clock { get; } = new(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero));
 
-    public async Task<HttpClient> Start(Action<WebApplicationBuilder>? configure = null)
+    // jsonErrors stays off by default so failures surface in tests
+    public async Task<HttpClient> Start(Action<WebApplicationBuilder>? configure = null, bool jsonErrors = false)
     {
         await connection.OpenAsync();
         var builder = WebApplication.CreateBuilder();
@@ -28,8 +29,12 @@ public sealed class TestApp : IAsyncDisposable
         builder.Services.AddSingleton<IEmailSender>(Email);
         builder.Services.AddScoped<Notifications>();
         builder.Services.AddSingleton<TimeProvider>(Clock);
+        if (jsonErrors)
+            builder.AddJsonErrors();
         configure?.Invoke(builder);
         app = builder.Build();
+        if (jsonErrors)
+            app.UseJsonErrors();
         app.UseBackendApiKey();
         app.MapGet("/", () => Results.Ok());
         app.MapGet("/health", () => Results.Ok());

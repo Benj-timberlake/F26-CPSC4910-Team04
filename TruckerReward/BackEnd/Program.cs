@@ -17,9 +17,11 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<EbayClient>();
 builder.AddEmail();
 builder.Services.AddScoped<Notifications>();
+builder.AddJsonErrors();
 
 var app = builder.Build();
 
+app.UseJsonErrors();
 app.UseBackendApiKey();
 
 if (app.Environment.IsDevelopment())
