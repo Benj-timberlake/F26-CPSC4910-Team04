@@ -79,7 +79,19 @@ public static class AuthEndpoints
             var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user is null)
             {
-                user = new User { UserType = Driver, Username = await UniqueUsername(db, email), Email = email, PhoneNumber = "", Address = "" };
+                var username = await UniqueUsername(db, email);
+                // providers send the display name as "First Last"
+                var name = req.Name?.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries) ?? [];
+                user = new User
+                {
+                    UserType = Driver,
+                    Username = username,
+                    FirstName = name.Length > 0 ? name[0] : username,
+                    LastName = name.Length > 1 ? name[1].Trim() : "",
+                    Email = email,
+                    PhoneNumber = "",
+                    Address = ""
+                };
                 db.Users.Add(user);
                 await db.SaveChangesAsync();
                 await notifications.AccountCreated(user);

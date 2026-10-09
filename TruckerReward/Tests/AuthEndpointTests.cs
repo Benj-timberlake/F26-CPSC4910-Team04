@@ -204,7 +204,24 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         Assert.Equal("sue", user.Username);
         Assert.Equal("driver", user.UserType);
         Assert.Null(user.Password);
+        Assert.Equal("Sue", user.FirstName);
+        Assert.Equal("", user.LastName);
         Assert.Equal(2, await Db().LoginAttempts.CountAsync(a => a.UserId == user.Id && a.Succeeded));
+    }
+
+    [Theory]
+    [InlineData("Sue Ellen Smith", "Sue", "Ellen Smith")]
+    [InlineData("  Sue   Smith ", "Sue", "Smith")]
+    [InlineData(null, "sue", "")]
+    public async Task ExternalLoginSplitsTheProviderName(string? name, string firstName, string lastName)
+    {
+        var client = await Start();
+        var response = await client.PostAsJsonAsync("/auth/external", new { provider = "Google", email = "sue@gmail.com", name });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var user = await Db().Users.SingleAsync();
+        Assert.Equal(firstName, user.FirstName);
+        Assert.Equal(lastName, user.LastName);
     }
 
     [Fact]
@@ -291,12 +308,12 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         // an old failure, a login, then two failures and today's login. only the two count.
         using (var db = Db())
         {
-            var t = DateTime.UtcNow.AddDays(-3);
+            var t = app.Clock.GetUtcNow().UtcDateTime.AddDays(-3);
             db.LoginAttempts.AddRange(
-                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, AttemptedAt = t },
+                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, IpAddress = "", AttemptedAt = t },
                 new LoginAttempt { Username = "bob", UserId = id, Succeeded = true, IpAddress = "1.1.1.1", AttemptedAt = t.AddHours(1) },
-                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, AttemptedAt = t.AddHours(2) },
-                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, AttemptedAt = t.AddHours(3) });
+                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, IpAddress = "", AttemptedAt = t.AddHours(2) },
+                new LoginAttempt { Username = "bob", UserId = id, Succeeded = false, IpAddress = "", AttemptedAt = t.AddHours(3) });
             await db.SaveChangesAsync();
         }
         await client.PostAsJsonAsync("/auth/login", new { username = "bob", password = "Hunter22x!", ipAddress = "10.0.0.5" });
