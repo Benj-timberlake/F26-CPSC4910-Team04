@@ -47,7 +47,7 @@ public static class AuthEndpoints
             return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
         });
 
-        app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db, IEmailSender email, TimeProvider clock) =>
+        app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             var username = req.Username?.Trim() ?? "";
             var now = clock.GetUtcNow().UtcDateTime;
@@ -64,8 +64,7 @@ public static class AuthEndpoints
 
             // this failure may be the one that starts a lock, tell the admins once
             if (await Lockout.LockedUntil(db, username, now) is { } until)
-                await Notify.Admins(db, email, $"Account locked: {username}",
-                    $"{Lockout.MaxFailures} failed sign-in attempts in a row for {username} from {req.IpAddress ?? "an unknown address"}. The account is locked until {until:u}.");
+                await notifications.AccountLocked(username, req.IpAddress, until);
             return Results.Unauthorized();
         });
 

@@ -24,6 +24,16 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             $"{user.FirstName} {user.LastName} ({user.Username}, {user.Email}) created a {user.UserType} account.",
             emailed: false);
 
+    public Task AccountLocked(string username, string? ip, DateTime until) =>
+        ToAdmins($"Account locked: {username}",
+            $"{Lockout.MaxFailures} failed sign-in attempts in a row for {username} from {ip ?? "an unknown address"}. The account is locked until {until:u}.",
+            emailed: true);
+
+    public Task ResetRequested(User user, string? ip) =>
+        ToAdmins($"Password reset requested for {user.Username}",
+            $"A password reset was requested for {user.Username} ({user.Email}) from {ip ?? "an unknown address"}.",
+            emailed: true);
+
     public async Task PointsChanged(User user, int delta, string reason)
     {
         await Send(user, delta >= 0 ? $"{delta:N0} points added" : $"{-delta:N0} points deducted",

@@ -98,6 +98,7 @@ public sealed class PasswordEndpointTests : IAsyncDisposable
         Assert.Contains("http://frontend/reset-password?token=", toBob.Body);
         var toAdmin = Assert.Single(app.Email.Sent, m => m.To == "root@example.com");
         Assert.Contains("bob", toAdmin.Subject);
+        Assert.True(await app.Db().NotificationsHistories.AnyAsync(n => n.User.Username == "root" && n.Subject == toAdmin.Subject));
 
         var change = await app.Db().PasswordChanges.SingleAsync();
         Assert.Equal(PasswordChange.ResetRequested, change.ChangeType);

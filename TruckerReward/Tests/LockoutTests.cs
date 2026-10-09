@@ -125,6 +125,9 @@ public sealed class LockoutTests : IAsyncDisposable
         var mail = Assert.Single(app.Email.Sent);
         Assert.Equal("root@example.com", mail.To);
         Assert.Contains("bob", mail.Subject);
+        var saved = await app.Db().NotificationsHistories.Include(n => n.User).SingleAsync();
+        Assert.Equal("root", saved.User.Username);
+        Assert.Equal(mail.Subject, saved.Subject);
     }
 
     [Fact]
