@@ -1,0 +1,179 @@
+@page "/admin/accounts"
+@attribute [Authorize(Roles = "admin")]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Accounts</PageTitle>
+
+<div class="tr-page">
+    <h1>Accounts</h1>
+
+    <form class="filters" @onsubmit="Load">
+        <input type="search" aria-label="Search accounts" placeholder="Name, username or email" @bind="search" />
+        <select aria-label="Account type" @bind="type">
+            <option value="">All types</option>
+            <option value="driver">Drivers</option>
+            <option value="sponsor">Sponsors</option>
+            <option value="admin">Admins</option>
+        </select>
+        <select aria-label="Status" @bind="status">
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+        </select>
+        <select aria-label="Sort" @bind="sort">
+            <option value="name">Sort by name</option>
+            <option value="created">Newest accounts first</option>
+            <option value="last-login">Most recent sign-in first</option>
+        </select>
+        <button type="submit" class="tr-btn">Apply</button>
+    </form>
+
+    @if (notice is not null)
+    {
+        <p role="status" class="tr-alert-success">@notice</p>
+    }
+    @if (error is not null)
+    {
+        <p role="alert" class="tr-alert-error">@error</p>
+    }
+
+    @if (accounts is null)
+    {
+        <p role="status"><em>Loading...</em></p>
+    }
+    else if (accounts.Count == 0)
+    {
+        <p class="tr-muted">No accounts match.</p>
+    }
+    else
+    {
+        <div class="tr-table-wrap">
+            <table class="tr-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Type</th>
+                        <th>Created</th>
+                        <th>Last sign-in</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in accounts)
+                    {
+                        <tr class="@(a.Status == "inactive" ? "inactive" : "")">
+                            <td>@a.FirstName @a.LastName</td>
+                            <td>@a.Username</td>
+                            <td>@a.Email</td>
+                            <td>@a.UserType</td>
+                            <td>@When(a.CreatedAt)</td>
+                            <td>@(a.LastLoginAt is null ? "Never" : When(a.LastLoginAt))</td>
+                            <td>@a.Status</td>
+                            <td>
+                                @if (a.Id.ToString() != id)
+                                {
+                                    <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => Toggle(a)">
+                                        @(a.Status == "active" ? "Deactivate" : "Reactivate")
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<style>
+    .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .filters input {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    tr.inactive td {
+        color: #6b7280;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string? id;
+    private List<Account>? accounts;
+    private string? search;
+    private string type = "";
+    private string status = "";
+    private string sort = "name";
+    private bool busy;
+    private string? error;
+    private string? notice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(search)) query.Add("search=" + Uri.EscapeDataString(search.Trim()));
+        if (type != "") query.Add("type=" + type);
+        if (status != "") query.Add("status=" + status);
+        if (sort != "name") query.Add("sort=" + sort);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            accounts = await client.GetFromJsonAsync<List<Account>>("admin/accounts" + (query.Count > 0 ? "?" + string.Join("&", query) : "")) ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load accounts right now. Try again in a moment.";
+        }
+    }
+
+    private async Task Toggle(Account a)
+    {
+        busy = true;
+        error = notice = null;
+        var next = a.Status == "active" ? "inactive" : "active";
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"admin/accounts/{a.Id}/status", new { adminId = int.Parse(id!), status = next });
+            if (response.IsSuccessStatusCode)
+            {
+                notice = $"{a.Username} was {(next == "active" ? "reactivated" : "deactivated")}.";
+                await Load();
+            }
+            else
+            {
+                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private static string When(DateTime? utc) => utc is null ? "Unknown" : utc.Value.ToString("yyyy-MM-dd HH:mm");
+
+    private sealed record Account(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
+    private sealed record Problem(string? Message);
+}
