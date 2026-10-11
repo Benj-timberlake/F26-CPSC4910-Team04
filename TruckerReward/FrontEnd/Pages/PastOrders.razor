@@ -3,6 +3,7 @@
 @using System.Security.Claims
 @using FrontEnd.Shared
 @inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
 
 <PageTitle>Past Orders</PageTitle>
 
@@ -43,7 +44,13 @@
                                         <li>@item.Name × @item.Quantity — @RewardPoints.Format(RewardPoints.FromDollars(item.Price) * item.Quantity)</li>
                                     }</ul></td>
                                 <td>@RewardPoints.Format(order.TotalPoints)</td>
-                                <td class="status">@(order.Status == "ordered" ? "Ordered by your sponsor" : "Waiting for your sponsor")</td>
+                                <td class="status">
+                                    <span>@(order.Status == "ordered" ? "Ordered by your sponsor" : "Waiting for your sponsor")</span>
+                                    @if (order.Status == "pending")
+                                    {
+                                        <button type="button" class="tr-btn-outline change-order" disabled="@saving" @onclick="() => ChangeOrder(order)">Change order</button>
+                                    }
+                                </td>
                                 <td>
                                     @if (order.CanRefund)
                                     {
@@ -122,6 +129,29 @@
         }
     }
 
+    // puts the items back in the cart to edit and resend
+    private async Task ChangeOrder(PastOrder order)
+    {
+        saving = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PostAsync($"users/{userId}/orders/{order.PointsHistoryId}/edit", null);
+            if (response.IsSuccessStatusCode)
+            {
+                Nav.NavigateTo("cart");
+                return;
+            }
+            error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That order can't be changed.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Refresh and try again.";
+        }
+        finally { saving = false; }
+    }
+
     private async Task Refund()
     {
         if (selected is null || saving) return;
@@ -149,6 +179,7 @@
         finally { saving = false; selected = null; }
     }
 
+    private sealed record Problem(string? Message);
     private sealed record PastOrder(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, string Status, List<OrderItem> Items);
     private sealed record OrderItem(uint Id, string Name, decimal Price, string? Description, int Quantity);
     private sealed record OrderError(string Message);
