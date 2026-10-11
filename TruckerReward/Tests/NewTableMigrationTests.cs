@@ -4,21 +4,23 @@ using Xunit;
 
 namespace TruckerReward.Tests;
 
-public sealed class Migration005Tests
+public sealed class NewTableMigrationTests
 {
-    [Fact]
-    public void ImpersonationsMatchTheMigration()
+    [Theory]
+    [InlineData(typeof(Impersonation), "005_impersonations.sql")]
+    [InlineData(typeof(PasskeyCredential), "006_passkeys.sql")]
+    public void TablesMatchTheirMigration(Type entity, string file)
     {
         using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
             .UseMySQL("Server=localhost;Database=model_validation;User Id=unused;Password=unused")
             .Options);
-        var views = db.Model.FindEntityType(typeof(Impersonation))!;
-        var sql = File.ReadAllText(Path.Combine(RepoRoot(), "db", "migrations", "005_impersonations.sql"));
+        var table = db.Model.FindEntityType(entity)!;
+        var sql = File.ReadAllText(Path.Combine(RepoRoot(), "db", "migrations", file));
 
-        Assert.Contains($"CREATE TABLE IF NOT EXISTS {views.GetTableName()} (", sql);
-        foreach (var column in views.GetProperties().Select(p => p.GetColumnName()))
+        Assert.Contains($"CREATE TABLE IF NOT EXISTS {table.GetTableName()} (", sql);
+        foreach (var column in table.GetProperties().Select(p => p.GetColumnName()))
             Assert.Contains($"    {column} ", sql);
-        foreach (var fk in views.GetForeignKeys())
+        foreach (var fk in table.GetForeignKeys())
             Assert.Contains($"CONSTRAINT {fk.GetConstraintName()} ", sql);
     }
 
