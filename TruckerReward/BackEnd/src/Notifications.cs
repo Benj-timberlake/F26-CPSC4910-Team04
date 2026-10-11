@@ -11,9 +11,9 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             // keeps the reset link out of the database
             stored: "A link to reset your password was emailed to you. It works for one hour.");
 
-    public Task AccountInvited(User user, string link) =>
+    public Task AccountInvited(User user, string link, string invitedBy) =>
         Send(user, "Your TruckerReward account is ready",
-            $"Hi {user.Username},\n\nAn administrator made you a TruckerReward {user.UserType} account. Use this link within three days to choose your password:\n{link}\n\nAfter that, use Forgot password on the login page.",
+            $"Hi {user.Username},\n\n{invitedBy} made you a TruckerReward {user.UserType} account. Use this link within three days to choose your password:\n{link}\n\nAfter that, use Forgot password on the login page.",
             null, emailed: true,
             stored: "Your account was created by an administrator. A link to choose your password was emailed to you.");
 

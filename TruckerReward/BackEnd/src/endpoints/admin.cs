@@ -113,12 +113,12 @@ public static class AdminEndpoints
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (req.UserType is not (AuthEndpoints.Driver or AuthEndpoints.Sponsor or AuthEndpoints.Admin))
             return Results.BadRequest(new { message = "Account type must be driver, sponsor or admin." });
-        return await Invite(db, notifications, clock, config, req.UserType, req.Username, req.FirstName, req.LastName, req.Email, req.CompanyId);
+        return await Invite(db, notifications, clock, config, "An administrator", req.UserType, req.Username, req.FirstName, req.LastName, req.Email, req.CompanyId);
     }
 
     // the new user sets a password from the emailed link
     internal static async Task<IResult> Invite(AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config,
-        string userType, string? usernameIn, string? firstNameIn, string? lastNameIn, string? emailIn, int? companyId)
+        string invitedBy, string userType, string? usernameIn, string? firstNameIn, string? lastNameIn, string? emailIn, int? companyId)
     {
         var username = usernameIn?.Trim() ?? "";
         var (firstName, lastName, address) = (Trim(firstNameIn), Trim(lastNameIn), Trim(emailIn));
@@ -140,7 +140,7 @@ public static class AdminEndpoints
         await db.SaveChangesAsync();
         var link = PasswordEndpoints.ResetLink(db, user, clock.GetUtcNow().UtcDateTime + InviteLifetime, config);
         await db.SaveChangesAsync();
-        await notifications.AccountInvited(user, link);
+        await notifications.AccountInvited(user, link, invitedBy);
         await notifications.AccountCreated(user);
         return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
     }
