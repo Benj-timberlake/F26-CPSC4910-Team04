@@ -115,5 +115,31 @@ public sealed class AuditEndpointTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/users/999/audit")).StatusCode);
     }
 
+    [Fact]
+    public async Task CsvHasTheSameRowsAsTheLog()
+    {
+        await Start();
+
+        var response = await client.GetAsync($"/users/{sue}/audit.csv?category=points");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/csv", response.Content.Headers.ContentType!.MediaType);
+        var lines = (await response.Content.ReadAsStringAsync()).Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("When (UTC),Category,Account,What happened,By", lines[0]);
+        Assert.Equal("\"2026-09-15 12:00:00\",\"points\",\"bob\",\"'+250 points: Safe week\",\"sue\"", lines[1]);
+        Assert.Equal(2, lines.Length);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/users/{bob}/audit.csv")).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("=HYPERLINK(\"x\")", "\"'=HYPERLINK(\"\"x\"\")\"")]
+    [InlineData("a,b", "\"a,b\"")]
+    [InlineData("@SUM(1)", "\"'@SUM(1)\"")]
+    public void CsvCellsAreQuotedAndFormulasDefused(string detail, string cell)
+    {
+        var csv = AuditEndpoints.Csv([new AuditEntry(new DateTime(2026, 1, 1), "points", null, "bob", detail, null)]);
+        Assert.Contains("," + cell + ",", csv);
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }
