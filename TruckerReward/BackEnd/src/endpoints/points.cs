@@ -13,6 +13,7 @@ public static class PointsEndpoints
         // id is the sponsor or admin who is looking
         app.MapGet("/users/{id:int}/points/drivers", Drivers);
         app.MapPost("/users/{id:int}/points/drivers/{driverId:int}", Change);
+        app.MapPost("/users/{id:int}/points/drivers/{driverId:int}/remove", Remove);
         // period is all, month or week
         app.MapGet("/users/{id:int}/leaderboard", Leaderboard);
     }
@@ -118,6 +119,33 @@ public static class PointsEndpoints
         return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, driver.Points, spent));
     }
 
+    // cancels the accepted application to allow reapplying
+    private static async Task<IResult> Remove(int id, int driverId, RemoveDriverRequest req, AppDbContext db, Notifications notifications, TimeProvider clock)
+    {
+        var reason = req.Reason?.Trim() ?? "";
+        if (reason.Length is 0 or > MaxReasonLength)
+            return Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." });
+        var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+        var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == driverId && u.UserType == AuthEndpoints.Driver);
+        if (actor is null || driver?.CompanyId is not { } company)
+            return Results.NotFound(new { message = "That driver isn't with a sponsor." });
+        if (!CanManage(actor) || (actor.UserType == AuthEndpoints.Sponsor && actor.CompanyId != company))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        driver.CompanyId = null;
+        var now = clock.GetUtcNow().UtcDateTime;
+        foreach (var application in await db.Applications.Where(a => a.ApplicantId == driverId && a.CompanyId == company && a.Status == "approved").ToListAsync())
+        {
+            application.Status = "canceled";
+            application.ReviewerId = actor.Id;
+            application.ReviewerReasoning = reason;
+            application.ResponseTimestamp = now;
+        }
+        await db.SaveChangesAsync();
+        await notifications.ApplicationReviewed(driver, company, "approved", "canceled", reason);
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> Leaderboard(int id, string? period, int? companyId, AppDbContext db, TimeProvider clock)
     {
         var viewer = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
@@ -162,6 +190,8 @@ public record LeaderboardRow(int Rank, int Id, string Username, string FirstName
 
 // your rank is null for viewers off the board
 public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Rows);
+
+public record RemoveDriverRequest(string? Reason);
 
 public record ChangePointsRequest(int Points, string? Reason);
 
