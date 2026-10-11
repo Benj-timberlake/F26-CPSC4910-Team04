@@ -152,4 +152,38 @@ public sealed class AdminAccountsPageTests : TestContext
         page.WaitForAssertion(() => Assert.Equal("That email address is already in use.", page.Find(".tr-alert-error").TextContent));
         Assert.Single(page.FindAll("form.edit-form"));
     }
+
+    [Fact]
+    public void CreatingPostsTheNewAccount()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["POST /admin/accounts"] = (HttpStatusCode.Created, "{}");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+
+        page.Find("button.new-account").Click();
+        page.Find("input[aria-label='New username']").Change("kim");
+        page.Find("input[aria-label='New first name']").Change("Kim");
+        page.Find("input[aria-label='New last name']").Change("Lee");
+        page.Find("input[aria-label='New email']").Change("kim@example.com");
+        page.Find("select[aria-label='New account sponsor']").Change("2");
+        page.Find("form.create-form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("kim was created and emailed a link to set a password.", page.Find(".tr-alert-success").TextContent));
+        Assert.Equal("""{"adminId":4,"userType":"driver","username":"kim","firstName":"Kim","lastName":"Lee","email":"kim@example.com","companyId":2}""", backend.Bodies["POST /admin/accounts"]);
+        Assert.Empty(page.FindAll("form.create-form"));
+    }
+
+    [Fact]
+    public void AdminAccountsHaveNoSponsorPicker()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+
+        page.Find("button.new-account").Click();
+        page.Find("select[aria-label='New account type']").Change("admin");
+
+        Assert.Empty(page.FindAll("select[aria-label='New account sponsor']"));
+    }
 }

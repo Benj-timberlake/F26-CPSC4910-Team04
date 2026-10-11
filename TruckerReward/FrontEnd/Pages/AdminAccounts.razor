@@ -47,6 +47,37 @@
         <button type="submit" class="tr-btn">Apply</button>
     </form>
 
+    @if (creating is null)
+    {
+        <button type="button" class="tr-btn-outline new-account" @onclick="() => creating = new()">New account</button>
+    }
+    else
+    {
+        <form class="create-form" @onsubmit="Create">
+            <select aria-label="New account type" @bind="creating.UserType">
+                <option value="driver">Driver</option>
+                <option value="sponsor">Sponsor</option>
+                <option value="admin">Admin</option>
+            </select>
+            <input aria-label="New username" placeholder="Username" @bind="creating.Username" />
+            <input aria-label="New first name" placeholder="First name" @bind="creating.FirstName" />
+            <input aria-label="New last name" placeholder="Last name" @bind="creating.LastName" />
+            <input type="email" aria-label="New email" placeholder="Email" @bind="creating.Email" />
+            @if (creating.UserType != "admin")
+            {
+                <select aria-label="New account sponsor" @bind="creating.CompanyId">
+                    <option value="0">No sponsor</option>
+                    @foreach (var c in companies)
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+            }
+            <button type="submit" class="tr-btn" disabled="@busy">Create</button>
+            <button type="button" class="tr-btn-outline" @onclick="() => creating = null">Cancel</button>
+        </form>
+    }
+
     @if (notice is not null)
     {
         <p role="status" class="tr-alert-success">@notice</p>
@@ -166,10 +197,18 @@
         font-weight: 700;
     }
 
-    .edit-form {
+    .new-account {
+        margin-bottom: 16px;
+    }
+
+    .create-form, .edit-form {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+    }
+
+    .create-form {
+        margin-bottom: 16px;
     }
 
     tr.inactive td {
@@ -194,6 +233,7 @@
     private string? error;
     private string? notice;
     private Edit? editing;
+    private NewAccount? creating;
 
     protected override async Task OnInitializedAsync()
     {
@@ -243,6 +283,37 @@
             if (response.IsSuccessStatusCode)
             {
                 notice = $"{a.Username} was {(next == "active" ? "reactivated" : "deactivated")}.";
+                await Load();
+            }
+            else
+            {
+                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private async Task Create()
+    {
+        var c = creating!;
+        busy = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync("admin/accounts", new
+            {
+                adminId = int.Parse(id!), userType = c.UserType, username = c.Username, firstName = c.FirstName, lastName = c.LastName,
+                email = c.Email, companyId = c.UserType == "admin" || c.CompanyId == 0 ? (int?)null : c.CompanyId
+            });
+            if (response.IsSuccessStatusCode)
+            {
+                notice = $"{c.Username.Trim()} was created and emailed a link to set a password.";
+                creating = null;
                 await Load();
             }
             else
@@ -310,6 +381,16 @@
     private sealed record Counts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive);
     private sealed record Company(int Id, string Name);
     private sealed record Details(string FirstName, string LastName, string Email, string PhoneNumber, string Address, int? CompanyId);
+
+    private sealed class NewAccount
+    {
+        public string UserType { get; set; } = "driver";
+        public string Username { get; set; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public int CompanyId { get; set; }
+    }
 
     private sealed class Edit
     {
