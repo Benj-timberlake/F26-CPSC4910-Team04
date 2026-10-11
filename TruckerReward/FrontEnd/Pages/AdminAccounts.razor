@@ -129,6 +129,12 @@
                                         @(a.Status == "active" ? "Deactivate" : "Reactivate")
                                     </button>
                                     <button type="button" class="tr-btn-outline edit" disabled="@busy" @onclick="() => StartEdit(a)">Edit</button>
+                                    @if (a.UserType != "admin" && a.Status == "active")
+                                    {
+                                        <form class="view-as" method="post" action="account/view-as/@a.Id">
+                                            <button type="submit" class="tr-btn-outline">View as</button>
+                                        </form>
+                                    }
                                 }
                             </td>
                         </tr>
@@ -195,6 +201,10 @@
         margin: 0;
         font-size: 22px;
         font-weight: 700;
+    }
+
+    form.view-as {
+        display: inline;
     }
 
     .new-account {

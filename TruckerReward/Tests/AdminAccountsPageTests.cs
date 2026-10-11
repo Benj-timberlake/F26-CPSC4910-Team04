@@ -186,4 +186,14 @@ public sealed class AdminAccountsPageTests : TestContext
 
         Assert.Empty(page.FindAll("select[aria-label='New account sponsor']"));
     }
+
+    [Fact]
+    public void ViewAsPostsForActiveNonAdmins()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        var page = Render();
+
+        page.WaitForAssertion(() => Assert.Single(page.FindAll("form.view-as")));
+        Assert.Equal("account/view-as/8", page.Find("form.view-as").GetAttribute("action"));
+    }
 }

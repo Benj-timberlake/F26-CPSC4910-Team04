@@ -76,6 +76,9 @@
                                     else
                                     {
                                         <button type="button" class="tr-btn-outline" @onclick="() => Edit(d)">Change points</button>
+                                        <form class="view-as" method="post" action="account/view-as/@d.Id">
+                                            <button type="submit" class="tr-btn-outline">View as</button>
+                                        </form>
                                     }
                                 </td>
                             </tr>
@@ -88,6 +91,10 @@
 </div>
 
 <style>
+    form.view-as {
+        display: inline;
+    }
+
     .search {
         display: flex;
         gap: 8px;
