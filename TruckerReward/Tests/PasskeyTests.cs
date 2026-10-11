@@ -38,6 +38,8 @@ public sealed class PasskeyTests : IAsyncDisposable
     private async Task<HttpResponseMessage> Register(int user, SoftAuthenticator key, int completeAs = 0, string name = "iPhone")
     {
         var begin = await Post($"/users/{user}/passkeys/begin");
+        // the browser rejects null where it wants a list
+        Xunit.Assert.DoesNotContain(":null", begin.GetRawText());
         return await client.PostAsJsonAsync($"/users/{(completeAs == 0 ? user : completeAs)}/passkeys/complete",
             new { requestId = begin.GetProperty("requestId").GetString(), name, response = key.Create(begin.GetProperty("options")) });
     }
@@ -45,6 +47,7 @@ public sealed class PasskeyTests : IAsyncDisposable
     private async Task<(string RequestId, object Response)> Assert(SoftAuthenticator key)
     {
         var begin = await Post("/auth/passkey/begin");
+        Xunit.Assert.DoesNotContain(":null", begin.GetRawText());
         return (begin.GetProperty("requestId").GetString()!, key.Get(begin.GetProperty("options")));
     }
 
