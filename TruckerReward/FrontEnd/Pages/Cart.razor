@@ -61,6 +61,10 @@
         </div>
         <div class="cart-total">
             <strong>Cart total: @RewardPoints.Format(items.Sum(item => RewardPoints.FromDollars(item.Price) * item.Quantity))</strong>
+            @if (balance is not null)
+            {
+                <span class="cart-balance">Your balance: @RewardPoints.Format(balance.Value), @RewardPoints.Format(balance.Value - Total) after this order</span>
+            }
             <button type="button" class="tr-btn" disabled="@(saving || items.Count == 0)" @onclick="SendOrder">Send order</button>
         </div>
     }
@@ -76,6 +80,7 @@
     private bool saving;
     private int userId;
     private bool orderSent;
+    private int? balance;
 
     private async Task SendOrder()
     {
@@ -96,6 +101,7 @@
             response.EnsureSuccessStatusCode();
             items.Clear();
             orderSent = true;
+            await LoadBalance();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -148,6 +154,7 @@
         {
             items = await client.GetFromJsonAsync<List<CartItem>>($"users/{id}/cart")
                 ?? throw new System.Text.Json.JsonException("Missing cart response.");
+            await LoadBalance();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -155,6 +162,23 @@
         }
     }
 
+    private decimal Total => items?.Sum(item => RewardPoints.FromDollars(item.Price) * item.Quantity) ?? 0;
+
+    // a missing balance just hides the line
+    private async Task LoadBalance()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            balance = (await client.GetFromJsonAsync<Account>($"users/{userId}"))?.Points;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            balance = null;
+        }
+    }
+
     private sealed record CartItem(uint Id, string Name, decimal Price, string? Description, int Quantity = 1);
     private sealed record OrderError(string Message);
+    private sealed record Account(int Points);
 }
