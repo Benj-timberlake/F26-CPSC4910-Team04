@@ -15,13 +15,17 @@ public static class CartEndpoints
                 .Where(item => item.User.UserType == "driver" && item.User.CompanyId == sponsor.CompanyId
                     && !item.WasOrdered && !item.InCart && item.PointsHistory != null
                     && item.PointsHistory.UserId == item.UserId).ToListAsync();
+            var orderIds = items.Select(item => item.PointsHistoryId!.Value).Distinct().ToList();
+            var reasons = await db.AuditHistories.AsNoTracking().Where(a => orderIds.Contains(a.PointsHistoryId))
+                .GroupBy(a => a.PointsHistoryId).Select(g => new { g.Key, Reason = g.Min(a => a.Resoning) }).ToDictionaryAsync(r => r.Key, r => r.Reason);
             return Results.Ok(items.GroupBy(item => item.PointsHistoryId!.Value).Select(group =>
             {
                 var first = group.First();
                 return new SponsorOrderDetails(group.Key, first.UserId,
                     first.User.FirstName + " " + first.User.LastName, first.PointsHistory!.Timestamp,
                     group.Sum(item => item.Price * item.Quantity),
-                    group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList());
+                    group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList(),
+                    reasons.GetValueOrDefault(group.Key));
             }).OrderByDescending(order => order.Timestamp).ThenByDescending(order => order.OrderId));
         });
         app.MapPost("/users/{id:int}/driver-orders/{orderId:int}/buy", async (int id, int orderId, AppDbContext db, Notifications notifications) =>
@@ -81,6 +85,7 @@ public static class CartEndpoints
                 return Results.BadRequest(new { message = "The refund would exceed the maximum points balance." });
             user.Points = (int)balance;
             db.CartItems.RemoveRange(items);
+            db.AuditHistories.RemoveRange(await db.AuditHistories.Where(a => a.PointsHistoryId == historyId).ToListAsync());
             db.PointsHistory.Remove(history);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -89,8 +94,11 @@ public static class CartEndpoints
             return Results.NoContent();
         });
 
-        app.MapPost("/users/{id:int}/cart/send-order", async (int id, AppDbContext db, Notifications notifications, TimeProvider clock) =>
+        app.MapPost("/users/{id:int}/cart/send-order", async (int id, SendOrderRequest? request, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
+            var reason = request?.Reason?.Trim() ?? "";
+            if (reason.Length > PointsEndpoints.MaxReasonLength)
+                return Results.BadRequest(new { message = $"Keep the reason to {PointsEndpoints.MaxReasonLength} characters." });
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             // Lock this user's balance before reading the cart so duplicate submissions
             // cannot both spend the same points. All changes commit or roll back together.
@@ -120,6 +128,9 @@ public static class CartEndpoints
                 Timestamp = clock.GetUtcNow().UtcDateTime
             };
             db.PointsHistory.Add(history);
+            // the driver's reason goes on the audit row
+            if (reason != "")
+                db.AuditHistories.Add(new AuditHistory { UserId = id, PointsHistory = history, Resoning = reason });
             foreach (var item in items)
             {
                 item.InCart = false;
@@ -198,5 +209,7 @@ public static class CartEndpoints
 public record CartItemDetails(uint Id, string Name, decimal Price, string? Description, int Quantity = 1);
 public record UpdateCartQuantity(int Quantity);
 public record AddCartItem(string Name, decimal Price, string? Description);
-public record SponsorOrderDetails(int OrderId, int DriverId, string DriverName, DateTime? Timestamp, decimal TotalPrice, List<CartItemDetails> Items);
+public record SponsorOrderDetails(int OrderId, int DriverId, string DriverName, DateTime? Timestamp, decimal TotalPrice, List<CartItemDetails> Items, string? Reason = null);
+
+public record SendOrderRequest(string? Reason);
 public record PastOrderDetails(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, string Status, List<CartItemDetails> Items);
