@@ -116,6 +116,21 @@ public sealed class AdminAccountsTests : IAsyncDisposable
         Assert.Equal("bob", Assert.Single(await List($"?companyId={acme}&type=driver")).Username);
     }
 
+    [Fact]
+    public async Task FindsDriversAndSponsorsWithoutASponsor()
+    {
+        await Start();
+        using (var db = app.Db())
+        {
+            var company = new Company { Name = "Acme" };
+            db.Add(company);
+            await db.SaveChangesAsync();
+            await db.Users.Where(u => u.Username == "bob").ExecuteUpdateAsync(u => u.SetProperty(x => x.CompanyId, company.Id));
+        }
+
+        Assert.Equal(["amy", "sue"], (await List("?noSponsor=true")).Select(a => a.Username).Order());
+    }
+
     private async Task<int> Id(string username)
     {
         using var db = app.Db();

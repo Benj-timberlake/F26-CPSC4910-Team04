@@ -39,7 +39,7 @@ public static class AdminEndpoints
         });
 
         // sort is name, created or last-login
-        app.MapGet("/admin/accounts", async (string? search, string? type, string? status, string? sort, int? companyId, AppDbContext db) =>
+        app.MapGet("/admin/accounts", async (string? search, string? type, string? status, string? sort, int? companyId, bool? noSponsor, AppDbContext db) =>
         {
             var users = db.Users.AsNoTracking();
             if (!string.IsNullOrWhiteSpace(search))
@@ -54,6 +54,8 @@ public static class AdminEndpoints
                 users = users.Where(u => u.Status == status);
             if (companyId is not null)
                 users = users.Where(u => u.CompanyId == companyId);
+            if (noSponsor == true)
+                users = users.Where(u => u.UserType != AuthEndpoints.Admin && u.CompanyId == null);
 
             var rows = users.Select(u => new
             {
