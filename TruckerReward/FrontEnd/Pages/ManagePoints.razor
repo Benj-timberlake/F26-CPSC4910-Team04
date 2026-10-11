@@ -26,6 +26,11 @@
         <form class="search" @onsubmit="Search">
             <label for="search" class="visually-hidden">Search drivers</label>
             <input id="search" type="search" placeholder="Search by name or username" @bind="search" />
+            <select aria-label="Sort" @bind="sort">
+                <option value="name">Sort by name</option>
+                <option value="points">Highest balance first</option>
+                <option value="spent">Most points spent first</option>
+            </select>
             <button type="submit" class="tr-btn">Search</button>
         </form>
 
@@ -46,6 +51,7 @@
                             <th>Driver</th>
                             <th>Email</th>
                             <th>Points</th>
+                            <th>Spent</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -56,6 +62,7 @@
                                 <td>@d.FirstName @d.LastName (@d.Username)</td>
                                 <td>@d.Email</td>
                                 <td class="balance">@d.Points.ToString("N0")</td>
+                                <td class="spent">@d.Spent.ToString("N0")</td>
                                 <td>
                                     @if (editing == d.Id)
                                     {
@@ -110,6 +117,7 @@
     private string? id;
     private List<Driver>? drivers;
     private string? search;
+    private string sort = "name";
     private int? editing;
     private int? amount;
     private string? reason;
@@ -136,7 +144,10 @@
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            var url = $"users/{id}/points/drivers" + (string.IsNullOrWhiteSpace(search) ? "" : $"?search={Uri.EscapeDataString(search.Trim())}");
+            var query = new List<string>();
+            if (!string.IsNullOrWhiteSpace(search)) query.Add("search=" + Uri.EscapeDataString(search.Trim()));
+            if (sort != "name") query.Add("sort=" + sort);
+            var url = $"users/{id}/points/drivers" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
             var response = await client.GetAsync(url);
             // sponsors without a company get a 403
             if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
@@ -188,6 +199,6 @@
         busy = false;
     }
 
-    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points);
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent);
     private sealed record Problem(string? Message);
 }

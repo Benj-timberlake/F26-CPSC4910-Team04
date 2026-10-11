@@ -28,8 +28,18 @@ public static class AdminEndpoints
                     (c, u) => new PasswordChangeEntry(c.ChangedAt, u.Id, u.Username, c.ChangeType, c.IpAddress))
                 .ToListAsync()));
 
+        app.MapGet("/admin/accounts/counts", async (AppDbContext db) =>
+        {
+            var active = db.Users.AsNoTracking().Where(u => u.Status == User.Active);
+            return Results.Ok(new AccountCounts(
+                await active.CountAsync(u => u.UserType == AuthEndpoints.Driver),
+                await active.CountAsync(u => u.UserType == AuthEndpoints.Sponsor),
+                await active.CountAsync(u => u.UserType == AuthEndpoints.Admin),
+                await db.Users.CountAsync(u => u.Status == User.Inactive)));
+        });
+
         // sort is name, created or last-login
-        app.MapGet("/admin/accounts", async (string? search, string? type, string? status, string? sort, AppDbContext db) =>
+        app.MapGet("/admin/accounts", async (string? search, string? type, string? status, string? sort, int? companyId, AppDbContext db) =>
         {
             var users = db.Users.AsNoTracking();
             if (!string.IsNullOrWhiteSpace(search))
@@ -42,6 +52,8 @@ public static class AdminEndpoints
                 users = users.Where(u => u.UserType == type);
             if (!string.IsNullOrWhiteSpace(status))
                 users = users.Where(u => u.Status == status);
+            if (companyId is not null)
+                users = users.Where(u => u.CompanyId == companyId);
 
             var rows = users.Select(u => new
             {
@@ -96,6 +108,8 @@ public static class AdminEndpoints
 }
 
 public record AdminAccount(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
+
+public record AccountCounts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive);
 
 public record AccountStatus(string Status);
 

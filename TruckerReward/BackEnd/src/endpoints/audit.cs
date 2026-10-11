@@ -13,27 +13,55 @@ public static class AuditEndpoints
     {
         app.MapGet("/users/{id:int}/audit", async (int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
         {
-            var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
-            if (actor is null)
-                return Results.NotFound();
-            if (category is not (null or "" or Logins or Passwords or Points))
-                return Results.BadRequest(new { message = "Category must be logins, passwords or points." });
-            if (!PointsEndpoints.CanManage(actor))
-                return Results.StatusCode(StatusCodes.Status403Forbidden);
-
-            var ids = Scope(db, actor, companyId, driverId);
-            var start = from?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue;
-            var end = to?.AddDays(1).ToDateTime(TimeOnly.MinValue) ?? DateTime.MaxValue;
-            var all = string.IsNullOrEmpty(category);
-            var rows = new List<AuditEntry>();
-            if (all || category == Logins)
-                rows.AddRange(await LoginRows(db, ids, start, end));
-            if (all || category == Passwords)
-                rows.AddRange(await PasswordRows(db, ids, start, end));
-            if (all || category == Points)
-                rows.AddRange(await PointRows(db, ids, start, end));
-            return Results.Ok(rows.OrderByDescending(r => r.At).Take(MaxRows).ToList());
+            var (error, rows) = await Query(db, id, category, from, to, companyId, driverId);
+            return error ?? Results.Ok(rows);
         });
+
+        app.MapGet("/users/{id:int}/audit.csv", async (int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
+        {
+            var (error, rows) = await Query(db, id, category, from, to, companyId, driverId);
+            return error ?? Results.File(System.Text.Encoding.UTF8.GetBytes(Csv(rows!)), "text/csv", "audit-log.csv");
+        });
+    }
+
+    private static async Task<(IResult? Error, List<AuditEntry>? Rows)> Query(AppDbContext db, int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId)
+    {
+        var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+        if (actor is null)
+            return (Results.NotFound(), null);
+        if (category is not (null or "" or Logins or Passwords or Points))
+            return (Results.BadRequest(new { message = "Category must be logins, passwords or points." }), null);
+        if (!PointsEndpoints.CanManage(actor))
+            return (Results.StatusCode(StatusCodes.Status403Forbidden), null);
+
+        var ids = Scope(db, actor, companyId, driverId);
+        var start = from?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue;
+        var end = to?.AddDays(1).ToDateTime(TimeOnly.MinValue) ?? DateTime.MaxValue;
+        var all = string.IsNullOrEmpty(category);
+        var rows = new List<AuditEntry>();
+        if (all || category == Logins)
+            rows.AddRange(await LoginRows(db, ids, start, end));
+        if (all || category == Passwords)
+            rows.AddRange(await PasswordRows(db, ids, start, end));
+        if (all || category == Points)
+            rows.AddRange(await PointRows(db, ids, start, end));
+        return (null, rows.OrderByDescending(r => r.At).Take(MaxRows).ToList());
+    }
+
+    public static string Csv(IEnumerable<AuditEntry> rows)
+    {
+        var csv = new System.Text.StringBuilder("When (UTC),Category,Account,What happened,By\r\n");
+        foreach (var r in rows)
+            csv.Append(string.Join(",", new[] { r.At.ToString("yyyy-MM-dd HH:mm:ss"), r.Category, r.Username, r.Detail, r.By ?? "" }.Select(Cell))).Append("\r\n");
+        return csv.ToString();
+    }
+
+    // quotes every cell and defuses spreadsheet formulas
+    private static string Cell(string value)
+    {
+        if (value.Length > 0 && "=+-@\t\r".Contains(value[0]))
+            value = "'" + value;
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 
     // null means every account, which only admins get

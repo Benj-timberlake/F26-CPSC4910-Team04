@@ -63,6 +63,21 @@ public sealed class AuditLogPageTests : TestContext
     }
 
     [Fact]
+    public void PageLinksTheCurrentFilters()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, "[]");
+        backend.Routes["GET /users/5/audit"] = (HttpStatusCode.OK, """[{"at":"2026-09-15T12:00:00","category":"points","userId":8,"username":"bob","detail":"+250 points: x","by":"sue"}]""");
+        backend.Routes["GET /users/5/audit?category=points"] = backend.Routes["GET /users/5/audit"];
+        var page = Render("sponsor", 5);
+        page.WaitForAssertion(() => Assert.Equal("audit/export", page.Find("a.export").GetAttribute("href")));
+
+        page.Find("select[aria-label=Category]").Change("points");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("audit/export?category=points", page.Find("a.export").GetAttribute("href")));
+    }
+
+    [Fact]
     public void SponsorWithoutACompanyIsTold()
     {
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.Forbidden, "");

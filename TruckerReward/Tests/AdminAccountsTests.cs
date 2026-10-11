@@ -88,5 +88,33 @@ public sealed class AdminAccountsTests : IAsyncDisposable
         Assert.Equal(["sue", "bob"], (await List("?sort=last-login")).Select(a => a.Username).Take(2));
     }
 
+    [Fact]
+    public async Task CountsActiveAccountsByType()
+    {
+        await Start();
+
+        var counts = await client.GetFromJsonAsync<AccountCounts>("/admin/accounts/counts");
+
+        Assert.Equal(new AccountCounts(1, 1, 1, 1), counts);
+    }
+
+    [Fact]
+    public async Task FiltersBySponsorCompany()
+    {
+        await Start();
+        int acme;
+        using (var db = app.Db())
+        {
+            var company = new Company { Name = "Acme" };
+            db.Add(company);
+            await db.SaveChangesAsync();
+            acme = company.Id;
+            await db.Users.Where(u => u.Username == "bob" || u.Username == "sue").ExecuteUpdateAsync(u => u.SetProperty(x => x.CompanyId, acme));
+        }
+
+        Assert.Equal(["bob", "sue"], (await List($"?companyId={acme}")).Select(a => a.Username).Order());
+        Assert.Equal("bob", Assert.Single(await List($"?companyId={acme}&type=driver")).Username);
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }

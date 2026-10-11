@@ -57,7 +57,7 @@
         }
         else
         {
-            <p class="tr-muted">Showing the newest @rows.Count entries.</p>
+            <p class="tr-muted">Showing the newest @rows.Count entries. <a class="export" href="@ExportUrl">Download CSV</a></p>
             <div class="tr-table-wrap">
                 <table class="tr-table">
                     <thead>
@@ -113,6 +113,7 @@
     private DateOnly? from;
     private DateOnly? to;
     private string? error;
+    private string applied = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,13 +155,16 @@
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            rows = await client.GetFromJsonAsync<List<Row>>($"users/{id}/audit" + (query.Count > 0 ? "?" + string.Join("&", query) : "")) ?? [];
+            applied = string.Join("&", query);
+            rows = await client.GetFromJsonAsync<List<Row>>($"users/{id}/audit" + (applied == "" ? "" : "?" + applied)) ?? [];
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
             error = "Couldn't load the audit log right now. Try again in a moment.";
         }
     }
+
+    private string ExportUrl => "audit/export" + (applied == "" ? "" : "?" + applied);
 
     private static string Label(string category) => category switch
     {

@@ -23,6 +23,8 @@ public sealed class AdminAccountsPageTests : TestContext
         auth.SetAuthorized("ann");
         auth.SetRoles("admin");
         auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "4"));
+        backend.Routes.TryAdd("GET /companies", (HttpStatusCode.OK, """[{"id":2,"name":"Acme","description":null}]"""));
+        backend.Routes.TryAdd("GET /admin/accounts/counts", (HttpStatusCode.OK, """{"activeDrivers":12,"activeSponsors":3,"activeAdmins":1,"inactive":2}"""));
         Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
             .ConfigurePrimaryHttpMessageHandler(() => backend);
         return RenderComponent<AdminAccounts>();
@@ -61,17 +63,29 @@ public sealed class AdminAccountsPageTests : TestContext
     public void FiltersGoIntoTheQuery()
     {
         backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
-        backend.Routes["GET /admin/accounts?search=bob%20b&type=driver&status=inactive&sort=created"] = (HttpStatusCode.OK, "[]");
+        backend.Routes["GET /admin/accounts?search=bob%20b&type=driver&companyId=2&status=inactive&sort=created"] = (HttpStatusCode.OK, "[]");
         var page = Render();
         page.WaitForAssertion(() => page.Find("tbody tr"));
 
         page.Find("input[type=search]").Change(" bob b ");
         page.Find("select[aria-label='Account type']").Change("driver");
+        page.Find("select[aria-label=Sponsor]").Change("2");
         page.Find("select[aria-label=Status]").Change("inactive");
         page.Find("select[aria-label=Sort]").Change("created");
         page.Find("form").Submit();
 
         page.WaitForAssertion(() => Assert.Contains("No accounts match.", page.Markup));
+    }
+
+    [Fact]
+    public void ShowsActiveCounts()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        var page = Render();
+
+        page.WaitForAssertion(() => Assert.Equal("12", page.Find(".counts .drivers").TextContent));
+        Assert.Equal("3", page.Find(".counts .sponsors").TextContent);
+        Assert.Contains("Acme", page.Find("select[aria-label=Sponsor]").TextContent);
     }
 
     [Fact]
