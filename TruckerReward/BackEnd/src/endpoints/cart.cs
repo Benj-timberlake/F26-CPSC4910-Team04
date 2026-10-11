@@ -54,7 +54,7 @@ public static class CartEndpoints
             {
                 var history = group.First().PointsHistory!;
                 return new PastOrderDetails(history.Id, history.Timestamp, -(long)history.PointsDelta,
-                    CanRefund(history, now), group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList());
+                    CanRefund(history, now), group.All(item => item.WasOrdered) ? OrderOrdered : OrderPending, group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList());
             }).OrderByDescending(order => order.Timestamp).ThenByDescending(order => order.PointsHistoryId));
         });
 
@@ -182,6 +182,10 @@ public static class CartEndpoints
             return removed == 0 ? Results.NotFound() : Results.NoContent();
         });
     }
+    // pending until the sponsor orders it
+    public const string OrderPending = "pending";
+    public const string OrderOrdered = "ordered";
+
     private static bool CanRefund(PointsHistory history, DateTime now) =>
         history.PointsDelta <= 0 && history.Timestamp is DateTime timestamp
         && timestamp <= now && now - timestamp < TimeSpan.FromHours(24);
@@ -192,4 +196,4 @@ public record CartItemDetails(uint Id, string Name, decimal Price, string? Descr
 public record UpdateCartQuantity(int Quantity);
 public record AddCartItem(string Name, decimal Price, string? Description);
 public record SponsorOrderDetails(int OrderId, int DriverId, string DriverName, DateTime? Timestamp, decimal TotalPrice, List<CartItemDetails> Items);
-public record PastOrderDetails(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, List<CartItemDetails> Items);
+public record PastOrderDetails(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, string Status, List<CartItemDetails> Items);
