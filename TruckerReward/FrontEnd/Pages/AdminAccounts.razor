@@ -97,9 +97,36 @@
                                     <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => Toggle(a)">
                                         @(a.Status == "active" ? "Deactivate" : "Reactivate")
                                     </button>
+                                    <button type="button" class="tr-btn-outline edit" disabled="@busy" @onclick="() => StartEdit(a)">Edit</button>
                                 }
                             </td>
                         </tr>
+                        @if (editing is not null && editing.Id == a.Id)
+                        {
+                            <tr class="editing">
+                                <td colspan="8">
+                                    <form class="edit-form" @onsubmit="SaveEdit">
+                                        <input aria-label="First name" @bind="editing.FirstName" />
+                                        <input aria-label="Last name" @bind="editing.LastName" />
+                                        <input type="email" aria-label="Email" @bind="editing.Email" />
+                                        <input aria-label="Phone number" @bind="editing.PhoneNumber" />
+                                        <input aria-label="Address" @bind="editing.Address" />
+                                        @if (a.UserType != "admin")
+                                        {
+                                            <select aria-label="Account sponsor" @bind="editing.CompanyId">
+                                                <option value="0">No sponsor</option>
+                                                @foreach (var c in companies)
+                                                {
+                                                    <option value="@c.Id">@c.Name</option>
+                                                }
+                                            </select>
+                                        }
+                                        <button type="submit" class="tr-btn" disabled="@busy">Save</button>
+                                        <button type="button" class="tr-btn-outline" @onclick="() => editing = null">Cancel</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -139,6 +166,12 @@
         font-weight: 700;
     }
 
+    .edit-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
     tr.inactive td {
         color: #6b7280;
     }
@@ -160,6 +193,7 @@
     private bool busy;
     private string? error;
     private string? notice;
+    private Edit? editing;
 
     protected override async Task OnInitializedAsync()
     {
@@ -223,10 +257,69 @@
         busy = false;
     }
 
+    private async Task StartEdit(Account a)
+    {
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var d = await client.GetFromJsonAsync<Details>($"users/{a.Id}");
+            editing = d is null ? null : new Edit { Id = a.Id, Username = a.Username, FirstName = d.FirstName, LastName = d.LastName, Email = d.Email, PhoneNumber = d.PhoneNumber, Address = d.Address, CompanyId = d.CompanyId ?? 0 };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load that account right now. Try again in a moment.";
+        }
+    }
+
+    private async Task SaveEdit()
+    {
+        var e = editing!;
+        busy = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PutAsJsonAsync($"admin/accounts/{e.Id}", new
+            {
+                adminId = int.Parse(id!), firstName = e.FirstName, lastName = e.LastName, email = e.Email,
+                phoneNumber = e.PhoneNumber, address = e.Address, companyId = e.CompanyId == 0 ? (int?)null : e.CompanyId
+            });
+            if (response.IsSuccessStatusCode)
+            {
+                notice = $"{e.Username} was updated.";
+                editing = null;
+                await Load();
+            }
+            else
+            {
+                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
     private static string When(DateTime? utc) => utc is null ? "Unknown" : utc.Value.ToString("yyyy-MM-dd HH:mm");
 
     private sealed record Account(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
     private sealed record Problem(string? Message);
     private sealed record Counts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive);
     private sealed record Company(int Id, string Name);
+    private sealed record Details(string FirstName, string LastName, string Email, string PhoneNumber, string Address, int? CompanyId);
+
+    private sealed class Edit
+    {
+        public int Id { get; init; }
+        public string Username { get; init; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+        public string Address { get; set; } = "";
+        public int CompanyId { get; set; }
+    }
 }

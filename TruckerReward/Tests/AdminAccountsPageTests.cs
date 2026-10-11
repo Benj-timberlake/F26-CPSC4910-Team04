@@ -115,4 +115,41 @@ public sealed class AdminAccountsPageTests : TestContext
 
         page.WaitForAssertion(() => Assert.Equal("That account is already inactive.", page.Find(".tr-alert-error").TextContent));
     }
+
+    [Fact]
+    public void EditingLoadsTheAccountAndSaves()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["GET /users/8"] = (HttpStatusCode.OK, """{"id":8,"userType":"driver","username":"bob","firstName":"Bob","lastName":"Baker","email":"bob@example.com","phoneNumber":"555","address":"","companyName":null,"companyId":null,"points":0,"pendingCompanyName":null}""");
+        backend.Routes["PUT /admin/accounts/8"] = (HttpStatusCode.NoContent, "");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("button.edit"));
+
+        page.Find("button.edit").Click();
+        page.WaitForAssertion(() => Assert.Equal("555", page.Find("input[aria-label='Phone number']").GetAttribute("value")));
+        page.Find("input[aria-label='First name']").Change("Robert");
+        page.Find("select[aria-label='Account sponsor']").Change("2");
+        page.Find("form.edit-form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("bob was updated.", page.Find(".tr-alert-success").TextContent));
+        Assert.Equal("""{"adminId":4,"firstName":"Robert","lastName":"Baker","email":"bob@example.com","phoneNumber":"555","address":"","companyId":2}""", backend.Bodies["PUT /admin/accounts/8"]);
+        Assert.Empty(page.FindAll("form.edit-form"));
+    }
+
+    [Fact]
+    public void EditRefusalIsShown()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["GET /users/8"] = (HttpStatusCode.OK, """{"id":8,"userType":"driver","username":"bob","firstName":"Bob","lastName":"Baker","email":"bob@example.com","phoneNumber":"","address":"","companyName":null,"companyId":null,"points":0,"pendingCompanyName":null}""");
+        backend.Routes["PUT /admin/accounts/8"] = (HttpStatusCode.Conflict, """{"message":"That email address is already in use."}""");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("button.edit"));
+
+        page.Find("button.edit").Click();
+        page.WaitForAssertion(() => page.Find("form.edit-form"));
+        page.Find("form.edit-form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("That email address is already in use.", page.Find(".tr-alert-error").TextContent));
+        Assert.Single(page.FindAll("form.edit-form"));
+    }
 }
