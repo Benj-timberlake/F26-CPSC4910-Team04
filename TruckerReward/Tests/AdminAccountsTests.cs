@@ -180,5 +180,50 @@ public sealed class AdminAccountsTests : IAsyncDisposable
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task AdminCreatesAnAccountThatSetsItsOwnPassword()
+    {
+        await Start();
+        var ann = await Id("ann");
+
+        var response = await client.PostAsJsonAsync("/admin/accounts", new
+        {
+            adminId = ann, userType = "admin", username = " kim ", firstName = "Kim", lastName = "Lee", email = "kim@example.com"
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.Created, response.StatusCode);
+        using (var db = app.Db())
+        {
+            var kim = await db.Users.SingleAsync(u => u.Username == "kim");
+            Assert.Equal(("admin", null, BackEnd.Models.User.Active), (kim.UserType, kim.Password, kim.Status));
+        }
+        var invite = Assert.Single(app.Email.Sent, m => m.To == "kim@example.com");
+        var token = System.Text.RegularExpressions.Regex.Match(invite.Body, "token=([A-Za-z0-9_-]+)").Groups[1].Value;
+
+        app.Clock.Advance(TimeSpan.FromDays(2));
+        var reset = await client.PostAsJsonAsync("/auth/reset", new { token, newPassword = "Correct-Horse-9", ipAddress = "" });
+
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, reset.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("sue", "driver", "kim", "kim@example.com", 403)]
+    [InlineData("ann", "boss", "kim", "kim@example.com", 400)]
+    [InlineData("ann", "driver", "bob", "kim@example.com", 409)]
+    [InlineData("ann", "driver", "kim", "bob@example.com", 409)]
+    [InlineData("ann", "driver", "kim", "nope", 400)]
+    public async Task AdminCreatesAreChecked(string actor, string type, string username, string email, int status)
+    {
+        await Start();
+
+        var response = await client.PostAsJsonAsync("/admin/accounts", new
+        {
+            adminId = await Id(actor), userType = type, username, firstName = "Kim", lastName = "Lee", email
+        });
+
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Empty(app.Email.Sent);
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }

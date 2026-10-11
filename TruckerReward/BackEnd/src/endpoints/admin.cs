@@ -100,6 +100,44 @@ public static class AdminEndpoints
             return Results.NoContent();
         });
 
+        // no password, so the new user picks one from the emailed link
+        app.MapPost("/admin/accounts", async (CreateAccountRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config) =>
+        {
+            if (!await db.Users.AnyAsync(u => u.Id == req.AdminId && u.UserType == AuthEndpoints.Admin))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            var username = req.Username?.Trim() ?? "";
+            var firstName = req.FirstName?.Trim() ?? "";
+            var lastName = req.LastName?.Trim() ?? "";
+            var address = req.Email?.Trim() ?? "";
+            if (req.UserType is not (AuthEndpoints.Driver or AuthEndpoints.Sponsor or AuthEndpoints.Admin))
+                return Results.BadRequest(new { message = "Account type must be driver, sponsor or admin." });
+            if (username.Length is 0 or > 255)
+                return Results.BadRequest(new { message = "Usernames are 1 to 255 characters." });
+            if (firstName.Length is 0 or > 100 || lastName.Length is 0 or > 100)
+                return Results.BadRequest(new { message = "First and last names are required and must be 100 characters or fewer." });
+            if (address.Length is 0 or > 255 || !System.Net.Mail.MailAddress.TryCreate(address, out var parsed) || parsed.Address != address)
+                return Results.BadRequest(new { message = "Enter a valid email address of 255 characters or fewer." });
+            if (req.CompanyId is not null && (req.UserType == AuthEndpoints.Admin || !await db.Companies.AnyAsync(c => c.Id == req.CompanyId)))
+                return Results.BadRequest(new { message = "Pick an existing sponsor, and only for drivers and sponsors." });
+            if (await db.Users.AnyAsync(u => u.Username == username))
+                return Results.Conflict(new { message = "That username is already taken." });
+            if (await db.Users.AnyAsync(u => u.Email == address))
+                return Results.Conflict(new { message = "An account with that email already exists." });
+
+            var user = new User
+            {
+                UserType = req.UserType, Username = username, FirstName = firstName, LastName = lastName,
+                Email = address, PhoneNumber = "", Address = "", CompanyId = req.CompanyId
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            var link = PasswordEndpoints.ResetLink(db, user, clock.GetUtcNow().UtcDateTime + InviteLifetime, config);
+            await db.SaveChangesAsync();
+            await notifications.AccountInvited(user, link);
+            await notifications.AccountCreated(user);
+            return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
+        });
+
         // username, password and type have their own flows
         app.MapPut("/admin/accounts/{id:int}", async (int id, EditAccountRequest req, AppDbContext db, IEmailSender email) =>
         {
@@ -141,6 +179,7 @@ public static class AdminEndpoints
     }
 
     public const int MaxAccounts = 500;
+    public static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(3);
 
     // lists take an optional limit, capped so nobody asks for the whole table
     private static int Limit(int? requested) => requested is > 0 and <= 500 ? requested.Value : 100;
@@ -151,6 +190,8 @@ public record AdminAccount(int Id, string Username, string FirstName, string Las
 public record AccountCounts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive);
 
 public record AccountStatus(string Status);
+
+public record CreateAccountRequest(int AdminId, string? UserType, string? Username, string? FirstName, string? LastName, string? Email, int? CompanyId);
 
 public record EditAccountRequest(int AdminId, string? FirstName, string? LastName, string? Email, string? PhoneNumber, string? Address, int? CompanyId);
 
