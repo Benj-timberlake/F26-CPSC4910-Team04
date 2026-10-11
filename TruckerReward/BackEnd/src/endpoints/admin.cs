@@ -28,7 +28,6 @@ public static class AdminEndpoints
                     (c, u) => new PasswordChangeEntry(c.ChangedAt, u.Id, u.Username, c.ChangeType, c.IpAddress))
                 .ToListAsync()));
 
-        // sort is name, created or last-login
         app.MapGet("/admin/accounts/counts", async (AppDbContext db) =>
         {
             var active = db.Users.AsNoTracking().Where(u => u.Status == User.Active);
@@ -39,6 +38,7 @@ public static class AdminEndpoints
                 await db.Users.CountAsync(u => u.Status == User.Inactive)));
         });
 
+        // sort is name, created or last-login
         app.MapGet("/admin/accounts", async (string? search, string? type, string? status, string? sort, int? companyId, AppDbContext db) =>
         {
             var users = db.Users.AsNoTracking();
