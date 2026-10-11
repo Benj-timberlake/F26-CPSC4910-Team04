@@ -56,4 +56,19 @@ public sealed class CartBalanceTests : TestContext
         page.WaitForAssertion(() => Assert.Contains("Mug", page.Find("tbody").TextContent));
         Assert.Empty(page.FindAll(".cart-balance"));
     }
+
+    [Fact]
+    public void OrderSendsTheReason()
+    {
+        backend.Routes["GET /users/7/cart"] = (HttpStatusCode.OK, """[{"id":1,"name":"Mug","price":2.50,"quantity":2}]""");
+        backend.Routes["POST /users/7/cart/send-order"] = (HttpStatusCode.NoContent, "");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("input.order-reason"));
+
+        page.Find("input.order-reason").Change("Mine broke");
+        page.Find(".cart-total button").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("Order sent successfully", page.Markup));
+        Assert.Equal("""{"reason":"Mine broke"}""", backend.Bodies["POST /users/7/cart/send-order"]);
+    }
 }
