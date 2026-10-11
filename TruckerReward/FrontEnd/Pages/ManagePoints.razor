@@ -64,7 +64,15 @@
                                 <td class="balance">@d.Points.ToString("N0")</td>
                                 <td class="spent">@d.Spent.ToString("N0")</td>
                                 <td>
-                                    @if (editing == d.Id)
+                                    @if (removing == d.Id)
+                                    {
+                                        <div class="change">
+                                            <input type="text" aria-label="Why remove @d.Username" placeholder="Reason" maxlength="500" @bind="reason" />
+                                            <button type="button" class="tr-btn" disabled="@busy" @onclick="() => Remove(d)">Remove from sponsor</button>
+                                            <button type="button" class="tr-btn-outline" @onclick="() => removing = null">Cancel</button>
+                                        </div>
+                                    }
+                                    else if (editing == d.Id)
                                     {
                                         <div class="change">
                                             <input type="number" aria-label="Points for @d.Username" placeholder="+100 or -50" @bind="amount" />
@@ -76,6 +84,10 @@
                                     else
                                     {
                                         <button type="button" class="tr-btn-outline" @onclick="() => Edit(d)">Change points</button>
+                                        @if (!viewing)
+                                        {
+                                            <button type="button" class="tr-btn-outline remove" @onclick="() => StartRemove(d)">Remove</button>
+                                        }
                                         @if (!viewing)
                                         {
                                             <form class="view-as" method="post" action="account/view-as/@d.Id">
@@ -129,6 +141,7 @@
     private string? search;
     private string sort = "name";
     private int? editing;
+    private int? removing;
     private int? amount;
     private string? reason;
     private bool busy;
@@ -180,6 +193,7 @@
     private void Edit(Driver d)
     {
         editing = d.Id;
+        removing = null;
         amount = null;
         reason = null;
         notice = null;
@@ -199,6 +213,40 @@
                 drivers = drivers!.Select(x => x.Id == d.Id && updated is not null ? updated : x).ToList();
                 notice = $"{d.Username} now has {updated?.Points.ToString("N0")} points.";
                 editing = null;
+            }
+            else
+            {
+                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private void StartRemove(Driver d)
+    {
+        removing = d.Id;
+        editing = null;
+        reason = null;
+        notice = null;
+    }
+
+    private async Task Remove(Driver d)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/points/drivers/{d.Id}/remove", new { reason });
+            if (response.IsSuccessStatusCode)
+            {
+                drivers = drivers!.Where(x => x.Id != d.Id).ToList();
+                notice = $"{d.Username} was removed and told why.";
+                removing = null;
             }
             else
             {
