@@ -110,4 +110,21 @@ public sealed class ManagePointsPageTests : TestContext
         page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
         Assert.Equal(forms, page.FindAll("form.view-as").Count);
     }
+
+    [Fact]
+    public void RemovingADriverPostsTheReasonAndDropsTheRow()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        backend.Routes["POST /users/5/points/drivers/8/remove"] = (HttpStatusCode.NoContent, "");
+        var page = Render();
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+
+        page.FindAll("button.remove").First().Click();
+        page.Find("input[aria-label='Why remove bob']").Change("Left the company");
+        page.FindAll("button").First(b => b.TextContent == "Remove from sponsor").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("bob was removed and told why.", page.Find(".tr-alert-success").TextContent));
+        Assert.Equal("""{"reason":"Left the company"}""", backend.Bodies["POST /users/5/points/drivers/8/remove"]);
+        Assert.Single(page.FindAll("tbody tr"));
+    }
 }

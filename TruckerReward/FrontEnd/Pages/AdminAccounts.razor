@@ -29,6 +29,7 @@
         </select>
         <select aria-label="Sponsor" @bind="companyId">
             <option value="0">All sponsors</option>
+            <option value="-1">No sponsor</option>
             @foreach (var c in companies)
             {
                 <option value="@c.Id">@c.Name</option>
@@ -266,7 +267,8 @@
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(search)) query.Add("search=" + Uri.EscapeDataString(search.Trim()));
         if (type != "") query.Add("type=" + type);
-        if (companyId != 0) query.Add("companyId=" + companyId);
+        if (companyId > 0) query.Add("companyId=" + companyId);
+        if (companyId == -1) query.Add("noSponsor=true");
         if (status != "") query.Add("status=" + status);
         if (sort != "name") query.Add("sort=" + sort);
         try

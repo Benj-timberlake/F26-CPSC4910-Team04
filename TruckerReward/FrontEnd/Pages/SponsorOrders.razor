@@ -31,6 +31,7 @@
             <section class="tr-card">
                 <h2>Order #@order.OrderId — @order.DriverName</h2>
                 <p>@(order.Timestamp?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Time unavailable")</p>
+                <p class="order-reason">@(string.IsNullOrEmpty(order.Reason) ? "No reason given." : "Reason: " + order.Reason)</p>
                 <div class="tr-table-wrap">
                     <table class="tr-table">
                         <thead><tr><th>Item</th><th>Quantity</th><th>Unit price</th><th>Total</th></tr></thead>
@@ -98,6 +99,6 @@
     }
 
     private static string Dollars(decimal price) => price.ToString("C2", CultureInfo.GetCultureInfo("en-US"));
-    private sealed record DriverOrder(int OrderId, int DriverId, string DriverName, DateTime? Timestamp, decimal TotalPrice, List<OrderItem> Items);
+    private sealed record DriverOrder(int OrderId, int DriverId, string DriverName, DateTime? Timestamp, decimal TotalPrice, List<OrderItem> Items, string? Reason = null);
     private sealed record OrderItem(uint Id, string Name, decimal Price, string? Description, int Quantity);
 }

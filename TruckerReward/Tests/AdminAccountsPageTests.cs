@@ -196,4 +196,18 @@ public sealed class AdminAccountsPageTests : TestContext
         page.WaitForAssertion(() => Assert.Single(page.FindAll("form.view-as")));
         Assert.Equal("account/view-as/8", page.Find("form.view-as").GetAttribute("action"));
     }
+
+    [Fact]
+    public void NoSponsorFilterGoesIntoTheQuery()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["GET /admin/accounts?noSponsor=true"] = (HttpStatusCode.OK, "[]");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+
+        page.Find("select[aria-label=Sponsor]").Change("-1");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Contains("No accounts match.", page.Markup));
+    }
 }

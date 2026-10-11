@@ -39,7 +39,7 @@ public static class AdminEndpoints
         });
 
         // sort is name, created or last-login
-        app.MapGet("/admin/accounts", async (string? search, string? type, string? status, string? sort, int? companyId, AppDbContext db) =>
+        app.MapGet("/admin/accounts", async (string? search, string? type, string? status, string? sort, int? companyId, bool? noSponsor, AppDbContext db) =>
         {
             var users = db.Users.AsNoTracking();
             if (!string.IsNullOrWhiteSpace(search))
@@ -54,6 +54,8 @@ public static class AdminEndpoints
                 users = users.Where(u => u.Status == status);
             if (companyId is not null)
                 users = users.Where(u => u.CompanyId == companyId);
+            if (noSponsor == true)
+                users = users.Where(u => u.UserType != AuthEndpoints.Admin && u.CompanyId == null);
 
             var rows = users.Select(u => new
             {
@@ -100,7 +102,6 @@ public static class AdminEndpoints
             return Results.NoContent();
         });
 
-        // the new user picks a password from the emailed link
         app.MapPost("/admin/accounts", CreateAccount);
         // username, password and type have their own flows
         app.MapPut("/admin/accounts/{id:int}", EditAccount);
@@ -110,13 +111,20 @@ public static class AdminEndpoints
     {
         if (!await IsAdmin(db, req.AdminId))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var username = req.Username?.Trim() ?? "";
-        var (firstName, lastName, address) = (Trim(req.FirstName), Trim(req.LastName), Trim(req.Email));
         if (req.UserType is not (AuthEndpoints.Driver or AuthEndpoints.Sponsor or AuthEndpoints.Admin))
             return Results.BadRequest(new { message = "Account type must be driver, sponsor or admin." });
+        return await Invite(db, notifications, clock, config, "An administrator", req.UserType, req.Username, req.FirstName, req.LastName, req.Email, req.CompanyId);
+    }
+
+    // the new user sets a password from the emailed link
+    internal static async Task<IResult> Invite(AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config,
+        string invitedBy, string userType, string? usernameIn, string? firstNameIn, string? lastNameIn, string? emailIn, int? companyId)
+    {
+        var username = usernameIn?.Trim() ?? "";
+        var (firstName, lastName, address) = (Trim(firstNameIn), Trim(lastNameIn), Trim(emailIn));
         if (username.Length is 0 or > 255)
             return Results.BadRequest(new { message = "Usernames are 1 to 255 characters." });
-        if ((DetailsProblem(firstName, lastName, address) ?? await CompanyProblem(db, req.UserType, req.CompanyId)) is { } problem)
+        if ((DetailsProblem(firstName, lastName, address) ?? await CompanyProblem(db, userType, companyId)) is { } problem)
             return Results.BadRequest(new { message = problem });
         if (await db.Users.AnyAsync(u => u.Username == username))
             return Results.Conflict(new { message = "That username is already taken." });
@@ -125,14 +133,14 @@ public static class AdminEndpoints
 
         var user = new User
         {
-            UserType = req.UserType, Username = username, FirstName = firstName, LastName = lastName,
-            Email = address, PhoneNumber = "", Address = "", CompanyId = req.CompanyId
+            UserType = userType, Username = username, FirstName = firstName, LastName = lastName,
+            Email = address, PhoneNumber = "", Address = "", CompanyId = companyId
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
         var link = PasswordEndpoints.ResetLink(db, user, clock.GetUtcNow().UtcDateTime + InviteLifetime, config);
         await db.SaveChangesAsync();
-        await notifications.AccountInvited(user, link);
+        await notifications.AccountInvited(user, link, invitedBy);
         await notifications.AccountCreated(user);
         return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
     }

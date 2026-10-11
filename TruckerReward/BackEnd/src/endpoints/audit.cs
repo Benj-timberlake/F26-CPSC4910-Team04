@@ -118,7 +118,7 @@ public static class AuditEndpoints
             })
             .ToListAsync();
         return rows.Select(h => new AuditEntry(h.Timestamp ?? DateTime.MinValue, Points, h.UserId, h.Username,
-            $"{h.PointsDelta:+#,0;-#,0} points: " + (h.Order ? "order" : h.Audit?.Resoning ?? "no reason given"),
+            $"{h.PointsDelta:+#,0;-#,0} points: " + (h.Order ? "order" + (h.Audit is null ? "" : ": " + h.Audit.Resoning) : h.Audit?.Resoning ?? "no reason given"),
             h.Order ? null : h.Audit?.Username));
     }
 

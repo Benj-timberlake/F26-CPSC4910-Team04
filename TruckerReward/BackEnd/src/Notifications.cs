@@ -11,9 +11,9 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             // keeps the reset link out of the database
             stored: "A link to reset your password was emailed to you. It works for one hour.");
 
-    public Task AccountInvited(User user, string link) =>
+    public Task AccountInvited(User user, string link, string invitedBy) =>
         Send(user, "Your TruckerReward account is ready",
-            $"Hi {user.Username},\n\nAn administrator made you a TruckerReward {user.UserType} account. Use this link within three days to choose your password:\n{link}\n\nAfter that, use Forgot password on the login page.",
+            $"Hi {user.Username},\n\n{invitedBy} made you a TruckerReward {user.UserType} account. Use this link within three days to choose your password:\n{link}\n\nAfter that, use Forgot password on the login page.",
             null, emailed: true,
             stored: "Your account was created by an administrator. A link to choose your password was emailed to you.");
 
@@ -99,6 +99,12 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
         Send(driver, "Your sponsor ordered your items",
             "Your sponsor placed the order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             NotificationCategory.Orders);
+
+    public Task DriverEditingOrder(User driver, IReadOnlyList<CartItem> items) =>
+        ToSponsorsOf(driver.CompanyId, $"{driver.Username} pulled an order back to change it",
+            $"{driver.FirstName} {driver.LastName} ({driver.Username}) moved " +
+            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + " back to their cart.",
+            NotificationCategory.Purchases);
 
     private async Task<string> CompanyName(int companyId) =>
         await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "the company";
