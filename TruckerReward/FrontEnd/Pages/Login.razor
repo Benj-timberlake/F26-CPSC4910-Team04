@@ -27,6 +27,11 @@
             <p class="tr-alt"><a href="forgot-password">Forgot your password?</a></p>
         </form>
 
+        <div class="passkey">
+            <button type="button" class="tr-btn-outline tr-btn-block" data-return-url="@returnUrl" onclick="truckerPasskeys.signIn(this.dataset.returnUrl, 'passkey-status')">Sign in with Face ID or a passkey</button>
+            <p id="passkey-status" role="alert" class="tr-alert-error" hidden></p>
+        </div>
+
         @if (providers.Count > 0)
         {
             <div class="sso">
@@ -43,6 +48,10 @@
 </div>
 
 <style>
+    .passkey {
+        margin-top: 16px;
+    }
+
     .sso {
         margin-top: 24px;
         text-align: center;

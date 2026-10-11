@@ -116,5 +116,114 @@ public sealed class AdminAccountsTests : IAsyncDisposable
         Assert.Equal("bob", Assert.Single(await List($"?companyId={acme}&type=driver")).Username);
     }
 
+    private async Task<int> Id(string username)
+    {
+        using var db = app.Db();
+        return await db.Users.Where(u => u.Username == username).Select(u => u.Id).SingleAsync();
+    }
+
+    [Fact]
+    public async Task AdminEditsAnyAccount()
+    {
+        await Start();
+        int acme;
+        using (var db = app.Db())
+        {
+            var company = new Company { Name = "Acme" };
+            db.Add(company);
+            await db.SaveChangesAsync();
+            acme = company.Id;
+        }
+        var (ann, bob) = (await Id("ann"), await Id("bob"));
+
+        var response = await client.PutAsJsonAsync($"/admin/accounts/{bob}", new
+        {
+            adminId = ann, firstName = " Robert ", lastName = "Baker", email = "rob@example.com", phoneNumber = "555", address = "1 Main St", companyId = acme
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
+        using var check = app.Db();
+        var saved = await check.Users.SingleAsync(u => u.Id == bob);
+        Assert.Equal(("Robert", "rob@example.com", "555", "1 Main St", (int?)acme), (saved.FirstName, saved.Email, saved.PhoneNumber, saved.Address, saved.CompanyId));
+        Assert.Equal("bob@example.com", Assert.Single(app.Email.Sent).To);
+    }
+
+    [Theory]
+    [InlineData("sue", "bob", "Bob", "bob@example.com", 403)]
+    [InlineData("ann", "bob", "", "bob@example.com", 400)]
+    [InlineData("ann", "bob", "Bob", "not an email", 400)]
+    [InlineData("ann", "bob", "Bob", "sue@example.com", 409)]
+    public async Task AdminEditsAreChecked(string actor, string target, string first, string email, int status)
+    {
+        await Start();
+
+        var response = await client.PutAsJsonAsync($"/admin/accounts/{await Id(target)}", new
+        {
+            adminId = await Id(actor), firstName = first, lastName = "Baker", email, phoneNumber = "", address = ""
+        });
+
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
+    public async Task AdminsCantBeGivenACompany()
+    {
+        await Start();
+        var ann = await Id("ann");
+
+        var response = await client.PutAsJsonAsync($"/admin/accounts/{ann}", new
+        {
+            adminId = ann, firstName = "Ann", lastName = "Admin", email = "ann@example.com", companyId = 999
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminCreatesAnAccountThatSetsItsOwnPassword()
+    {
+        await Start();
+        var ann = await Id("ann");
+
+        var response = await client.PostAsJsonAsync("/admin/accounts", new
+        {
+            adminId = ann, userType = "admin", username = " kim ", firstName = "Kim", lastName = "Lee", email = "kim@example.com"
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.Created, response.StatusCode);
+        using (var db = app.Db())
+        {
+            var kim = await db.Users.SingleAsync(u => u.Username == "kim");
+            Assert.Equal(("admin", null, BackEnd.Models.User.Active), (kim.UserType, kim.Password, kim.Status));
+        }
+        var invite = Assert.Single(app.Email.Sent, m => m.To == "kim@example.com");
+        var token = System.Text.RegularExpressions.Regex.Match(invite.Body, "token=([A-Za-z0-9_-]+)").Groups[1].Value;
+
+        app.Clock.Advance(TimeSpan.FromDays(2));
+        var reset = await client.PostAsJsonAsync("/auth/reset", new { token, newPassword = "Correct-Horse-9", ipAddress = "" });
+
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, reset.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("sue", "driver", "kim", "kim@example.com", 403)]
+    [InlineData("ann", "boss", "kim", "kim@example.com", 400)]
+    [InlineData("ann", "driver", "bob", "kim@example.com", 409)]
+    [InlineData("ann", "driver", "kim", "bob@example.com", 409)]
+    [InlineData("ann", "driver", "kim", "nope", 400)]
+    public async Task AdminCreatesAreChecked(string actor, string type, string username, string email, int status)
+    {
+        await Start();
+
+        var response = await client.PostAsJsonAsync("/admin/accounts", new
+        {
+            adminId = await Id(actor), userType = type, username, firstName = "Kim", lastName = "Lee", email
+        });
+
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Empty(app.Email.Sent);
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }

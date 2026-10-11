@@ -29,6 +29,7 @@ public sealed class TestApp : IAsyncDisposable
         builder.Services.AddSingleton<IEmailSender>(Email);
         builder.Services.AddScoped<Notifications>();
         builder.Services.AddSingleton<TimeProvider>(Clock);
+        builder.Services.AddPasskeys(builder.Configuration);
         if (jsonErrors)
             builder.AddJsonErrors();
         configure?.Invoke(builder);
@@ -47,6 +48,8 @@ public sealed class TestApp : IAsyncDisposable
         app.MapNotificationEndpoints();
         app.MapPointsEndpoints();
         app.MapAuditEndpoints();
+        app.MapViewAsEndpoints();
+        app.MapPasskeyEndpoints();
         using (var scope = app.Services.CreateScope())
         {
             // the mysql enum column types aren't valid in sqlite

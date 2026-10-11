@@ -31,7 +31,7 @@
             <p>Purchases can be refunded within 24 hours. All timestamps are UTC.</p>
             <div class="tr-table-wrap">
                 <table class="tr-table">
-                    <thead><tr><th>Points history ID</th><th>Purchased at (UTC)</th><th>Items</th><th>Total</th><th>Refund</th></tr></thead>
+                    <thead><tr><th>Points history ID</th><th>Purchased at (UTC)</th><th>Items</th><th>Total</th><th>Status</th><th>Refund</th></tr></thead>
                     <tbody>
                         @foreach (var order in orders)
                         {
@@ -43,6 +43,7 @@
                                         <li>@item.Name × @item.Quantity — @RewardPoints.Format(RewardPoints.FromDollars(item.Price) * item.Quantity)</li>
                                     }</ul></td>
                                 <td>@RewardPoints.Format(order.TotalPoints)</td>
+                                <td class="status">@(order.Status == "ordered" ? "Ordered by your sponsor" : "Waiting for your sponsor")</td>
                                 <td>
                                     @if (order.CanRefund)
                                     {
@@ -148,7 +149,7 @@
         finally { saving = false; selected = null; }
     }
 
-    private sealed record PastOrder(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, List<OrderItem> Items);
+    private sealed record PastOrder(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, string Status, List<OrderItem> Items);
     private sealed record OrderItem(uint Id, string Name, decimal Price, string? Description, int Quantity);
     private sealed record OrderError(string Message);
 }

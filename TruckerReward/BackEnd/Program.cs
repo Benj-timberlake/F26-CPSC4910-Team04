@@ -17,6 +17,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<EbayClient>();
 builder.AddEmail();
 builder.Services.AddScoped<Notifications>();
+builder.Services.AddPasskeys(builder.Configuration);
 builder.AddJsonErrors();
 
 var app = builder.Build();
@@ -42,6 +43,8 @@ app.MapAboutEndpoints();
 app.MapNotificationEndpoints();
 app.MapPointsEndpoints();
 app.MapAuditEndpoints();
+app.MapViewAsEndpoints();
+app.MapPasskeyEndpoints();
 
 // a real query, so this fails when the database is asleep or unreachable
 app.MapGet("/health", async (AppDbContext db) =>

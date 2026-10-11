@@ -1,0 +1,160 @@
+@page "/account/passkeys"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+
+<PageTitle>Face ID and passkeys</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Face ID and passkeys</h1>
+        <p class="tr-muted">Sign in with Face ID, a fingerprint or a security key instead of your password.</p>
+
+        @if (notice is not null)
+        {
+            <p role="status" class="tr-alert-success">@notice</p>
+        }
+        @if (error is not null)
+        {
+            <p role="alert" class="tr-alert-error">@error</p>
+        }
+
+        @if (viewing)
+        {
+            <p class="tr-muted">Passkeys can't be changed while viewing the site as someone else.</p>
+        }
+        else
+        {
+            <form class="tr-form add-passkey" @onsubmit="Add">
+                <label for="passkey-name">Name this device</label>
+                <input id="passkey-name" maxlength="100" @bind="name" />
+                <button type="submit" class="tr-btn" disabled="@busy">Add a passkey</button>
+            </form>
+        }
+
+        @if (passkeys is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+        else if (passkeys.Count == 0)
+        {
+            <p class="tr-muted">No passkeys yet.</p>
+        }
+        else
+        {
+            <ul class="passkey-list">
+                @foreach (var p in passkeys)
+                {
+                    <li>
+                        <strong>@p.Name</strong>
+                        <span class="tr-muted">Added @p.CreatedAt.ToString("yyyy-MM-dd"), @(p.LastUsedAt is null ? "never used" : "last used " + p.LastUsedAt.Value.ToString("yyyy-MM-dd"))</span>
+                        @if (!viewing)
+                        {
+                            <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => Remove(p)">Remove</button>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</div>
+
+<style>
+    .add-passkey {
+        margin-bottom: 16px;
+    }
+
+    .passkey-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .passkey-list li {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        border-top: 1px solid #e5e7eb;
+        padding: 12px 0;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string? id;
+    private bool viewing;
+    private string name = "This device";
+    private List<Passkey>? passkeys;
+    private bool busy;
+    private string? error;
+    private string? notice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        viewing = FrontEnd.Auth.ViewAs.IsViewing(user);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            passkeys = await client.GetFromJsonAsync<List<Passkey>>($"users/{id}/passkeys") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load your passkeys right now. Try again in a moment.";
+        }
+    }
+
+    private async Task Add()
+    {
+        busy = true;
+        error = notice = null;
+        var problem = await JS.InvokeAsync<string?>("truckerPasskeys.register", name.Trim());
+        if (problem is null)
+        {
+            notice = "Passkey added. You can sign in with it from the login page.";
+            await Load();
+        }
+        else
+        {
+            error = problem;
+        }
+        busy = false;
+    }
+
+    private async Task Remove(Passkey p)
+    {
+        busy = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.DeleteAsync($"users/{id}/passkeys/{p.Id}");
+            if (response.IsSuccessStatusCode)
+            {
+                notice = $"{p.Name} was removed.";
+                await Load();
+            }
+            else
+            {
+                error = "That passkey couldn't be removed.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private sealed record Passkey(int Id, string Name, DateTime CreatedAt, DateTime? LastUsedAt);
+}

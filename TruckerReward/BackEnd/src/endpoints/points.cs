@@ -13,6 +13,8 @@ public static class PointsEndpoints
         // id is the sponsor or admin who is looking
         app.MapGet("/users/{id:int}/points/drivers", Drivers);
         app.MapPost("/users/{id:int}/points/drivers/{driverId:int}", Change);
+        // period is all, month or week
+        app.MapGet("/users/{id:int}/leaderboard", Leaderboard);
     }
 
     private static async Task<IResult> Summary(int id, AppDbContext db, TimeProvider clock)
@@ -116,10 +118,50 @@ public static class PointsEndpoints
         return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, driver.Points, spent));
     }
 
+    private static async Task<IResult> Leaderboard(int id, string? period, int? companyId, AppDbContext db, TimeProvider clock)
+    {
+        var viewer = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+        if (viewer is null)
+            return Results.NotFound();
+        period = string.IsNullOrEmpty(period) ? "all" : period;
+        var now = clock.GetUtcNow().UtcDateTime;
+        DateTime? start = period switch
+        {
+            "month" => new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc),
+            "week" => now.Date.AddDays(-(((int)now.DayOfWeek + 6) % 7)),
+            _ => null
+        };
+        if (period is not ("all" or "month" or "week"))
+            return Results.BadRequest(new { message = "Period must be all, month or week." });
+        var company = viewer.UserType == AuthEndpoints.Admin ? companyId : viewer.CompanyId;
+        if (company is null)
+            return Results.BadRequest(new { message = "Pick a sponsor to see its leaderboard." });
+
+        var drivers = db.Users.AsNoTracking()
+            .Where(u => u.UserType == AuthEndpoints.Driver && u.CompanyId == company && u.Status == User.Active);
+        var totals = await drivers.Select(u => new
+        {
+            u.Id, u.Username, u.FirstName, u.LastName,
+            Points = start == null
+                ? u.Points
+                : db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta > 0 && h.Timestamp >= start).Sum(h => (long)h.PointsDelta)
+        }).ToListAsync();
+
+        var ordered = totals.OrderByDescending(t => t.Points).ThenBy(t => t.Username).ToList();
+        // ties share a rank
+        var rows = ordered.Select(t => new LeaderboardRow(ordered.FindIndex(o => o.Points == t.Points) + 1, t.Id, t.Username, t.FirstName, t.LastName, t.Points)).ToList();
+        return Results.Ok(new Leaderboard(period, rows.FirstOrDefault(r => r.Id == id)?.Rank, rows));
+    }
+
     // admins or sponsors with a company
     internal static bool CanManage(User actor) =>
         actor.UserType == AuthEndpoints.Admin || (actor.UserType == AuthEndpoints.Sponsor && actor.CompanyId is not null);
 }
+
+public record LeaderboardRow(int Rank, int Id, string Username, string FirstName, string LastName, long Points);
+
+// your rank is null for viewers off the board
+public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Rows);
 
 public record ChangePointsRequest(int Points, string? Reason);
 

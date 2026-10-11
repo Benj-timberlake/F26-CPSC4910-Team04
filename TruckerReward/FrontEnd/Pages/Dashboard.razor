@@ -110,6 +110,7 @@
                     <dt>Password</dt>
                     <dd>@(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))</dd>
                 </dl>
+                <p><a class="passkeys-link" href="account/passkeys">Face ID and passkeys</a></p>
 
                 @if (activity.Recent.Count > 0)
                 {
