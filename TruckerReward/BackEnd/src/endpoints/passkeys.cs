@@ -22,8 +22,8 @@ public static class PasskeyEndpoints
             var frontend = new Uri(config["FRONTEND_URL"] ?? "http://localhost:8081");
             return new Fido2(new Fido2Configuration
             {
-                ServerDomain = frontend.Host,
-                ServerName = "TruckerReward",
+                RPID = frontend.Host,
+                RPName = "TruckerReward",
                 Origins = new HashSet<string> { frontend.GetLeftPart(UriPartial.Authority) }
             }, null!);
         });
