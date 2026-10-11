@@ -15,20 +15,12 @@ public sealed class NewTableMigrationTests
             .UseMySQL("Server=localhost;Database=model_validation;User Id=unused;Password=unused")
             .Options);
         var table = db.Model.FindEntityType(entity)!;
-        var sql = File.ReadAllText(Path.Combine(RepoRoot(), "db", "migrations", file));
+        var sql = File.ReadAllText(Path.Combine(Migration004Tests.RepoRoot(), "db", "migrations", file));
 
         Assert.Contains($"CREATE TABLE IF NOT EXISTS {table.GetTableName()} (", sql);
         foreach (var column in table.GetProperties().Select(p => p.GetColumnName()))
             Assert.Contains($"    {column} ", sql);
         foreach (var fk in table.GetForeignKeys())
             Assert.Contains($"CONSTRAINT {fk.GetConstraintName()} ", sql);
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (!Directory.Exists(Path.Combine(dir!.FullName, "db")))
-            dir = dir.Parent;
-        return dir.FullName;
     }
 }
