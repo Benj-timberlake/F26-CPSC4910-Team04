@@ -44,6 +44,20 @@ public sealed class ManagePointsPageTests : TestContext
     }
 
     [Fact]
+    public void SortsBySpending()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        backend.Routes["GET /users/5/points/drivers?sort=spent"] = (HttpStatusCode.OK, """[{"id":9,"username":"amy","firstName":"Amy","lastName":"Zane","email":"amy@example.com","points":0,"spent":900}]""");
+        var page = Render();
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+
+        page.Find("select[aria-label=Sort]").Change("spent");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("900", page.Find("td.spent").TextContent));
+    }
+
+    [Fact]
     public void ChangingPointsSendsTheAmountAndReason()
     {
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);

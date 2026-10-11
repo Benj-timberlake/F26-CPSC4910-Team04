@@ -123,6 +123,25 @@ public sealed class PointsEndpointTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SponsorsSortDriversByBalanceOrSpending()
+    {
+        await Start();
+        await client.PostAsJsonAsync($"/users/{amy}/cart", new { name = "Mug", price = 0.00m, description = "free" });
+        await Change(sue, amy, 500, "Award");
+        await client.PostAsJsonAsync($"/users/{amy}/cart", new { name = "Hat", price = 2.00m, description = "A hat" });
+        await client.PostAsync($"/users/{amy}/cart/send-order", null);
+
+        var byPoints = (await client.GetFromJsonAsync<List<PointsDriver>>($"/users/{sue}/points/drivers?sort=points"))!;
+        var bySpent = (await client.GetFromJsonAsync<List<PointsDriver>>($"/users/{sue}/points/drivers?sort=spent"))!;
+
+        Assert.Equal(["amy", "bob"], byPoints.Select(d => d.Username));
+        Assert.Equal(300, byPoints[0].Points);
+        Assert.Equal(["amy", "bob"], bySpent.Select(d => d.Username));
+        Assert.Equal(200, bySpent[0].Spent);
+        Assert.Equal(0, bySpent[1].Spent);
+    }
+
+    [Fact]
     public async Task DriverSeesHistoryWithTotals()
     {
         await Start();

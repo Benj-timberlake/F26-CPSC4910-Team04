@@ -47,7 +47,8 @@ public static class PointsEndpoints
             entries));
     }
 
-    private static async Task<IResult> Drivers(int id, string? search, AppDbContext db)
+    // sort is name, points or spent
+    private static async Task<IResult> Drivers(int id, string? search, string? sort, AppDbContext db)
     {
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
@@ -63,9 +64,19 @@ public static class PointsEndpoints
             var term = search.Trim().ToLower();
             drivers = drivers.Where(u => u.Username.ToLower().Contains(term) || (u.FirstName + " " + u.LastName).ToLower().Contains(term));
         }
-        return Results.Ok(await drivers
-            .OrderBy(u => u.LastName).ThenBy(u => u.FirstName).ThenBy(u => u.Username)
-            .Select(u => new PointsDriver(u.Id, u.Username, u.FirstName, u.LastName, u.Email, u.Points))
+        var rows = drivers.Select(u => new
+        {
+            User = u,
+            Spent = db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta)
+        });
+        rows = sort switch
+        {
+            "points" => rows.OrderByDescending(r => r.User.Points).ThenBy(r => r.User.Username),
+            "spent" => rows.OrderByDescending(r => r.Spent).ThenBy(r => r.User.Username),
+            _ => rows.OrderBy(r => r.User.LastName).ThenBy(r => r.User.FirstName).ThenBy(r => r.User.Username)
+        };
+        return Results.Ok(await rows
+            .Select(r => new PointsDriver(r.User.Id, r.User.Username, r.User.FirstName, r.User.LastName, r.User.Email, r.User.Points, r.Spent))
             .ToListAsync());
     }
 
@@ -101,7 +112,8 @@ public static class PointsEndpoints
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.')}.");
-        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, driver.Points));
+        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
+        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, driver.Points, spent));
     }
 
     // admins or sponsors with a company
@@ -111,7 +123,7 @@ public static class PointsEndpoints
 
 public record ChangePointsRequest(int Points, string? Reason);
 
-public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, int Points);
+public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent);
 
 // by is null for orders
 public record PointsEntry(DateTime? At, int Points, string Reason, string? By);
