@@ -2,7 +2,7 @@ using System.Security.Claims;
 
 namespace FrontEnd.Auth;
 
-// the browser can't reach the backend, so the csv download passes through here
+// proxies the csv download for the browser
 public static class AuditExport
 {
     private static readonly string[] Filters = ["category", "from", "to", "companyId", "driverId"];
