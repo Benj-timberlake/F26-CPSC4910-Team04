@@ -9,6 +9,16 @@
 <div class="tr-page">
     <h1>Accounts</h1>
 
+    @if (counts is not null)
+    {
+        <dl class="counts">
+            <div><dt>Active drivers</dt><dd class="drivers">@counts.ActiveDrivers</dd></div>
+            <div><dt>Active sponsors</dt><dd class="sponsors">@counts.ActiveSponsors</dd></div>
+            <div><dt>Active admins</dt><dd>@counts.ActiveAdmins</dd></div>
+            <div><dt>Deactivated</dt><dd>@counts.Inactive</dd></div>
+        </dl>
+    }
+
     <form class="filters" @onsubmit="Load">
         <input type="search" aria-label="Search accounts" placeholder="Name, username or email" @bind="search" />
         <select aria-label="Account type" @bind="type">
@@ -16,6 +26,13 @@
             <option value="driver">Drivers</option>
             <option value="sponsor">Sponsors</option>
             <option value="admin">Admins</option>
+        </select>
+        <select aria-label="Sponsor" @bind="companyId">
+            <option value="0">All sponsors</option>
+            @foreach (var c in companies)
+            {
+                <option value="@c.Id">@c.Name</option>
+            }
         </select>
         <select aria-label="Status" @bind="status">
             <option value="">Any status</option>
@@ -103,6 +120,25 @@
         min-width: 200px;
     }
 
+    .counts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 0 0 16px;
+    }
+
+    .counts div {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 8px 14px;
+    }
+
+    .counts dd {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+    }
+
     tr.inactive td {
         color: #6b7280;
     }
@@ -118,6 +154,9 @@
     private string type = "";
     private string status = "";
     private string sort = "name";
+    private int companyId;
+    private Counts? counts;
+    private List<Company> companies = [];
     private bool busy;
     private string? error;
     private string? notice;
@@ -125,6 +164,15 @@
     protected override async Task OnInitializedAsync()
     {
         id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            companies = await client.GetFromJsonAsync<List<Company>>("companies") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            // the sponsor filter just stays empty
+        }
         await Load();
     }
 
@@ -134,12 +182,14 @@
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(search)) query.Add("search=" + Uri.EscapeDataString(search.Trim()));
         if (type != "") query.Add("type=" + type);
+        if (companyId != 0) query.Add("companyId=" + companyId);
         if (status != "") query.Add("status=" + status);
         if (sort != "name") query.Add("sort=" + sort);
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
             accounts = await client.GetFromJsonAsync<List<Account>>("admin/accounts" + (query.Count > 0 ? "?" + string.Join("&", query) : "")) ?? [];
+            counts = await client.GetFromJsonAsync<Counts>("admin/accounts/counts");
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
@@ -177,4 +227,6 @@
 
     private sealed record Account(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
     private sealed record Problem(string? Message);
+    private sealed record Counts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive);
+    private sealed record Company(int Id, string Name);
 }
