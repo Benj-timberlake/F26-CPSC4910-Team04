@@ -56,7 +56,7 @@
     @if (viewing.User.FindFirst(FrontEnd.Auth.ViewAs.ViewerNameClaim) is { } viewer)
     {
         <div class="view-as-banner" role="status">
-            Viewing the site as @viewing.User.Identity?.Name. Anything you do here is done as them.
+            Viewing the site as @viewing.User.Identity?.Name, read-only.
             <form method="post" action="account/view-as/stop">
                 <button type="submit">Return to @viewer.Value</button>
             </form>
