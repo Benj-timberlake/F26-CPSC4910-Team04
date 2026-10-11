@@ -81,14 +81,16 @@ public sealed class ViewAsCookieTests : IAsyncDisposable
         var (client, cookie) = await ViewingAsBob();
         backend.Routes["GET /users/8/status"] = (HttpStatusCode.OK, """{"status":"active"}""");
         backend.Routes["GET /users/8"] = (HttpStatusCode.OK, Bob);
-        clock.Advance(CookieRevalidation.Interval + TimeSpan.FromSeconds(1));
+        clock.Advance(TimeSpan.FromMinutes(20));
 
+        // renewing slides the cookie's own expiry to 50 minutes, so only the view-as limit ends it at 30
         var response = await Send(client, HttpMethod.Get, "/whoami", cookie);
         Assert.Equal(new Who("bob", "ann"), await response.Content.ReadFromJsonAsync<Who>());
         Assert.Contains("GET /users/8", backend.Requests);
+        var renewed = Cookie(response)!;
 
-        clock.Advance(ViewAs.Lifetime);
-        var later = await Send(client, HttpMethod.Get, "/whoami", Cookie(response) ?? cookie);
+        clock.Advance(TimeSpan.FromMinutes(20));
+        var later = await Send(client, HttpMethod.Get, "/whoami", renewed);
         Assert.Equal(HttpStatusCode.Redirect, later.StatusCode);
         Assert.Contains("/login", later.Headers.Location!.ToString());
     }
