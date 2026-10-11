@@ -100,6 +100,12 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             "Your sponsor placed the order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             NotificationCategory.Orders);
 
+    public Task DriverEditingOrder(User driver, IReadOnlyList<CartItem> items) =>
+        ToSponsorsOf(driver.CompanyId, $"{driver.Username} pulled an order back to change it",
+            $"{driver.FirstName} {driver.LastName} ({driver.Username}) moved " +
+            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + " back to their cart.",
+            NotificationCategory.Purchases);
+
     private async Task<string> CompanyName(int companyId) =>
         await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "the company";
 

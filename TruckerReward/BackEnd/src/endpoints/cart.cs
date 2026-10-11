@@ -94,6 +94,35 @@ public static class CartEndpoints
             return Results.NoContent();
         });
 
+        // pending orders only
+        app.MapPost("/users/{id:int}/orders/{historyId:int}/edit", async (int id, int historyId, AppDbContext db, Notifications notifications) =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            await db.Users.Where(user => user.Id == id)
+                .ExecuteUpdateAsync(update => update.SetProperty(user => user.Points, user => user.Points));
+            var user = await db.Users.SingleOrDefaultAsync(user => user.Id == id);
+            var history = await db.PointsHistory.SingleOrDefaultAsync(h => h.Id == historyId && h.UserId == id);
+            var items = await db.CartItems.Where(item => item.PointsHistoryId == historyId).ToListAsync();
+            if (user is null || history is null || items.Count == 0 || items.Any(item => item.UserId != id || item.InCart))
+                return Results.NotFound(new { message = "That order wasn't found." });
+            if (items.Any(item => item.WasOrdered))
+                return Results.Conflict(new { message = "Your sponsor already ordered this, so it can't be changed." });
+
+            user.Points -= history.PointsDelta;
+            foreach (var item in items)
+            {
+                item.InCart = true;
+                item.PointsHistoryId = null;
+            }
+            db.AuditHistories.RemoveRange(await db.AuditHistories.Where(a => a.PointsHistoryId == historyId).ToListAsync());
+            db.PointsHistory.Remove(history);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was moved back to your cart.");
+            await notifications.DriverEditingOrder(user, items);
+            return Results.NoContent();
+        });
+
         app.MapPost("/users/{id:int}/cart/send-order", async (int id, SendOrderRequest? request, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             var reason = request?.Reason?.Trim() ?? "";
