@@ -32,6 +32,8 @@ public partial class AppDbContext : DbContext
 
     public DbSet<NotificationPreference> NotificationPreferences { get; set; }
 
+    public DbSet<Impersonation> Impersonations { get; set; }
+
     public virtual DbSet<PasswordChange> PasswordChanges { get; set; }
 
     public virtual DbSet<PasswordReset> PasswordResets { get; set; }
@@ -390,6 +392,24 @@ public partial class AppDbContext : DbContext
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_notification_preferences_user");
+        });
+
+        modelBuilder.Entity<Impersonation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("impersonations");
+            entity.HasIndex(e => e.UserId, "ix_impersonations_user");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ViewerId).HasColumnName("viewer_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.StartedAt).HasColumnType("datetime").HasColumnName("started_at");
+            entity.Property(e => e.IpAddress).HasMaxLength(45).HasColumnName("ip_address");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.ViewerId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_impersonations_viewer");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_impersonations_user");
         });
 
         modelBuilder.Entity<User>(entity =>

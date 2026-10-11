@@ -90,6 +90,11 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             NotificationCategory.Purchases);
 
+    public Task AccountViewed(User user, User viewer) =>
+        Send(user, "Someone viewed the site as you",
+            $"{viewer.FirstName} {viewer.LastName} ({viewer.Username}), {(viewer.UserType == AuthEndpoints.Admin ? "an administrator" : "your sponsor")}, viewed the site as you.",
+            null, emailed: false);
+
     private async Task<string> CompanyName(int companyId) =>
         await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "the company";
 
