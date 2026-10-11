@@ -99,6 +99,45 @@ public static class AdminEndpoints
             await notifications.AccountStatusChanged(account, admin);
             return Results.NoContent();
         });
+
+        // username, password and type have their own flows
+        app.MapPut("/admin/accounts/{id:int}", async (int id, EditAccountRequest req, AppDbContext db, IEmailSender email) =>
+        {
+            if (!await db.Users.AnyAsync(u => u.Id == req.AdminId && u.UserType == AuthEndpoints.Admin))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            var account = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+            if (account is null)
+                return Results.NotFound();
+
+            var firstName = req.FirstName?.Trim() ?? "";
+            var lastName = req.LastName?.Trim() ?? "";
+            var address = req.Email?.Trim() ?? "";
+            var phone = req.PhoneNumber?.Trim() ?? "";
+            var street = req.Address?.Trim() ?? "";
+            if (firstName.Length is 0 or > 100 || lastName.Length is 0 or > 100)
+                return Results.BadRequest(new { message = "First and last names are required and must be 100 characters or fewer." });
+            if (address.Length is 0 or > 255 || !System.Net.Mail.MailAddress.TryCreate(address, out var parsed) || parsed.Address != address)
+                return Results.BadRequest(new { message = "Enter a valid email address of 255 characters or fewer." });
+            if (phone.Length > 20 || street.Length > 255)
+                return Results.BadRequest(new { message = "Phone number must be 20 characters or fewer and address must be 255 characters or fewer." });
+            if (await db.Users.AnyAsync(u => u.Email == address && u.Id != id))
+                return Results.Conflict(new { message = "That email address is already in use." });
+            if (req.CompanyId is not null && (account.UserType == AuthEndpoints.Admin || !await db.Companies.AnyAsync(c => c.Id == req.CompanyId)))
+                return Results.BadRequest(new { message = "Pick an existing sponsor, and only for drivers and sponsors." });
+
+            var oldAddress = account.Email;
+            account.FirstName = firstName;
+            account.LastName = lastName;
+            account.Email = address;
+            account.PhoneNumber = phone;
+            account.Address = street;
+            account.CompanyId = req.CompanyId;
+            await db.SaveChangesAsync();
+            if (!string.Equals(oldAddress, address, StringComparison.OrdinalIgnoreCase))
+                await email.SendAsync(oldAddress, "Your TruckerReward email was changed",
+                    $"Hi {account.Username},\n\nAn administrator changed your account email from {oldAddress} to {address}. If that's wrong, contact an administrator.");
+            return Results.NoContent();
+        });
     }
 
     public const int MaxAccounts = 500;
@@ -112,6 +151,8 @@ public record AdminAccount(int Id, string Username, string FirstName, string Las
 public record AccountCounts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive);
 
 public record AccountStatus(string Status);
+
+public record EditAccountRequest(int AdminId, string? FirstName, string? LastName, string? Email, string? PhoneNumber, string? Address, int? CompanyId);
 
 public record ChangeAccountStatusRequest(int AdminId, string? Status);
 

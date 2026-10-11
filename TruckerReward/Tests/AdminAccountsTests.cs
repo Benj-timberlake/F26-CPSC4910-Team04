@@ -116,5 +116,69 @@ public sealed class AdminAccountsTests : IAsyncDisposable
         Assert.Equal("bob", Assert.Single(await List($"?companyId={acme}&type=driver")).Username);
     }
 
+    private async Task<int> Id(string username)
+    {
+        using var db = app.Db();
+        return await db.Users.Where(u => u.Username == username).Select(u => u.Id).SingleAsync();
+    }
+
+    [Fact]
+    public async Task AdminEditsAnyAccount()
+    {
+        await Start();
+        int acme;
+        using (var db = app.Db())
+        {
+            var company = new Company { Name = "Acme" };
+            db.Add(company);
+            await db.SaveChangesAsync();
+            acme = company.Id;
+        }
+        var (ann, bob) = (await Id("ann"), await Id("bob"));
+
+        var response = await client.PutAsJsonAsync($"/admin/accounts/{bob}", new
+        {
+            adminId = ann, firstName = " Robert ", lastName = "Baker", email = "rob@example.com", phoneNumber = "555", address = "1 Main St", companyId = acme
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
+        using var check = app.Db();
+        var saved = await check.Users.SingleAsync(u => u.Id == bob);
+        Assert.Equal(("Robert", "rob@example.com", "555", "1 Main St", (int?)acme), (saved.FirstName, saved.Email, saved.PhoneNumber, saved.Address, saved.CompanyId));
+        Assert.Equal("bob@example.com", Assert.Single(app.Email.Sent).To);
+    }
+
+    [Theory]
+    [InlineData("sue", "bob", "Bob", "bob@example.com", 403)]
+    [InlineData("ann", "bob", "", "bob@example.com", 400)]
+    [InlineData("ann", "bob", "Bob", "not an email", 400)]
+    [InlineData("ann", "bob", "Bob", "sue@example.com", 409)]
+    public async Task AdminEditsAreChecked(string actor, string target, string first, string email, int status)
+    {
+        await Start();
+
+        var response = await client.PutAsJsonAsync($"/admin/accounts/{await Id(target)}", new
+        {
+            adminId = await Id(actor), firstName = first, lastName = "Baker", email, phoneNumber = "", address = ""
+        });
+
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
+    public async Task AdminsCantBeGivenACompany()
+    {
+        await Start();
+        var ann = await Id("ann");
+
+        var response = await client.PutAsJsonAsync($"/admin/accounts/{ann}", new
+        {
+            adminId = ann, firstName = "Ann", lastName = "Admin", email = "ann@example.com", companyId = 999
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }
