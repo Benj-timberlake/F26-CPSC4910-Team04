@@ -20,6 +20,11 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
     public override async Task ValidatePrincipal(CookieValidatePrincipalContext context)
     {
         var now = clock.GetUtcNow();
+        if (context.Principal is { } principal && ViewAs.IsViewing(principal) && ViewAs.Expired(context.Properties, now))
+        {
+            await Reject(context);
+            return;
+        }
         if (now - CheckedAt(context.Properties) < Interval)
             return;
 
@@ -61,7 +66,7 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
         if (user is null)
             return;
 
-        context.ReplacePrincipal(TruckerSignIn.Principal(user));
+        context.ReplacePrincipal(ViewAs.Carry(context.Principal!, TruckerSignIn.Principal(user)));
         MarkChecked(context.Properties, now);
         context.ShouldRenew = true;
     }

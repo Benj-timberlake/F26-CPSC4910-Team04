@@ -48,6 +48,7 @@ app.UseAuthorization();
 
 app.MapAccountEndpoints();
 app.MapAuditExport();
+app.MapViewAs();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
