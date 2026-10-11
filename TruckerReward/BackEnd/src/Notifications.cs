@@ -78,6 +78,12 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             NotificationCategory.Purchases);
 
+    public Task DriverRefunded(User driver, IReadOnlyList<CartItem> items, int points) =>
+        ToSponsorsOf(driver.CompanyId, $"{driver.Username} refunded an order",
+            $"{driver.FirstName} {driver.LastName} ({driver.Username}) got {points:N0} points back for " +
+            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
+            NotificationCategory.Purchases);
+
     private async Task<string> CompanyName(int companyId) =>
         await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "the company";
 
