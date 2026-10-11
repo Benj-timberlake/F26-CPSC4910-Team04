@@ -17,12 +17,12 @@ public sealed class ManagePointsPageTests : TestContext
          {"id":9,"username":"amy","firstName":"Amy","lastName":"Zane","email":"amy@example.com","points":0}]
         """;
 
-    private IRenderedComponent<ManagePoints> Render()
+    private IRenderedComponent<ManagePoints> Render(params Claim[] extra)
     {
         var auth = this.AddTestAuthorization();
         auth.SetAuthorized("sue");
         auth.SetRoles("sponsor");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "5"));
+        auth.SetClaims([new Claim(ClaimTypes.NameIdentifier, "5"), .. extra]);
         Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
             .ConfigurePrimaryHttpMessageHandler(() => backend);
         return RenderComponent<ManagePoints>();
@@ -97,5 +97,17 @@ public sealed class ManagePointsPageTests : TestContext
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.Forbidden, "");
         var page = Render();
         page.WaitForAssertion(() => Assert.Contains("You aren't with a company yet", page.Markup));
+    }
+
+    [Theory]
+    [InlineData(false, 2)]
+    [InlineData(true, 0)]
+    public void ViewAsIsOfferedUnlessAlreadyViewing(bool viewing, int forms)
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        var page = Render(viewing ? [new Claim(FrontEnd.Auth.ViewAs.ViewerIdClaim, "4")] : []);
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        Assert.Equal(forms, page.FindAll("form.view-as").Count);
     }
 }

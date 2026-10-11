@@ -76,9 +76,12 @@
                                     else
                                     {
                                         <button type="button" class="tr-btn-outline" @onclick="() => Edit(d)">Change points</button>
-                                        <form class="view-as" method="post" action="account/view-as/@d.Id">
-                                            <button type="submit" class="tr-btn-outline">View as</button>
-                                        </form>
+                                        @if (!viewing)
+                                        {
+                                            <form class="view-as" method="post" action="account/view-as/@d.Id">
+                                                <button type="submit" class="tr-btn-outline">View as</button>
+                                            </form>
+                                        }
                                     }
                                 </td>
                             </tr>
@@ -130,12 +133,15 @@
     private string? reason;
     private bool busy;
     private bool noCompany;
+    private bool viewing;
     private string? error;
     private string? notice;
 
     protected override async Task OnInitializedAsync()
     {
-        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = (await AuthState).User;
+        id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        viewing = FrontEnd.Auth.ViewAs.IsViewing(user);
         await Load();
     }
 
