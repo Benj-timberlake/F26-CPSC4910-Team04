@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace FrontEnd.Auth;
 
-// passkeys.js talks to these because the browser can't reach the backend, and only a real request can set the cookie
+// proxies passkeys.js calls to set the cookie
 public static class PasskeyProxy
 {
     public static void MapPasskeyProxy(this WebApplication app)

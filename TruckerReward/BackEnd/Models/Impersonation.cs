@@ -1,6 +1,6 @@
 namespace BackEnd.Models;
 
-// one row each time an admin or sponsor starts viewing the site as someone else
+// one row per view-as session
 public class Impersonation
 {
     public int Id { get; set; }

@@ -83,7 +83,7 @@ public sealed class ViewAsCookieTests : IAsyncDisposable
         backend.Routes["GET /users/8"] = (HttpStatusCode.OK, Bob);
         clock.Advance(TimeSpan.FromMinutes(20));
 
-        // renewing slides the cookie's own expiry to 50 minutes, so only the view-as limit ends it at 30
+        // only the view-as limit ends this before the renewed cookie expires
         var response = await Send(client, HttpMethod.Get, "/whoami", cookie);
         Assert.Equal(new Who("bob", "ann"), await response.Content.ReadFromJsonAsync<Who>());
         Assert.Contains("GET /users/8", backend.Requests);
@@ -116,7 +116,7 @@ public sealed class ViewAsCookieTests : IAsyncDisposable
         var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["password"] = "x" });
 
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(client, HttpMethod.Post, "/account/change-password", cookie, form)).StatusCode);
-        // bob is a driver, so the role check turns this away first
+        // the driver role check turns this away first
         Assert.Contains("/login", (await Send(client, HttpMethod.Post, "/account/view-as/9", cookie)).Headers.Location!.ToString());
         Assert.DoesNotContain(backend.Requests, r => r.Contains("/password") || r.Contains("view-as/9"));
     }

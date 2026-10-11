@@ -100,7 +100,7 @@ public static class AdminEndpoints
             return Results.NoContent();
         });
 
-        // no password, so the new user picks one from the emailed link
+        // the new user picks a password from the emailed link
         app.MapPost("/admin/accounts", CreateAccount);
         // username, password and type have their own flows
         app.MapPut("/admin/accounts/{id:int}", EditAccount);

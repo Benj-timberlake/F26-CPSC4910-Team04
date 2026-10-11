@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace FrontEnd.Auth;
 
-// swaps the cookie to another user for a fixed half hour, keeping who is really signed in
+// swaps the cookie to another user for a fixed half hour
 public static class ViewAs
 {
     public const string ViewerIdClaim = "viewer_id";
@@ -69,7 +69,7 @@ public static class ViewAs
         || !DateTimeOffset.TryParse(s, null, System.Globalization.DateTimeStyles.RoundtripKind, out var until)
         || now >= until;
 
-    // keeps the viewer claims when the cookie is rebuilt from the backend
+    // keeps the viewer claims across cookie rebuilds
     internal static ClaimsPrincipal Carry(ClaimsPrincipal from, ClaimsPrincipal to)
     {
         ((ClaimsIdentity)to.Identity!).AddClaims(from.Claims.Where(c => c.Type is ViewerIdClaim or ViewerNameClaim).Select(c => new Claim(c.Type, c.Value)));

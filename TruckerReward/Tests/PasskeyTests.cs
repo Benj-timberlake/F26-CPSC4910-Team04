@@ -38,7 +38,7 @@ public sealed class PasskeyTests : IAsyncDisposable
     private async Task<HttpResponseMessage> Register(int user, SoftAuthenticator key, int completeAs = 0, string name = "iPhone")
     {
         var begin = await Post($"/users/{user}/passkeys/begin");
-        // the browser rejects null where it wants a list
+        // the browser rejects null lists
         Xunit.Assert.DoesNotContain(":null", begin.GetRawText());
         return await client.PostAsJsonAsync($"/users/{(completeAs == 0 ? user : completeAs)}/passkeys/complete",
             new { requestId = begin.GetProperty("requestId").GetString(), name, response = key.Create(begin.GetProperty("options")) });
@@ -144,7 +144,7 @@ public sealed class PasskeyTests : IAsyncDisposable
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
 
-    // stands in for face id: a p-256 key that answers webauthn like a browser would
+    // a p-256 key standing in for face id
     private sealed class SoftAuthenticator(int userId)
     {
         private readonly ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);

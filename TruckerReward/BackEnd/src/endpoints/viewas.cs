@@ -1,7 +1,7 @@
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
 
-// admins view as any driver or sponsor, sponsors as their own drivers
+// lets admins and sponsors view the site as another user
 public static class ViewAsEndpoints
 {
     public static void MapViewAsEndpoints(this WebApplication app)

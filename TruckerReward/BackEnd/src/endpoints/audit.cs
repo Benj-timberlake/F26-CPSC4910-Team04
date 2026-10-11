@@ -144,5 +144,5 @@ public static class AuditEndpoints
     };
 }
 
-// by is whoever made a point change or viewed the account
+// by names the point changer or viewer
 public record AuditEntry(DateTime At, string Category, int? UserId, string Username, string Detail, string? By);

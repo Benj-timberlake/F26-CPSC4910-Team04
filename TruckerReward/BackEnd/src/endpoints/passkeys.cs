@@ -7,13 +7,13 @@ using Fido2NetLib.Objects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
-// passkeys (face id, fingerprints, security keys). the browser does the ceremony, this checks it
+// checks passkey ceremonies done in the browser
 public static class PasskeyEndpoints
 {
     public static readonly TimeSpan CeremonyLifetime = TimeSpan.FromMinutes(5);
     public const int MaxNameLength = 100;
 
-    // the relying party is whatever host FRONTEND_URL names, so passkeys only work on that address
+    // passkeys only work on the FRONTEND_URL host
     public static void AddPasskeys(this IServiceCollection services, IConfiguration config)
     {
         services.AddMemoryCache();
@@ -53,7 +53,7 @@ public static class PasskeyEndpoints
             {
                 User = new Fido2User { Id = Handle(user.Id), Name = user.Username, DisplayName = $"{user.FirstName} {user.LastName}" },
                 ExcludeCredentials = existing.Select(c => new PublicKeyCredentialDescriptor(c)).ToList(),
-                // discoverable and face id/fingerprint checked, so sign in needs no username
+                // discoverable keys let sign in skip the username
                 AuthenticatorSelection = new AuthenticatorSelection { ResidentKey = ResidentKeyRequirement.Required, UserVerification = UserVerificationRequirement.Required },
                 AttestationPreference = AttestationConveyancePreference.None
             });
@@ -161,7 +161,7 @@ public static class PasskeyEndpoints
         return Results.Text($$"""{"requestId":"{{requestId}}","options":{{optionsJson}}}""", "application/json");
     }
 
-    // single use, so a captured response can't be replayed
+    // single use to stop replays
     private static Pending? Take(IMemoryCache cache, string? requestId)
     {
         if (string.IsNullOrEmpty(requestId) || !cache.TryGetValue("passkey:" + requestId, out Pending? pending))

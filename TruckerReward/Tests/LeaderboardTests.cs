@@ -11,7 +11,7 @@ public sealed class LeaderboardTests : IAsyncDisposable
     private HttpClient client = null!;
     private int bob, amy, sue, ann, loner, acme;
 
-    // the test clock is thursday 2026-09-17, so the week starts on the 14th
+    // the week of the thursday 2026-09-17 test clock starts on the 14th
     private async Task Start()
     {
         client = await app.Start();

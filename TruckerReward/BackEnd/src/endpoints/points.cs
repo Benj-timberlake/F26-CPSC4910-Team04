@@ -160,7 +160,7 @@ public static class PointsEndpoints
 
 public record LeaderboardRow(int Rank, int Id, string Username, string FirstName, string LastName, long Points);
 
-// your rank is null unless you're on the board
+// your rank is null for viewers off the board
 public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Rows);
 
 public record ChangePointsRequest(int Points, string? Reason);

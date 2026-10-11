@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
     CONSTRAINT fk_notification_preferences_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
--- each time an admin or sponsor views the site as another user
+-- one row per view-as session
 CREATE TABLE IF NOT EXISTS impersonations (
     id INT NOT NULL AUTO_INCREMENT,
     viewer_id INT NOT NULL,

@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Components.Server.Circuits;
 
 namespace FrontEnd.Auth;
 
-// while viewing as someone, the backend client only sends reads
+// blocks backend writes while viewing as someone
 public sealed class ViewAsReadOnlyHandler(CircuitServices circuit, IHttpContextAccessor http) : DelegatingHandler
 {
     public const string Message = "View as is read-only. Return to your own account to make changes.";
@@ -21,14 +21,14 @@ public sealed class ViewAsReadOnlyHandler(CircuitServices circuit, IHttpContextA
 
     private async Task<bool> Viewing()
     {
-        // a blazor circuit has no live HttpContext, so ask the circuit's auth state first
+        // circuits have no live HttpContext
         if (circuit.Services?.GetService<AuthenticationStateProvider>() is { } auth)
             return ViewAs.IsViewing((await auth.GetAuthenticationStateAsync()).User);
         return http.HttpContext?.User is { } user && ViewAs.IsViewing(user);
     }
 }
 
-// the circuit's services, for code that runs in a different DI scope like http handlers
+// exposes circuit services to http handlers
 public sealed class CircuitServices
 {
     private static readonly AsyncLocal<IServiceProvider?> current = new();

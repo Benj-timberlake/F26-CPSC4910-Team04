@@ -1,6 +1,6 @@
 -- run once against Team04_DB before deploying this branch
 
--- each time an admin or sponsor views the site as another user
+-- one row per view-as session
 CREATE TABLE IF NOT EXISTS impersonations (
     id INT NOT NULL AUTO_INCREMENT,
     viewer_id INT NOT NULL,

@@ -1,4 +1,4 @@
-// webauthn needs https (or localhost), and the browser does the face id prompt
+// webauthn needs https or localhost
 window.truckerPasskeys = (() => {
     const toBytes = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
     const toText = b => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
