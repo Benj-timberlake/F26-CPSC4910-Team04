@@ -95,6 +95,11 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             $"{viewer.FirstName} {viewer.LastName} ({viewer.Username}), {(viewer.UserType == AuthEndpoints.Admin ? "an administrator" : "your sponsor")}, viewed the site as you.",
             null, emailed: false);
 
+    public Task OrderSent(User driver, IReadOnlyList<CartItem> items) =>
+        Send(driver, "Your sponsor ordered your items",
+            "Your sponsor placed the order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
+            NotificationCategory.Orders);
+
     private async Task<string> CompanyName(int companyId) =>
         await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "the company";
 

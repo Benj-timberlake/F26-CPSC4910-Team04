@@ -24,7 +24,7 @@ public static class CartEndpoints
                     group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList());
             }).OrderByDescending(order => order.Timestamp).ThenByDescending(order => order.OrderId));
         });
-        app.MapPost("/users/{id:int}/driver-orders/{orderId:int}/buy", async (int id, int orderId, AppDbContext db) =>
+        app.MapPost("/users/{id:int}/driver-orders/{orderId:int}/buy", async (int id, int orderId, AppDbContext db, Notifications notifications) =>
         {
             var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
             if (sponsor is null) return Results.NotFound();
@@ -40,7 +40,10 @@ public static class CartEndpoints
             var changed = await db.CartItems.Where(item => eligible.Contains(item.Id)
                     && item.PointsHistoryId == orderId && !item.InCart && !item.WasOrdered)
                 .ExecuteUpdateAsync(update => update.SetProperty(item => item.WasOrdered, true));
-            return changed == 0 ? Results.NotFound() : Results.NoContent();
+            if (changed == 0) return Results.NotFound();
+            var bought = await db.CartItems.AsNoTracking().Include(item => item.User).Where(item => eligible.Contains(item.Id)).ToListAsync();
+            await notifications.OrderSent(bought[0].User, bought);
+            return Results.NoContent();
         });
 
         app.MapGet("/users/{id:int}/orders", async (int id, AppDbContext db, TimeProvider clock) =>
