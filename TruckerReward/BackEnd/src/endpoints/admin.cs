@@ -101,82 +101,93 @@ public static class AdminEndpoints
         });
 
         // no password, so the new user picks one from the emailed link
-        app.MapPost("/admin/accounts", async (CreateAccountRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config) =>
-        {
-            if (!await db.Users.AnyAsync(u => u.Id == req.AdminId && u.UserType == AuthEndpoints.Admin))
-                return Results.StatusCode(StatusCodes.Status403Forbidden);
-            var username = req.Username?.Trim() ?? "";
-            var firstName = req.FirstName?.Trim() ?? "";
-            var lastName = req.LastName?.Trim() ?? "";
-            var address = req.Email?.Trim() ?? "";
-            if (req.UserType is not (AuthEndpoints.Driver or AuthEndpoints.Sponsor or AuthEndpoints.Admin))
-                return Results.BadRequest(new { message = "Account type must be driver, sponsor or admin." });
-            if (username.Length is 0 or > 255)
-                return Results.BadRequest(new { message = "Usernames are 1 to 255 characters." });
-            if (firstName.Length is 0 or > 100 || lastName.Length is 0 or > 100)
-                return Results.BadRequest(new { message = "First and last names are required and must be 100 characters or fewer." });
-            if (address.Length is 0 or > 255 || !System.Net.Mail.MailAddress.TryCreate(address, out var parsed) || parsed.Address != address)
-                return Results.BadRequest(new { message = "Enter a valid email address of 255 characters or fewer." });
-            if (req.CompanyId is not null && (req.UserType == AuthEndpoints.Admin || !await db.Companies.AnyAsync(c => c.Id == req.CompanyId)))
-                return Results.BadRequest(new { message = "Pick an existing sponsor, and only for drivers and sponsors." });
-            if (await db.Users.AnyAsync(u => u.Username == username))
-                return Results.Conflict(new { message = "That username is already taken." });
-            if (await db.Users.AnyAsync(u => u.Email == address))
-                return Results.Conflict(new { message = "An account with that email already exists." });
-
-            var user = new User
-            {
-                UserType = req.UserType, Username = username, FirstName = firstName, LastName = lastName,
-                Email = address, PhoneNumber = "", Address = "", CompanyId = req.CompanyId
-            };
-            db.Users.Add(user);
-            await db.SaveChangesAsync();
-            var link = PasswordEndpoints.ResetLink(db, user, clock.GetUtcNow().UtcDateTime + InviteLifetime, config);
-            await db.SaveChangesAsync();
-            await notifications.AccountInvited(user, link);
-            await notifications.AccountCreated(user);
-            return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
-        });
-
+        app.MapPost("/admin/accounts", CreateAccount);
         // username, password and type have their own flows
-        app.MapPut("/admin/accounts/{id:int}", async (int id, EditAccountRequest req, AppDbContext db, IEmailSender email) =>
-        {
-            if (!await db.Users.AnyAsync(u => u.Id == req.AdminId && u.UserType == AuthEndpoints.Admin))
-                return Results.StatusCode(StatusCodes.Status403Forbidden);
-            var account = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
-            if (account is null)
-                return Results.NotFound();
-
-            var firstName = req.FirstName?.Trim() ?? "";
-            var lastName = req.LastName?.Trim() ?? "";
-            var address = req.Email?.Trim() ?? "";
-            var phone = req.PhoneNumber?.Trim() ?? "";
-            var street = req.Address?.Trim() ?? "";
-            if (firstName.Length is 0 or > 100 || lastName.Length is 0 or > 100)
-                return Results.BadRequest(new { message = "First and last names are required and must be 100 characters or fewer." });
-            if (address.Length is 0 or > 255 || !System.Net.Mail.MailAddress.TryCreate(address, out var parsed) || parsed.Address != address)
-                return Results.BadRequest(new { message = "Enter a valid email address of 255 characters or fewer." });
-            if (phone.Length > 20 || street.Length > 255)
-                return Results.BadRequest(new { message = "Phone number must be 20 characters or fewer and address must be 255 characters or fewer." });
-            if (await db.Users.AnyAsync(u => u.Email == address && u.Id != id))
-                return Results.Conflict(new { message = "That email address is already in use." });
-            if (req.CompanyId is not null && (account.UserType == AuthEndpoints.Admin || !await db.Companies.AnyAsync(c => c.Id == req.CompanyId)))
-                return Results.BadRequest(new { message = "Pick an existing sponsor, and only for drivers and sponsors." });
-
-            var oldAddress = account.Email;
-            account.FirstName = firstName;
-            account.LastName = lastName;
-            account.Email = address;
-            account.PhoneNumber = phone;
-            account.Address = street;
-            account.CompanyId = req.CompanyId;
-            await db.SaveChangesAsync();
-            if (!string.Equals(oldAddress, address, StringComparison.OrdinalIgnoreCase))
-                await email.SendAsync(oldAddress, "Your TruckerReward email was changed",
-                    $"Hi {account.Username},\n\nAn administrator changed your account email from {oldAddress} to {address}. If that's wrong, contact an administrator.");
-            return Results.NoContent();
-        });
+        app.MapPut("/admin/accounts/{id:int}", EditAccount);
     }
+
+    private static async Task<IResult> CreateAccount(CreateAccountRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config)
+    {
+        if (!await IsAdmin(db, req.AdminId))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var username = req.Username?.Trim() ?? "";
+        var (firstName, lastName, address) = (Trim(req.FirstName), Trim(req.LastName), Trim(req.Email));
+        if (req.UserType is not (AuthEndpoints.Driver or AuthEndpoints.Sponsor or AuthEndpoints.Admin))
+            return Results.BadRequest(new { message = "Account type must be driver, sponsor or admin." });
+        if (username.Length is 0 or > 255)
+            return Results.BadRequest(new { message = "Usernames are 1 to 255 characters." });
+        if ((DetailsProblem(firstName, lastName, address) ?? await CompanyProblem(db, req.UserType, req.CompanyId)) is { } problem)
+            return Results.BadRequest(new { message = problem });
+        if (await db.Users.AnyAsync(u => u.Username == username))
+            return Results.Conflict(new { message = "That username is already taken." });
+        if (await db.Users.AnyAsync(u => u.Email == address))
+            return Results.Conflict(new { message = "An account with that email already exists." });
+
+        var user = new User
+        {
+            UserType = req.UserType, Username = username, FirstName = firstName, LastName = lastName,
+            Email = address, PhoneNumber = "", Address = "", CompanyId = req.CompanyId
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var link = PasswordEndpoints.ResetLink(db, user, clock.GetUtcNow().UtcDateTime + InviteLifetime, config);
+        await db.SaveChangesAsync();
+        await notifications.AccountInvited(user, link);
+        await notifications.AccountCreated(user);
+        return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
+    }
+
+    private static async Task<IResult> EditAccount(int id, EditAccountRequest req, AppDbContext db, IEmailSender email)
+    {
+        if (!await IsAdmin(db, req.AdminId))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var account = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (account is null)
+            return Results.NotFound();
+
+        var (firstName, lastName, address) = (Trim(req.FirstName), Trim(req.LastName), Trim(req.Email));
+        var (phone, street) = (Trim(req.PhoneNumber), Trim(req.Address));
+        if (DetailsProblem(firstName, lastName, address) is { } problem)
+            return Results.BadRequest(new { message = problem });
+        if (phone.Length > 20 || street.Length > 255)
+            return Results.BadRequest(new { message = "Phone number must be 20 characters or fewer and address must be 255 characters or fewer." });
+        if (await db.Users.AnyAsync(u => u.Email == address && u.Id != id))
+            return Results.Conflict(new { message = "That email address is already in use." });
+        if (await CompanyProblem(db, account.UserType, req.CompanyId) is { } companyProblem)
+            return Results.BadRequest(new { message = companyProblem });
+
+        var oldAddress = account.Email;
+        account.FirstName = firstName;
+        account.LastName = lastName;
+        account.Email = address;
+        account.PhoneNumber = phone;
+        account.Address = street;
+        account.CompanyId = req.CompanyId;
+        await db.SaveChangesAsync();
+        if (!string.Equals(oldAddress, address, StringComparison.OrdinalIgnoreCase))
+            await email.SendAsync(oldAddress, "Your TruckerReward email was changed",
+                $"Hi {account.Username},\n\nAn administrator changed your account email from {oldAddress} to {address}. If that's wrong, contact an administrator.");
+        return Results.NoContent();
+    }
+
+    private static Task<bool> IsAdmin(AppDbContext db, int id) =>
+        db.Users.AnyAsync(u => u.Id == id && u.UserType == AuthEndpoints.Admin);
+
+    private static string Trim(string? value) => value?.Trim() ?? "";
+
+    private static string? DetailsProblem(string firstName, string lastName, string email)
+    {
+        if (firstName.Length is 0 or > 100 || lastName.Length is 0 or > 100)
+            return "First and last names are required and must be 100 characters or fewer.";
+        if (email.Length is 0 or > 255 || !System.Net.Mail.MailAddress.TryCreate(email, out var parsed) || parsed.Address != email)
+            return "Enter a valid email address of 255 characters or fewer.";
+        return null;
+    }
+
+    private static async Task<string?> CompanyProblem(AppDbContext db, string? userType, int? companyId) =>
+        companyId is not null && (userType == AuthEndpoints.Admin || !await db.Companies.AnyAsync(c => c.Id == companyId))
+            ? "Pick an existing sponsor, and only for drivers and sponsors."
+            : null;
 
     public const int MaxAccounts = 500;
     public static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(3);
