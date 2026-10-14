@@ -12,14 +12,16 @@ public static class UserEndpoints
                 .Select(c => new CompanyOption(c.Id, c.Name, c.Description))
                 .ToListAsync()));
 
-        app.MapPost("/users/{id:int}/applications", async (int id, CreateApplicationRequest request, AppDbContext db) =>
+        app.MapPost("/users/{id:int}/applications", async (int id, CreateApplicationRequest request, AppDbContext db, Notifications notifications) =>
         {
             var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == id);
             if (applicant is null)
                 return Results.NotFound();
             if ((applicant.UserType != "driver" && applicant.UserType != "sponsor") || applicant.CompanyId is not null)
                 return Results.BadRequest(new { message = "Only drivers or sponsors without a company can apply." });
-            if (!await db.Companies.AnyAsync(company => company.Id == request.CompanyId))
+            var companyName = await db.Companies.Where(company => company.Id == request.CompanyId)
+                .Select(company => company.Name).FirstOrDefaultAsync();
+            if (companyName is null)
                 return Results.BadRequest(new { message = "The selected company does not exist." });
             if (await db.Applications.AnyAsync(application =>
                 application.ApplicantId == id && (application.Status == "active" || application.Status == "approved")))
@@ -35,10 +37,11 @@ public static class UserEndpoints
             });
 
             await db.SaveChangesAsync();
+            await notifications.CompanyApplicationSubmitted(applicant, request.CompanyId, companyName, reasoning: null);
             return Results.Created($"/users/{id}/applications", new { message = "Application submitted." });
         });
 
-        app.MapPost("/users/{id:int}/applications/cancel", async (int id, CancelApplicationRequest request, AppDbContext db) =>
+        app.MapPost("/users/{id:int}/applications/cancel", async (int id, CancelApplicationRequest request, AppDbContext db, Notifications notifications) =>
         {
             var reasoning = request.Reasoning?.Trim();
             if (string.IsNullOrWhiteSpace(reasoning))
@@ -55,6 +58,9 @@ public static class UserEndpoints
             application.ReviewerId = applicant.Id;
             application.ReviewerReasoning = reasoning;
             await db.SaveChangesAsync();
+            var companyName = await db.Companies.Where(company => company.Id == application.CompanyId)
+                .Select(company => company.Name).FirstOrDefaultAsync() ?? "the company";
+            await notifications.CompanyApplicationCanceled(applicant, application.CompanyId, companyName, reasoning);
             return Results.Ok();
         });
 
@@ -140,7 +146,7 @@ public static class UserEndpoints
         });
 
         app.MapPost("/users/{reviewerId:int}/applications/{applicationId:int}/review", async
-            (int reviewerId, int applicationId, ReviewApplicationRequest request, AppDbContext db, TimeProvider clock) =>
+            (int reviewerId, int applicationId, ReviewApplicationRequest request, AppDbContext db, TimeProvider clock, Notifications notifications) =>
         {
             var reviewer = await db.Users.FirstOrDefaultAsync(user => user.Id == reviewerId);
             if (reviewer is null || (reviewer.UserType != "admin" && reviewer.UserType != "sponsor"))
@@ -160,6 +166,8 @@ public static class UserEndpoints
             var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == application.ApplicantId);
             if (applicant is null)
                 return Results.NotFound();
+            var companyName = await db.Companies.Where(company => company.Id == application.CompanyId)
+                .Select(company => company.Name).FirstOrDefaultAsync() ?? "the company";
             if (reviewer.UserType == "sponsor" &&
                 (reviewer.CompanyId is null || application.CompanyId != reviewer.CompanyId || applicant.UserType != "driver"))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -183,6 +191,7 @@ public static class UserEndpoints
                 applicant.CompanyId = null;
 
             await db.SaveChangesAsync();
+            await notifications.CompanyApplicationReviewed(applicant, reviewer, decision, companyName, reasoning);
             return Results.Ok();
         });
 

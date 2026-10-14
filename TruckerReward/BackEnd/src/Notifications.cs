@@ -24,6 +24,42 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             $"{user.FirstName} {user.LastName} ({user.Username}, {user.Email}) created a {user.UserType} account.",
             emailed: false);
 
+    public async Task CompanyApplicationSubmitted(User applicant, int companyId, string companyName, string? reasoning)
+    {
+        const string subject = "Company Application";
+        var body = WithReasoning(
+            $"{FormatIdentity(applicant)} applied to {companyName}.",
+            reasoning);
+        await ToAdmins(subject, body, emailed: false);
+        await ToSponsorsOf(companyId, subject, body, emailed: false);
+        await Send(applicant, subject, body, emailed: false);
+    }
+
+    public async Task CompanyApplicationCanceled(User applicant, int companyId, string companyName, string reasoning)
+    {
+        var subject = $"Company Application Canceled: {applicant.FirstName} {applicant.LastName}";
+        var body = WithReasoning(
+            $"{FormatIdentity(applicant)} canceled their application to {companyName}.",
+            reasoning);
+        await ToAdmins(subject, body, emailed: false);
+        await ToSponsorsOf(companyId, subject, body, emailed: false);
+        await Send(applicant, subject, body, emailed: false);
+    }
+
+    public Task CompanyApplicationReviewed(User applicant, User reviewer, string decision, string companyName, string reasoning)
+    {
+        var action = decision == "active" ? "reverted" : decision == "approved" ? "approved" : "denied";
+        var subject = $"Company Application {TitleCase(action)}: {applicant.FirstName} {applicant.LastName}";
+        var body = $"{FormatIdentity(reviewer)} {action} the application from {FormatIdentity(applicant)} to {companyName}.";
+        return Send(applicant, subject, WithReasoning(body, reasoning), emailed: true);
+    }
+
+    private static string FormatIdentity(User user) =>
+        $"{TitleCase(user.UserType)}, {user.FirstName} {user.LastName} ({user.Username}, {user.Email}),";
+    private static string TitleCase(string value) => char.ToUpperInvariant(value[0]) + value[1..];
+    private static string WithReasoning(string body, string? reasoning) =>
+        string.IsNullOrWhiteSpace(reasoning) ? body : $"{body}\nReason given: {reasoning}";
+
     public async Task PointsChanged(User user, int delta, string reason)
     {
         await Send(user, delta >= 0 ? $"{delta:N0} points added" : $"{-delta:N0} points deducted",
