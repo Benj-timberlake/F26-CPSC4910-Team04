@@ -47,7 +47,7 @@ public static class AuthEndpoints
             return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
         });
 
-        app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db, IEmailSender email, TimeProvider clock) =>
+        app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             var username = req.Username?.Trim() ?? "";
             var now = clock.GetUtcNow().UtcDateTime;
@@ -55,8 +55,12 @@ public static class AuthEndpoints
             var lockedUntil = await Lockout.LockedUntil(db, username, now);
 
             var ok = Passwords.Verify(user, req.Password) && lockedUntil is null;
-            await RecordAttempt(db, username, user?.Id, ok, req.IpAddress, now);
+            // only someone with the right password learns the account is deactivated
+            var inactive = ok && user!.Status == User.Inactive;
+            await RecordAttempt(db, username, user?.Id, ok && !inactive, req.IpAddress, now);
 
+            if (inactive)
+                return Deactivated();
             if (ok)
                 return Results.Ok(UserProfile.Of(user!));
             if (lockedUntil is not null)
@@ -64,8 +68,7 @@ public static class AuthEndpoints
 
             // this failure may be the one that starts a lock, tell the admins once
             if (await Lockout.LockedUntil(db, username, now) is { } until)
-                await Notify.Admins(db, email, $"Account locked: {username}",
-                    $"{Lockout.MaxFailures} failed sign-in attempts in a row for {username} from {req.IpAddress ?? "an unknown address"}. The account is locked until {until:u}.");
+                await notifications.AccountLocked(username, req.IpAddress, until);
             return Results.Unauthorized();
         });
 
@@ -79,15 +82,32 @@ public static class AuthEndpoints
             var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user is null)
             {
-                user = new User { UserType = Driver, Username = await UniqueUsername(db, email), Email = email, PhoneNumber = "", Address = "" };
+                var username = await UniqueUsername(db, email);
+                // providers send the display name as "First Last"
+                var name = req.Name?.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries) ?? [];
+                user = new User
+                {
+                    UserType = Driver,
+                    Username = username,
+                    FirstName = name.Length > 0 ? name[0] : username,
+                    LastName = name.Length > 1 ? name[1].Trim() : "",
+                    Email = email,
+                    PhoneNumber = "",
+                    Address = ""
+                };
                 db.Users.Add(user);
                 await db.SaveChangesAsync();
                 await notifications.AccountCreated(user);
             }
+            if (user.Status == User.Inactive)
+                return Deactivated();
             await RecordAttempt(db, user.Username, user.Id, true, req.IpAddress, clock.GetUtcNow().UtcDateTime);
             return Results.Ok(UserProfile.Of(user));
         });
     }
+
+    private static IResult Deactivated() =>
+        Results.Json(new { message = "This account has been deactivated." }, statusCode: StatusCodes.Status403Forbidden);
 
     private static Task RecordAttempt(AppDbContext db, string username, int? userId, bool succeeded, string? ip, DateTime at)
     {

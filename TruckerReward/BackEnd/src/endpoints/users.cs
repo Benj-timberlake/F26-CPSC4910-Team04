@@ -37,7 +37,7 @@ public static class UserEndpoints
             });
 
             await db.SaveChangesAsync();
-            await notifications.CompanyApplicationSubmitted(applicant, request.CompanyId, companyName, reasoning: null);
+            await notifications.CompanyApplicationSubmitted(applicant, request.CompanyId, companyName);
             return Results.Created($"/users/{id}/applications", new { message = "Application submitted." });
         });
 
@@ -181,6 +181,7 @@ public static class UserEndpoints
                 (item.Status == "active" || item.Status == "approved")))
                 return Results.Conflict(new { message = "This applicant already has an active or accepted application." });
 
+            var previous = application.Status;
             application.ReviewerId = reviewer.Id;
             application.ReviewerReasoning = reasoning;
             application.Status = decision;
@@ -191,7 +192,7 @@ public static class UserEndpoints
                 applicant.CompanyId = null;
 
             await db.SaveChangesAsync();
-            await notifications.CompanyApplicationReviewed(applicant, reviewer, decision, companyName, reasoning);
+            await notifications.CompanyApplicationReviewed(applicant, reviewer, previous, decision, companyName, reasoning);
             return Results.Ok();
         });
 

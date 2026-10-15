@@ -26,6 +26,8 @@ public static class AccountEndpoints
                 return Results.Redirect("/login?error=1" + ReturnParam(returnUrl));
             if (response.StatusCode == HttpStatusCode.Locked)
                 return Results.Redirect("/login?error=locked" + ReturnParam(returnUrl));
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+                return Results.Redirect("/login?error=inactive" + ReturnParam(returnUrl));
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/login?error=backend" + ReturnParam(returnUrl));
 
@@ -77,6 +79,11 @@ public static class AccountEndpoints
             var provider = external.Principal.Identity?.AuthenticationType;
 
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/external", new { provider, email, name, ipAddress = Ip(http) });
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                await http.SignOutAsync(AuthenticationSetup.ExternalScheme);
+                return Results.Redirect("/login?error=inactive");
+            }
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/login?error=sso");
 

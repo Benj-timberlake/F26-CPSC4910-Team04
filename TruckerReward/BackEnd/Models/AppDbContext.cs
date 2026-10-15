@@ -30,6 +30,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<NotificationsHistory> NotificationsHistories { get; set; }
 
+    public DbSet<NotificationPreference> NotificationPreferences { get; set; }
+
     public virtual DbSet<PasswordChange> PasswordChanges { get; set; }
 
     public virtual DbSet<PasswordReset> PasswordResets { get; set; }
@@ -377,6 +379,19 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("points_history_ibfk_1");
         });
 
+        modelBuilder.Entity<NotificationPreference>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.Category });
+            entity.ToTable("notification_preferences");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Category).HasMaxLength(30).HasColumnName("category");
+            entity.Property(e => e.Enabled).HasColumnName("enabled");
+            entity.Property(e => e.Emailed).HasColumnName("emailed");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_notification_preferences_user");
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -408,6 +423,9 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(20)
                 .HasColumnName("phone_number");
             entity.Property(e => e.Points).HasColumnName("points");
+            entity.Property(e => e.Status)
+                .HasColumnType("enum('active','inactive')")
+                .HasColumnName("status");
             entity.Property(e => e.UserType)
                 .HasColumnType("enum('admin','sponsor','driver')")
                 .HasColumnName("user_type");
