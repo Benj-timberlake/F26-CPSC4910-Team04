@@ -8,6 +8,15 @@ namespace FrontEnd.Auth;
 // CookieRevalidation when it refreshes the cookie from the current user row
 public static class TruckerSignIn
 {
+    public const string SponsorViewClaim = "sponsor_view_id";
+
+    public static ClaimsPrincipal DriverPrincipal(UserProfile driver, string sponsorId)
+    {
+        var principal = Principal(driver);
+        ((ClaimsIdentity)principal.Identity!).AddClaim(new Claim(SponsorViewClaim, sponsorId));
+        return principal;
+    }
+
     public static ClaimsPrincipal Principal(UserProfile user) => new(new ClaimsIdentity(
     [
         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -16,11 +25,15 @@ public static class TruckerSignIn
         new Claim(ClaimTypes.Role, user.UserType)
     ], CookieAuthenticationDefaults.AuthenticationScheme));
 
-    public static Task SignInAsync(HttpContext http, UserProfile user)
+    public static Task SignInAsync(HttpContext http, UserProfile user, string? sponsorId = null)
     {
         var clock = http.RequestServices.GetRequiredService<TimeProvider>();
         var properties = new AuthenticationProperties();
         CookieRevalidation.MarkChecked(properties, clock.GetUtcNow());
-        return http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, Principal(user), properties);
+        sponsorId ??= http.User.FindFirstValue(SponsorViewClaim);
+        var principal = sponsorId is not null && user.UserType == "driver"
+            ? DriverPrincipal(user, sponsorId)
+            : Principal(user);
+        return http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
     }
 }

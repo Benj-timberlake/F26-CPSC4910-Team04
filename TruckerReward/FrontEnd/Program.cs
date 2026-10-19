@@ -47,6 +47,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAccountEndpoints();
+app.MapDriverViewEndpoints();
 app.MapAuditExport();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");

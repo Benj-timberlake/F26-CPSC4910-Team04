@@ -31,9 +31,29 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
         }
 
         UserProfile? user;
+        var sponsorId = context.Principal?.FindFirstValue(TruckerSignIn.SponsorViewClaim);
         try
         {
             var backend = clients.CreateClient("Backend");
+            if (sponsorId is not null)
+            {
+                using var view = await backend.GetAsync($"users/{sponsorId}/drivers/{id}/view");
+                if (!view.IsSuccessStatusCode)
+                {
+                    await Reject(context);
+                    return;
+                }
+                var driver = await view.Content.ReadFromJsonAsync<UserProfile>();
+                if (driver is null || driver.UserType != "driver" || driver.Id.ToString() != id)
+                {
+                    await Reject(context);
+                    return;
+                }
+                context.ReplacePrincipal(TruckerSignIn.DriverPrincipal(driver, sponsorId));
+                MarkChecked(context.Properties, now);
+                context.ShouldRenew = true;
+                return;
+            }
             using var status = await backend.GetAsync($"users/{id}/status");
             if (status.IsSuccessStatusCode && (await status.Content.ReadFromJsonAsync<AccountStatus>())?.Status == "inactive")
             {
@@ -55,6 +75,11 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            if (sponsorId is not null)
+            {
+                await Reject(context);
+                return;
+            }
             log.LogWarning(ex, "could not re-check user {Id} against the backend, keeping the cookie for now", id);
             return;
         }

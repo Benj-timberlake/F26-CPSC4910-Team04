@@ -107,6 +107,7 @@
                                     <th scope="col">Username</th>
                                     <th scope="col">Email</th>
                                     <th scope="col">Points</th>
+                                    <th scope="col">Driver view</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -117,6 +118,11 @@
                                         <td>@driver.Username</td>
                                         <td>@driver.Email</td>
                                         <td>@FrontEnd.Shared.RewardPoints.Format(driver.Points)</td>
+                                        <td>
+                                            <form method="post" action="@($"account/driver-view/{driver.Id}")">
+                                                <button type="submit" class="tr-btn" aria-label="@($"See their view: {driver.Username}")">See their view</button>
+                                            </form>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -515,7 +521,7 @@
 
     private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
     private sealed record CompanyOption(int Id, string Name, string? Description);
-    private sealed record Driver(string Username, string FirstName, string LastName, string Email, int Points);
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
     private sealed record CancelApplicationRequest(string Reasoning);
 }

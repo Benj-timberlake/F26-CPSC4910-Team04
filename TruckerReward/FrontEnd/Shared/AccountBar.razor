@@ -8,6 +8,13 @@
     <a href="products">Products</a>
     <AuthorizeView>
         <Authorized>
+            @if (context.User.HasClaim(c => c.Type == FrontEnd.Auth.TruckerSignIn.SponsorViewClaim))
+            {
+                <span>Viewing as @context.User.Identity?.Name</span>
+                <form method="post" action="account/driver-view/return">
+                    <button type="submit">Return to sponsor view</button>
+                </form>
+            }
             <a href="dashboard">Dashboard</a>
             <AuthorizeView Roles="sponsor,admin" Context="applicationsNav">
                 @if (applicationsNav.User.IsInRole("admin") ||

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace TruckerReward.Tests;
@@ -21,6 +22,7 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
     private async Task<HttpClient> Start()
     {
         var builder = WebApplication.CreateBuilder();
+        builder.Logging.ClearProviders();
         builder.WebHost.UseTestServer();
         builder.AddTruckerAuthentication();
         builder.Services.AddSingleton<TimeProvider>(clock);

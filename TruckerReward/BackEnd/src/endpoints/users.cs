@@ -6,6 +6,20 @@ public static class UserEndpoints
 {
     public static void MapUserEndpoints(this WebApplication app)
     {
+        app.MapGet("/users/{id:int}/drivers/{driverId:int}/view", async (int id, int driverId, AppDbContext db) =>
+        {
+            var sponsor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+            if (sponsor is null || sponsor.UserType != "sponsor" || sponsor.CompanyId is null ||
+                sponsor.Status != User.Active)
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+            var driver = await db.Users.AsNoTracking()
+                .Where(u => u.Id == driverId && u.UserType == "driver" && u.CompanyId == sponsor.CompanyId && u.Status == User.Active)
+                .Select(u => new { u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address, u.Points })
+                .FirstOrDefaultAsync();
+            return driver is null ? Results.NotFound() : Results.Ok(driver);
+        });
+
         app.MapGet("/companies", async (AppDbContext db) =>
             Results.Ok(await db.Companies.AsNoTracking()
                 .OrderBy(c => c.Name)
