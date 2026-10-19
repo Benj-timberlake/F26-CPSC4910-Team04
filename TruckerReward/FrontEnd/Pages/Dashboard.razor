@@ -68,6 +68,55 @@
 
         </div>
 
+        @if (account.UserType == "sponsor")
+        {
+            <section class="tr-card">
+                <h2>Drivers</h2>
+                @if (account.CompanyId is null)
+                {
+                    <p>Join a company to see its associated drivers.</p>
+                }
+                else if (driverLoadError is not null)
+                {
+                    <p role="alert" class="tr-alert-error">@driverLoadError</p>
+                }
+                else if (drivers is null)
+                {
+                    <p role="status"><em>Loading drivers...</em></p>
+                }
+                else if (drivers.Count == 0)
+                {
+                    <p>No drivers are currently associated with your company.</p>
+                }
+                else
+                {
+                    <div class="tr-table-wrap">
+                        <table class="tr-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Name</th>
+                                    <th scope="col">Username</th>
+                                    <th scope="col">Email</th>
+                                    <th scope="col">Points</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var driver in drivers)
+                                {
+                                    <tr>
+                                        <td>@driver.FirstName @driver.LastName</td>
+                                        <td>@driver.Username</td>
+                                        <td>@driver.Email</td>
+                                        <td>@FrontEnd.Shared.RewardPoints.Format(driver.Points)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+
         @if (showCompanyModal)
         {
             <div class="company-backdrop" @onclick="CloseCompanyModal">
@@ -274,6 +323,8 @@
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     private Account? account;
+    private List<Driver>? drivers;
+    private string? driverLoadError;
     private string? loadError;
     private string? notice;
     private List<CompanyOption>? companies;
@@ -300,6 +351,18 @@
         catch (HttpRequestException)
         {
             loadError = "Couldn't load your account right now. Try again in a moment.";
+        }
+
+        if (account is { UserType: "sponsor", CompanyId: not null })
+        {
+            try
+            {
+                drivers = await client.GetFromJsonAsync<List<Driver>>($"users/{id}/points/drivers") ?? [];
+            }
+            catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+            {
+                driverLoadError = "Couldn't load drivers right now. Try again in a moment.";
+            }
         }
     }
 
@@ -443,6 +506,7 @@
 
     private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName);
     private sealed record CompanyOption(int Id, string Name, string? Description);
+    private sealed record Driver(string Username, string FirstName, string LastName, string Email, int Points);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
     private sealed record CancelApplicationRequest(string Reasoning);
 }
