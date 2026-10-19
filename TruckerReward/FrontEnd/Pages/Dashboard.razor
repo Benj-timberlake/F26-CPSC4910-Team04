@@ -34,6 +34,15 @@
         }
 
         <div class="tr-cards">
+            @if (account.UserType == "sponsor")
+            {
+                <section class="tr-card points">
+                    <h2>Budget</h2>
+                    <p class="balance">@FrontEnd.Shared.RewardPoints.Format(account.Points)</p>
+                    <p class="hint">Available points. Your balance resets to your company's monthly budget on the first of each month.</p>
+                </section>
+            }
+
             @if ((account.UserType == "sponsor" || account.UserType == "driver") && account.CompanyId is null)
             {
                 <section class="tr-card">
@@ -504,7 +513,7 @@
         }
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
     private sealed record CompanyOption(int Id, string Name, string? Description);
     private sealed record Driver(string Username, string FirstName, string LastName, string Email, int Points);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);

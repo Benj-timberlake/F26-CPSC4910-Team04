@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace BackEnd.Models;
@@ -10,6 +10,8 @@ public partial class Company
     public string Name { get; set; } = null!;
 
     public string? Description { get; set; }
+
+    public decimal MonthlyBudget { get; set; }
 
     public virtual ICollection<Application> Applications { get; set; } = new List<Application>();
 

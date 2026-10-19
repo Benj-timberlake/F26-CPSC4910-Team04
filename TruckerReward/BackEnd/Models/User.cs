@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace BackEnd.Models;
@@ -21,6 +21,8 @@ public partial class User
     public string? Address { get; set; }
 
     public int Points { get; set; }
+
+    public DateTime? BudgetResetMonth { get; set; }
 
     public string FirstName { get; set; } = null!;
 

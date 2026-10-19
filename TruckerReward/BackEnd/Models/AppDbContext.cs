@@ -216,6 +216,11 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("companies");
 
+            entity.Property(e => e.MonthlyBudget)
+                .HasColumnType("decimal(12,2)")
+                .HasDefaultValue(0m)
+                .HasColumnName("monthly_budget");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Description)
                 .HasColumnType("text")
@@ -394,6 +399,9 @@ public partial class AppDbContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
+            entity.Property(e => e.BudgetResetMonth)
+                .HasColumnType("date")
+                .HasColumnName("budget_reset_month");
             entity.HasKey(e => e.Id).HasName("PRIMARY");
 
             entity.ToTable("users");
