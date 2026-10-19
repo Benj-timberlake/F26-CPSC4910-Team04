@@ -119,7 +119,7 @@ public static class AccountEndpoints
                 new { currentPassword, newPassword = password, ipAddress = Ip(http) });
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/account/password?error=" + await ErrorParam(response, "Could not change the password."));
-            return Results.Redirect("/dashboard?password=changed");
+            return Results.Redirect("/profile?password=changed");
         }).RequireAuthorization().DisableAntiforgery();
 
         app.MapPost("/account/change-username", async (
@@ -136,7 +136,7 @@ public static class AccountEndpoints
             // refresh the cookie so the new name shows right away
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await TruckerSignIn.SignInAsync(http, user!);
-            return Results.Redirect("/dashboard?username=changed");
+            return Results.Redirect("/profile?username=changed");
         }).RequireAuthorization().DisableAntiforgery();
 
         app.MapPost("/account/change-email", async (
@@ -152,7 +152,7 @@ public static class AccountEndpoints
                 return Results.Redirect("/account/email?error=" + await ErrorParam(response, "Could not change the email address."));
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await TruckerSignIn.SignInAsync(http, user!);
-            return Results.Redirect("/dashboard?email=changed");
+            return Results.Redirect("/profile?email=changed");
         }).RequireAuthorization().DisableAntiforgery();
 
         app.MapPost("/account/update-profile", async (
@@ -168,7 +168,7 @@ public static class AccountEndpoints
                 new { firstName, lastName, phoneNumber, address });
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/account/profile?error=" + await ErrorParam(response, "Could not update your account."));
-            return Results.Redirect("/dashboard?profile=updated");
+            return Results.Redirect("/profile?profile=updated");
         }).RequireAuthorization().DisableAntiforgery();
 
         app.MapPost("/account/logout", async (HttpContext http) =>

@@ -12,7 +12,7 @@
         <h1>Dashboard</h1>
         <p role="alert" class="tr-alert-error">@loadError</p>
     }
-    else if (account == null || activity == null)
+    else if (account == null)
     {
         <h1>Dashboard</h1>
         <p role="status"><em>Loading your account...</em></p>
@@ -66,77 +66,6 @@
                 </section>
             }
 
-            <section class="tr-card">
-                <div class="account-heading">
-                    <h2>@AccountLabel(account.UserType)</h2>
-                    <a class="tr-btn account-edit" href="account/profile">Edit</a>
-                </div>
-                <dl class="tr-kv">
-                    @if ((account.UserType == "sponsor" || account.UserType == "driver") &&
-                        !string.IsNullOrWhiteSpace(account.CompanyName))
-                    {
-                        <dt>Company</dt>
-                        <dd>@account.CompanyName</dd>
-                    }
-                    <dt>Username</dt>
-                    <dd>@account.Username</dd>
-                    <dt>Email</dt>
-                    <dd>@account.Email</dd>
-                    <dt>Password</dt>
-                    <dd>---------------</dd>
-                    <dt>Name</dt>
-                    <dd>@account.FirstName @account.LastName</dd>
-                    <dt>Phone</dt>
-                    <dd>@Shown(account.PhoneNumber)</dd>
-                    <dt>Address</dt>
-                    <dd>@Shown(account.Address)</dd>
-                </dl>
-            </section>
-
-            <section class="tr-card">
-                <h2>Security</h2>
-                @if (activity.FailedSincePreviousLogin > 0)
-                {
-                    <p role="alert" class="tr-alert-warning">
-                        @activity.FailedSincePreviousLogin failed sign-in @(activity.FailedSincePreviousLogin == 1 ? "attempt" : "attempts")
-                        on your account since your previous sign-in. If that wasn't you, change your password.
-                    </p>
-                }
-                <dl class="tr-kv">
-                    <dt>This sign-in</dt>
-                    <dd>@When(activity.LastLoginAt)@Ip(activity.LastLoginIp)</dd>
-                    <dt>Previous sign-in</dt>
-                    <dd>@(activity.PreviousLoginAt is null ? "This is your first sign-in." : When(activity.PreviousLoginAt))</dd>
-                    <dt>Password</dt>
-                    <dd>@(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))</dd>
-                </dl>
-
-                @if (activity.Recent.Count > 0)
-                {
-                    <details>
-                        <summary>Recent attempts</summary>
-                        <table class="tr-table">
-                            <thead>
-                                <tr>
-                                    <th>When</th>
-                                    <th>Result</th>
-                                    <th>IP</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var a in activity.Recent)
-                                {
-                                    <tr class="@(a.Succeeded ? "" : "failed")">
-                                        <td>@When(a.AttemptedAt)</td>
-                                        <td>@(a.Succeeded ? "Signed in" : "Failed")</td>
-                                        <td>@(a.IpAddress ?? "—")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </details>
-                }
-            </section>
         </div>
 
         @if (showCompanyModal)
@@ -245,38 +174,6 @@
     .cancel-submit-button { display: block; margin-left: auto; padding: 9px 14px; }
     .cancel-application-button:disabled, .cancel-submit-button:disabled { opacity: .65; cursor: wait; }
 
-    .tr-kv dd a {
-        margin-left: 8px;
-    }
-
-    .account-heading {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-    }
-
-    .account-heading h2 {
-        margin-bottom: 12px;
-    }
-
-    .account-edit {
-        margin-bottom: 12px;
-    }
-
-    details {
-        margin-top: 14px;
-    }
-
-    summary {
-        cursor: pointer;
-        font-weight: 600;
-    }
-
-    details .tr-table {
-        margin-top: 8px;
-    }
-
     .company-backdrop {
         position: fixed;
         inset: 0;
@@ -377,7 +274,6 @@
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     private Account? account;
-    private SecuritySummary? activity;
     private string? loadError;
     private string? notice;
     private List<CompanyOption>? companies;
@@ -394,36 +290,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["password"] == "changed")
-            notice = "Your password has been changed.";
-        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["username"] == "changed")
-            notice = "Your username has been changed.";
-        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["profile"] == "updated")
-            notice = "Your account information has been updated.";
-        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["email"] == "changed")
-            notice = "Your email address has been changed.";
-
         var user = (await AuthState).User;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
         using var client = HttpClientFactory.CreateClient("Backend");
         try
         {
             account = await client.GetFromJsonAsync<Account>($"users/{id}");
-            activity = await client.GetFromJsonAsync<SecuritySummary>($"users/{id}/security");
         }
         catch (HttpRequestException)
         {
             loadError = "Couldn't load your account right now. Try again in a moment.";
         }
     }
-
-    private static string AccountLabel(string userType) => userType switch
-    {
-        "driver" => "Driver account",
-        "sponsor" => "Sponsor account",
-        "admin" => "Administrator account",
-        _ => "Account"
-    };
 
     private async Task ShowCompanyModal()
     {
@@ -563,29 +441,8 @@
         }
     }
 
-    private static string Shown(string? value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
-
-    private static string Ip(string? ip) => string.IsNullOrEmpty(ip) ? "" : $" from {ip}";
-
-    // stored in utc, shown as an absolute time plus how long ago so it reads at a glance
-    private static string When(DateTime? utc)
-    {
-        if (utc is null) return "—";
-        var t = DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc);
-        var ago = DateTime.UtcNow - t;
-        var rel = ago.TotalSeconds < 60 ? "just now"
-            : ago.TotalMinutes < 60 ? $"{(int)ago.TotalMinutes} min ago"
-            : ago.TotalHours < 24 ? $"{(int)ago.TotalHours} h ago"
-            : ago.TotalDays < 30 ? $"{(int)ago.TotalDays} d ago"
-            : "";
-        var abs = t.ToString("yyyy-MM-dd HH:mm") + " UTC";
-        return rel == "" ? abs : $"{abs} ({rel})";
-    }
-
     private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName);
     private sealed record CompanyOption(int Id, string Name, string? Description);
-    private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
-    private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
     private sealed record CancelApplicationRequest(string Reasoning);
 }
