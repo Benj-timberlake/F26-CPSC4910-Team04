@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     address VARCHAR(255) NOT NULL,
     -- driver reward balance, only meaningful when user_type = 'driver'
     points INT NOT NULL DEFAULT 0,
+    status ENUM('active','inactive') NOT NULL DEFAULT 'active',
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_username (username),
     UNIQUE KEY uq_users_email (email)
@@ -60,4 +61,14 @@ CREATE TABLE IF NOT EXISTS password_resets (
     PRIMARY KEY (id),
     UNIQUE KEY uq_password_resets_token (token_hash),
     CONSTRAINT fk_password_resets_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- one row per user and category the user changed from the default
+CREATE TABLE IF NOT EXISTS notification_preferences (
+    user_id INT NOT NULL,
+    category VARCHAR(30) NOT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    emailed TINYINT(1) NOT NULL DEFAULT 1,
+    PRIMARY KEY (user_id, category),
+    CONSTRAINT fk_notification_preferences_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );

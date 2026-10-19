@@ -1,0 +1,114 @@
+@page "/notifications/settings"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Notification settings</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Notification settings</h1>
+        <p class="tr-muted">Password and sign-in notices are always sent.</p>
+
+        @if (loadError is not null)
+        {
+            <p role="alert" class="tr-alert-error">@loadError</p>
+        }
+        else if (settings is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+        else if (settings.Count == 0)
+        {
+            <p>There's nothing to change for your account.</p>
+        }
+        else
+        {
+            @if (notice is not null)
+            {
+                <p role="status" class="tr-alert-success">@notice</p>
+            }
+            @if (error is not null)
+            {
+                <p role="alert" class="tr-alert-error">@error</p>
+            }
+            <table class="tr-table">
+                <thead>
+                    <tr>
+                        <th>Notification</th>
+                        <th>On</th>
+                        <th>Also email</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in settings)
+                    {
+                        <tr>
+                            <td>@s.Label</td>
+                            <td><input type="checkbox" aria-label="@s.Label on" @bind="s.Enabled" /></td>
+                            <td><input type="checkbox" aria-label="Email @s.Label" @bind="s.Emailed" disabled="@(!s.Enabled)" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <button type="button" class="tr-btn tr-btn-block" disabled="@saving" @onclick="Save">Save</button>
+        }
+    </div>
+
+    <p class="tr-alt"><a href="notifications">Back to notifications</a></p>
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string? id;
+    private List<Setting>? settings;
+    private string? loadError;
+    private string? error;
+    private string? notice;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            settings = await client.GetFromJsonAsync<List<Setting>>($"users/{id}/notification-settings") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            loadError = "Couldn't load your settings right now. Try again in a moment.";
+        }
+    }
+
+    private async Task Save()
+    {
+        saving = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PutAsJsonAsync($"users/{id}/notification-settings",
+                settings!.Select(s => new { s.Category, s.Enabled, s.Emailed }));
+            if (response.IsSuccessStatusCode)
+                notice = "Saved.";
+            else
+                error = "Couldn't save your settings.";
+        }
+        catch (HttpRequestException)
+        {
+            error = "Couldn't save your settings right now. Try again in a moment.";
+        }
+        saving = false;
+    }
+
+    private sealed class Setting
+    {
+        public string Category { get; set; } = "";
+        public string Label { get; set; } = "";
+        public bool Enabled { get; set; }
+        public bool Emailed { get; set; }
+    }
+}

@@ -12,6 +12,190 @@ public static class UserEndpoints
                 .Select(c => new CompanyOption(c.Id, c.Name, c.Description))
                 .ToListAsync()));
 
+        app.MapPost("/users/{id:int}/applications", async (int id, CreateApplicationRequest request, AppDbContext db, Notifications notifications) =>
+        {
+            var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == id);
+            if (applicant is null)
+                return Results.NotFound();
+            if ((applicant.UserType != "driver" && applicant.UserType != "sponsor") || applicant.CompanyId is not null)
+                return Results.BadRequest(new { message = "Only drivers or sponsors without a company can apply." });
+            var companyName = await db.Companies.Where(company => company.Id == request.CompanyId)
+                .Select(company => company.Name).FirstOrDefaultAsync();
+            if (companyName is null)
+                return Results.BadRequest(new { message = "The selected company does not exist." });
+            if (await db.Applications.AnyAsync(application =>
+                application.ApplicantId == id && (application.Status == "active" || application.Status == "approved")))
+                return Results.Conflict(new { message = "An application already exists for this driver." });
+
+            db.Applications.Add(new Application
+            {
+                ApplicantId = id,
+                CompanyId = request.CompanyId,
+                ApplicantExtraInfo = string.IsNullOrWhiteSpace(request.ApplicantExtraInfo)
+                    ? null
+                    : request.ApplicantExtraInfo.Trim()
+            });
+
+            await db.SaveChangesAsync();
+            await notifications.CompanyApplicationSubmitted(applicant, request.CompanyId, companyName);
+            return Results.Created($"/users/{id}/applications", new { message = "Application submitted." });
+        });
+
+        app.MapPost("/users/{id:int}/applications/cancel", async (int id, CancelApplicationRequest request, AppDbContext db, Notifications notifications) =>
+        {
+            var reasoning = request.Reasoning?.Trim();
+            if (string.IsNullOrWhiteSpace(reasoning))
+                return Results.BadRequest(new { message = "A cancellation reason is required." });
+
+            var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == id);
+            if (applicant is null)
+                return Results.NotFound();
+            var application = await db.Applications.FirstOrDefaultAsync(item => item.ApplicantId == id && item.Status == "active");
+            if (application is null)
+                return Results.Conflict(new { message = "No active application was found." });
+
+            application.Status = "canceled";
+            application.ReviewerId = applicant.Id;
+            application.ReviewerReasoning = reasoning;
+            await db.SaveChangesAsync();
+            var companyName = await db.Companies.Where(company => company.Id == application.CompanyId)
+                .Select(company => company.Name).FirstOrDefaultAsync() ?? "the company";
+            await notifications.CompanyApplicationCanceled(applicant, application.CompanyId, companyName, reasoning);
+            return Results.Ok();
+        });
+
+        app.MapGet("/users/{reviewerId:int}/applications/{applicantType}", async (int reviewerId, string applicantType, AppDbContext db) =>
+        {
+            if (applicantType is not ("sponsor" or "driver"))
+                return Results.BadRequest(new { message = "Applicant type must be sponsor or driver." });
+
+            var reviewer = await db.Users.AsNoTracking().FirstOrDefaultAsync(user => user.Id == reviewerId);
+            if (reviewer is null || (reviewer.UserType != "admin" && reviewer.UserType != "sponsor"))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            if (reviewer.UserType == "sponsor" && applicantType != "driver")
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+            var query = db.Applications.AsNoTracking()
+                .Join(db.Users.AsNoTracking(), application => application.ApplicantId, applicant => applicant.Id,
+                    (application, applicant) => new { application, applicant })
+                .Where(row => row.applicant.UserType == applicantType);
+
+            if (reviewer.UserType == "sponsor")
+                query = query.Where(row => reviewer.CompanyId != null && row.application.CompanyId == reviewer.CompanyId);
+
+            var applicationData = await query
+                .OrderByDescending(row => row.application.Id)
+                .Join(db.Companies.AsNoTracking(), row => row.application.CompanyId, company => company.Id,
+                    (row, company) => new ApplicationListingData(
+                        row.application.Id,
+                        row.application.ApplicantId,
+                        row.application.CompanyId,
+                        row.applicant.FirstName + " " + row.applicant.LastName,
+                        row.applicant.Email,
+                        row.application.ApplicantExtraInfo,
+                        company.Name,
+                        row.application.Status,
+                        row.application.ReviewerId,
+                        row.application.ReviewerReasoning,
+                        row.application.ApplicationTimestamp,
+                        row.application.ResponseTimestamp))
+                .ToListAsync();
+
+            var reviewerIds = applicationData
+                .Where(application => application.ReviewerId.HasValue)
+                .Select(application => application.ReviewerId!.Value)
+                .Distinct()
+                .ToArray();
+            var applicantIds = applicationData.Select(application => application.ApplicantId).Distinct().ToArray();
+            var applicantsWithOpenOrAcceptedApplication = (await db.Applications.AsNoTracking()
+                .Where(application => applicantIds.Contains(application.ApplicantId) &&
+                    (application.Status == "active" || application.Status == "approved"))
+                .Select(application => application.ApplicantId)
+                .Distinct()
+                .ToListAsync())
+                .ToHashSet();
+            var reviewers = await db.Users.AsNoTracking()
+                .Where(user => reviewerIds.Contains(user.Id))
+                .ToDictionaryAsync(user => user.Id);
+            var applications = applicationData.Select(application =>
+            {
+                User? applicationReviewer = null;
+                if (application.ReviewerId is int id)
+                    reviewers.TryGetValue(id, out applicationReviewer);
+
+                return new ApplicationListing(
+                    application.Id,
+                    application.ApplicantId,
+                    application.CompanyId,
+                    application.ApplicantName,
+                    application.ApplicantEmail,
+                    application.ApplicantExtraInfo,
+                    application.CompanyName,
+                    application.Status,
+                    applicationReviewer?.UserType,
+                    applicationReviewer is null ? null : $"{applicationReviewer.FirstName} {applicationReviewer.LastName}",
+                    applicationReviewer?.Email,
+                    application.ReviewerReasoning,
+                    application.Status == "approved" ||
+                        (application.Status == "rejected" && !applicantsWithOpenOrAcceptedApplication.Contains(application.ApplicantId)),
+                    application.ApplicationTimestamp,
+                    application.ResponseTimestamp);
+            }).ToList();
+
+            return Results.Ok(applications);
+        });
+
+        app.MapPost("/users/{reviewerId:int}/applications/{applicationId:int}/review", async
+            (int reviewerId, int applicationId, ReviewApplicationRequest request, AppDbContext db, TimeProvider clock, Notifications notifications) =>
+        {
+            var reviewer = await db.Users.FirstOrDefaultAsync(user => user.Id == reviewerId);
+            if (reviewer is null || (reviewer.UserType != "admin" && reviewer.UserType != "sponsor"))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+            var decision = request.Decision?.Trim().ToLowerInvariant();
+            if (decision is not ("approved" or "rejected" or "active"))
+                return Results.BadRequest(new { message = "Decision must be approved, rejected, or active." });
+            var reasoning = request.Reasoning?.Trim();
+            if (string.IsNullOrWhiteSpace(reasoning))
+                return Results.BadRequest(new { message = "A reason is required." });
+
+            var application = await db.Applications.FirstOrDefaultAsync(item => item.Id == applicationId);
+            if (application is null)
+                return Results.NotFound();
+
+            var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == application.ApplicantId);
+            if (applicant is null)
+                return Results.NotFound();
+            var companyName = await db.Companies.Where(company => company.Id == application.CompanyId)
+                .Select(company => company.Name).FirstOrDefaultAsync() ?? "the company";
+            if (reviewer.UserType == "sponsor" &&
+                (reviewer.CompanyId is null || application.CompanyId != reviewer.CompanyId || applicant.UserType != "driver"))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+            if (decision == "active" && application.Status == "active")
+                return Results.Conflict(new { message = "This application is already active." });
+            if (decision != "active" && application.Status != "active")
+                return Results.Conflict(new { message = "Only active applications can be accepted or denied." });
+            if (decision == "active" && application.Status != "approved" && await db.Applications.AnyAsync(item =>
+                item.ApplicantId == application.ApplicantId &&
+                (item.Status == "active" || item.Status == "approved")))
+                return Results.Conflict(new { message = "This applicant already has an active or accepted application." });
+
+            var previous = application.Status;
+            application.ReviewerId = reviewer.Id;
+            application.ReviewerReasoning = reasoning;
+            application.Status = decision;
+            application.ResponseTimestamp = clock.GetUtcNow().UtcDateTime;
+            if (decision == "approved")
+                applicant.CompanyId = application.CompanyId;
+            else if (decision == "active" && applicant.CompanyId == application.CompanyId)
+                applicant.CompanyId = null;
+
+            await db.SaveChangesAsync();
+            await notifications.CompanyApplicationReviewed(applicant, reviewer, previous, decision, companyName, reasoning);
+            return Results.Ok();
+        });
+
         app.MapGet("/users/{id:int}", async (int id, AppDbContext db) =>
         {
             var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
@@ -21,7 +205,11 @@ public static class UserEndpoints
                 .Where(c => c.Id == user.CompanyId)
                 .Select(c => c.Name)
                 .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company, user.CompanyId, user.Points));
+            var pendingCompany = await db.Applications.AsNoTracking()
+                .Where(application => application.ApplicantId == id && application.Status == "active")
+                .Join(db.Companies.AsNoTracking(), application => application.CompanyId, c => c.Id, (application, c) => c.Name)
+                .FirstOrDefaultAsync();
+            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company, user.CompanyId, user.Points, pendingCompany));
         });
 
         // this login, the one before it, failures in between, the last ten attempts and when the
@@ -131,8 +319,13 @@ public static class UserEndpoints
 public record ChangeUsernameRequest(string? CurrentPassword, string? NewUsername);
 public record ChangeEmailRequest(string? CurrentPassword, string? NewEmail);
 public record UpdateUserProfileRequest(string? FirstName, string? LastName, string? PhoneNumber, string? Address);
+public record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
+public record CancelApplicationRequest(string? Reasoning);
+public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, int? ReviewerId, string? ReviewerReasoning, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
+public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
+public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName);
 
 public record CompanyOption(int Id, string Name, string? Description);
 

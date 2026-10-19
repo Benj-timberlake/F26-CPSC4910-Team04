@@ -11,7 +11,8 @@ public partial class User
 
     public string Username { get; set; } = null!;
 
-    public string Password { get; set; } = null!;
+    // null for google/microsoft-only accounts
+    public string? Password { get; set; }
 
     public string Email { get; set; } = null!;
 
@@ -26,6 +27,12 @@ public partial class User
     public string LastName { get; set; } = null!;
 
     public int? CompanyId { get; set; }
+
+    // values in the users.status enum
+    public const string Active = "active";
+    public const string Inactive = "inactive";
+
+    public string Status { get; set; } = Active;
 
     public virtual ICollection<AccountsHistory> AccountsHistories { get; set; } = new List<AccountsHistory>();
 

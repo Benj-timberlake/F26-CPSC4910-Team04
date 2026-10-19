@@ -26,7 +26,7 @@ public static class PasswordEndpoints
             return Results.NoContent();
         });
 
-        app.MapPost("/auth/forgot", async (ForgotPasswordRequest req, AppDbContext db, IEmailSender email, Notifications notifications, TimeProvider clock, IConfiguration config) =>
+        app.MapPost("/auth/forgot", async (ForgotPasswordRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config) =>
         {
             // same answer whether or not the email exists, so this can't be used to find accounts
             var reply = Results.Ok(new { message = "If that email has an account, a reset link is on its way." });
@@ -43,8 +43,7 @@ public static class PasswordEndpoints
 
             var link = $"{config["FRONTEND_URL"]?.TrimEnd('/')}/reset-password?token={token}";
             await notifications.ResetLinkSent(user, link);
-            await Notify.Admins(db, email, $"Password reset requested for {user.Username}",
-                $"A password reset was requested for {user.Username} ({user.Email}) from {req.IpAddress ?? "an unknown address"}.");
+            await notifications.ResetRequested(user, req.IpAddress);
             return reply;
         });
 

@@ -1,0 +1,81 @@
+@page "/sponsors"
+@attribute [Authorize(Roles = "sponsor")]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Other sponsors</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Other sponsors</h1>
+
+        @if (error is not null)
+        {
+            <p role="alert" class="tr-alert-error">@error</p>
+        }
+        else if (others is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+        else if (others.Count == 0)
+        {
+            <p class="tr-muted">No other sponsors yet.</p>
+        }
+        else
+        {
+            <ul class="sponsor-list">
+                @foreach (var c in others)
+                {
+                    <li>
+                        <strong>@c.Name</strong>
+                        <p class="tr-muted">@(string.IsNullOrWhiteSpace(c.Description) ? "No description." : c.Description)</p>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</div>
+
+<style>
+    .sponsor-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .sponsor-list li {
+        border-top: 1px solid #e5e7eb;
+        padding: 12px 0;
+    }
+
+    .sponsor-list p {
+        margin: 4px 0 0;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private List<Company>? others;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var me = await client.GetFromJsonAsync<Account>($"users/{id}");
+            var all = await client.GetFromJsonAsync<List<Company>>("companies") ?? [];
+            others = all.Where(c => c.Id != me?.CompanyId).ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load sponsors right now. Try again in a moment.";
+        }
+    }
+
+    private sealed record Account(int? CompanyId);
+    private sealed record Company(int Id, string Name, string? Description);
+}

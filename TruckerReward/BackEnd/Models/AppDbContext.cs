@@ -30,6 +30,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<NotificationsHistory> NotificationsHistories { get; set; }
 
+    public DbSet<NotificationPreference> NotificationPreferences { get; set; }
+
     public virtual DbSet<PasswordChange> PasswordChanges { get; set; }
 
     public virtual DbSet<PasswordReset> PasswordResets { get; set; }
@@ -116,40 +118,32 @@ public partial class AppDbContext : DbContext
 
             entity.HasIndex(e => e.CompanyId, "fk_applications_company");
 
-            entity.HasIndex(e => e.SponsorId, "fk_applications_sponsor");
+            entity.HasIndex(e => e.ReviewerId, "fk_applications_sponsor");
 
-            entity.HasIndex(e => e.DriverId, "uq_applications_driver_id").IsUnique();
+            entity.HasIndex(e => e.ApplicantId, "idx_applications_applicant_id");
 
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.ApplicationDate)
+            entity.Property(e => e.ApplicantExtraInfo)
+                .HasColumnType("text")
+                .HasColumnName("applicant_extra_info");
+            entity.Property(e => e.ApplicantId).HasColumnName("applicant_id");
+            entity.Property(e => e.ApplicationTimestamp)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("datetime")
-                .HasColumnName("application_date");
+                .HasColumnName("application_timestamp");
             entity.Property(e => e.CompanyId).HasColumnName("company_id");
-            entity.Property(e => e.DriverId).HasColumnName("driver_id");
-            entity.Property(e => e.ExtraInfo)
+            entity.Property(e => e.ResponseTimestamp)
+                .HasColumnType("datetime")
+                .HasColumnName("response_timestamp");
+            entity.Property(e => e.ReviewerId).HasColumnName("reviewer_id");
+            entity.Property(e => e.ReviewerReasoning)
                 .HasColumnType("text")
-                .HasColumnName("extra_info");
-            entity.Property(e => e.SponsorId).HasColumnName("sponsor_id");
+                .HasColumnName("reviewer_reasoning");
             entity.Property(e => e.Status)
-                .HasDefaultValueSql("'created'")
-                .HasColumnType("enum('created','approved','rejected')")
+                .HasDefaultValueSql("'active'")
+                .HasColumnType("enum('active','approved','rejected','canceled')")
                 .HasColumnName("status");
 
-            entity.HasOne(d => d.Company).WithMany(p => p.Applications)
-                .HasForeignKey(d => d.CompanyId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_applications_company");
-
-            entity.HasOne(d => d.Driver).WithOne(p => p.ApplicationDriver)
-                .HasForeignKey<Application>(d => d.DriverId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_applications_driver");
-
-            entity.HasOne(d => d.Sponsor).WithMany(p => p.ApplicationSponsors)
-                .HasForeignKey(d => d.SponsorId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("fk_applications_sponsor");
         });
 
         modelBuilder.Entity<AuditHistory>(entity =>
@@ -385,6 +379,19 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("points_history_ibfk_1");
         });
 
+        modelBuilder.Entity<NotificationPreference>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.Category });
+            entity.ToTable("notification_preferences");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Category).HasMaxLength(30).HasColumnName("category");
+            entity.Property(e => e.Enabled).HasColumnName("enabled");
+            entity.Property(e => e.Emailed).HasColumnName("emailed");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_notification_preferences_user");
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -416,6 +423,9 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(20)
                 .HasColumnName("phone_number");
             entity.Property(e => e.Points).HasColumnName("points");
+            entity.Property(e => e.Status)
+                .HasColumnType("enum('active','inactive')")
+                .HasColumnName("status");
             entity.Property(e => e.UserType)
                 .HasColumnType("enum('admin','sponsor','driver')")
                 .HasColumnName("user_type");
@@ -424,6 +434,11 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Company).WithMany(p => p.Users)
                 .HasForeignKey(d => d.CompanyId)
                 .HasConstraintName("fk_users_company");
+
+            // These legacy navigations are not columns or relationships in the users mapping.
+            // Ignore them to prevent EF from inferring a shadow ApplicationDriverId column.
+            entity.Ignore(user => user.ApplicationDriver);
+            entity.Ignore(user => user.ApplicationSponsors);
         });
 
         OnModelCreatingPartial(modelBuilder);

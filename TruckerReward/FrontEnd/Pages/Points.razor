@@ -1,0 +1,122 @@
+@page "/points"
+@attribute [Authorize(Roles = "driver")]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Points</PageTitle>
+
+<div class="tr-page">
+    <h1>Points</h1>
+
+    @if (loadError is not null)
+    {
+        <p role="alert" class="tr-alert-error">@loadError</p>
+    }
+    else if (summary is null)
+    {
+        <p role="status"><em>Loading...</em></p>
+    }
+    else
+    {
+        <div class="tr-cards">
+            <section class="tr-card">
+                <h2>Balance</h2>
+                <p class="figure balance">@summary.Balance.ToString("N0")</p>
+            </section>
+            <section class="tr-card">
+                <h2>Earned this month</h2>
+                <p class="figure month">@summary.EarnedThisMonth.ToString("N0")</p>
+            </section>
+            <section class="tr-card">
+                <h2>All time</h2>
+                <dl class="tr-kv">
+                    <dt>Earned</dt>
+                    <dd class="earned">@summary.Earned.ToString("N0")</dd>
+                    <dt>Spent on orders</dt>
+                    <dd class="spent">@summary.Spent.ToString("N0")</dd>
+                    <dt>Deducted</dt>
+                    <dd class="deducted">@summary.Deducted.ToString("N0")</dd>
+                </dl>
+            </section>
+        </div>
+
+        <section class="tr-card history">
+            <h2>History</h2>
+            @if (summary.History.Count == 0)
+            {
+                <p class="tr-muted">No point changes yet.</p>
+            }
+            else
+            {
+                <div class="tr-table-wrap">
+                    <table class="tr-table">
+                        <thead>
+                            <tr>
+                                <th>When</th>
+                                <th>Points</th>
+                                <th>Reason</th>
+                                <th>By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var e in summary.History)
+                            {
+                                <tr>
+                                    <td>@(e.At?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                    <td class="@(e.Points < 0 ? "minus" : "plus")">@e.Points.ToString("+#,0;-#,0")</td>
+                                    <td>@e.Reason</td>
+                                    <td>@(e.By ?? "")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+<style>
+    .figure {
+        font-size: 36px;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .history {
+        margin-top: 20px;
+    }
+
+    td.plus {
+        color: #15803d;
+    }
+
+    td.minus {
+        color: #b91c1c;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private Summary? summary;
+    private string? loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            summary = await client.GetFromJsonAsync<Summary>($"users/{id}/points");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            loadError = "Couldn't load your points right now. Try again in a moment.";
+        }
+    }
+
+    private sealed record Entry(DateTime? At, int Points, string Reason, string? By);
+    private sealed record Summary(int Balance, long EarnedThisMonth, long Earned, long Spent, long Deducted, List<Entry> History);
+}

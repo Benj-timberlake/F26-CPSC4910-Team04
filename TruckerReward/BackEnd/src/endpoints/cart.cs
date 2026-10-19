@@ -82,6 +82,7 @@ public static class CartEndpoints
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
             await notifications.PointsChanged(user, -history.PointsDelta, "Your order was refunded.");
+            await notifications.DriverRefunded(user, items, -history.PointsDelta);
             return Results.NoContent();
         });
 

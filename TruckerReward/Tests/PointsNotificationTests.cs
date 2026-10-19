@@ -124,6 +124,31 @@ public sealed class PointsNotificationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SponsorsAreToldOnTheSiteWhenADriverRefunds()
+    {
+        var (client, id) = await StartWithBob(1000);
+        using (var db = app.Db())
+        {
+            var acme = new Company { Name = "Acme" };
+            db.Add(acme);
+            await db.SaveChangesAsync();
+            db.Users.Add(User("sue", "sponsor", acme.Id));
+            (await db.Users.SingleAsync(u => u.Id == id)).CompanyId = acme.Id;
+            await db.SaveChangesAsync();
+        }
+        await client.PostAsJsonAsync($"/users/{id}/cart", new { name = "Mug", price = 3.50m, description = "A mug" });
+        await client.PostAsync($"/users/{id}/cart/send-order", null);
+        var historyId = (await app.Db().PointsHistory.SingleAsync()).Id;
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"/users/{id}/orders/{historyId}/refund", null)).StatusCode);
+
+        var refund = (await app.Db().NotificationsHistories.Include(n => n.User).Where(n => n.User.Username == "sue").OrderBy(n => n.Id).ToListAsync()).Last();
+        Assert.Equal("bob refunded an order", refund.Subject);
+        Assert.Equal("Bob Driver (bob) got 350 points back for Mug.", refund.Body);
+        Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
     public async Task DriverWithoutACompanyAlertsNoSponsor()
     {
         var (client, id) = await StartWithBob(1000);
