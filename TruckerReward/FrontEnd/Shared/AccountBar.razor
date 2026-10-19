@@ -39,7 +39,7 @@
                     <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                 </svg>
             </a>
-            <span>@context.User.Identity?.Name</span>
+            <a href="profile" class="profile-link">@context.User.Identity?.Name</a>
             <form method="post" action="account/logout">
                 <button type="submit">Log out</button>
             </form>
@@ -109,7 +109,8 @@
         flex: 1;
     }
 
-    .account-bar button {
+    .account-bar button,
+    .account-bar .profile-link {
         padding: 6px 12px;
         background: transparent;
         color: white;
