@@ -12,7 +12,7 @@ public static class DriverViewEndpoints
         app.MapPost("/account/driver-view/{driverId:int}", async (
             int driverId, HttpContext http, IHttpClientFactory clients) =>
         {
-            if (!http.User.IsInRole("sponsor") || http.User.HasClaim(c => c.Type == TruckerSignIn.SponsorViewClaim))
+            if (!http.User.IsInRole("sponsor") || http.User.HasClaim(c => c.Type == TruckerSignIn.SponsorViewClaim) || ViewAs.IsViewing(http.User))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             var sponsorId = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
             using var client = clients.CreateClient("Backend");

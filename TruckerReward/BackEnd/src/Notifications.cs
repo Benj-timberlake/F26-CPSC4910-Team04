@@ -11,6 +11,12 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             // keeps the reset link out of the database
             stored: "A link to reset your password was emailed to you. It works for one hour.");
 
+    public Task AccountInvited(User user, string link, string invitedBy) =>
+        Send(user, "Your TruckerReward account is ready",
+            $"Hi {user.Username},\n\n{invitedBy} made you a TruckerReward {user.UserType} account. Use this link within three days to choose your password:\n{link}\n\nAfter that, use Forgot password on the login page.",
+            null, emailed: true,
+            stored: "Your account was created by an administrator. A link to choose your password was emailed to you.");
+
     public Task PasswordChanged(User user, bool byReset) => byReset
         ? Send(user, "Your TruckerReward password was reset",
             $"Hi {user.Username},\n\nYour password was just reset. If that wasn't you, contact your sponsor or an administrator.",
@@ -95,6 +101,13 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
         return Send(applicant, subject, body, NotificationCategory.Applications);
     }
 
+    public async Task DriverRemoved(User driver, int companyId, string reason)
+    {
+        var company = await CompanyName(companyId);
+        await Send(driver, $"You've been removed from {company}",
+            $"You are no longer with {company}.\n\nReason: {reason}", NotificationCategory.Applications);
+    }
+
     private static string FormatIdentity(User user) =>
         $"{TitleCase(user.UserType)}, {user.FirstName} {user.LastName} ({user.Username}, {user.Email})";
     private static string TitleCase(string value) => char.ToUpperInvariant(value[0]) + value[1..];
@@ -122,6 +135,22 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
         ToSponsorsOf(driver.CompanyId, $"{driver.Username} refunded an order",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) got {points:N0} points back for " +
             string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
+            NotificationCategory.Purchases);
+
+    public Task AccountViewed(User user, User viewer) =>
+        Send(user, "Someone viewed the site as you",
+            $"{viewer.FirstName} {viewer.LastName} ({viewer.Username}), {(viewer.UserType == AuthEndpoints.Admin ? "an administrator" : "your sponsor")}, viewed the site as you.",
+            null, emailed: false);
+
+    public Task OrderSent(User driver, IReadOnlyList<CartItem> items) =>
+        Send(driver, "Your sponsor ordered your items",
+            "Your sponsor placed the order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
+            NotificationCategory.Orders);
+
+    public Task DriverEditingOrder(User driver, IReadOnlyList<CartItem> items) =>
+        ToSponsorsOf(driver.CompanyId, $"{driver.Username} pulled an order back to change it",
+            $"{driver.FirstName} {driver.LastName} ({driver.Username}) moved " +
+            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + " back to their cart.",
             NotificationCategory.Purchases);
 
     private async Task<string> CompanyName(int companyId) =>

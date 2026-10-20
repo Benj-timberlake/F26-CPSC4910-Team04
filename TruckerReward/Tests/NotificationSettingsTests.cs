@@ -53,7 +53,7 @@ public sealed class NotificationSettingsTests : IAsyncDisposable
         var driver = (await client.GetFromJsonAsync<List<NotificationSetting>>($"/users/{bob}/notification-settings"))!;
         var sponsor = (await client.GetFromJsonAsync<List<NotificationSetting>>($"/users/{sue}/notification-settings"))!;
 
-        Assert.Equal(["points", "applications"], driver.Select(s => s.Category));
+        Assert.Equal(["points", "orders", "applications"], driver.Select(s => s.Category));
         Assert.All(driver, s => Assert.True(s.Enabled));
         Assert.False(driver.Single(s => s.Category == "points").Emailed);
         Assert.Equal(["applications", "purchases", "negative-balances"], sponsor.Select(s => s.Category));

@@ -120,7 +120,7 @@ public static class AccountEndpoints
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/account/password?error=" + await ErrorParam(response, "Could not change the password."));
             return Results.Redirect("/profile?password=changed");
-        }).RequireAuthorization().DisableAntiforgery();
+        }).RequireAuthorization().AddEndpointFilter(ViewAs.NotWhileViewing).DisableAntiforgery();
 
         app.MapPost("/account/change-username", async (
             [FromForm] string? currentPassword,
@@ -137,7 +137,7 @@ public static class AccountEndpoints
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await TruckerSignIn.SignInAsync(http, user!);
             return Results.Redirect("/profile?username=changed");
-        }).RequireAuthorization().DisableAntiforgery();
+        }).RequireAuthorization().AddEndpointFilter(ViewAs.NotWhileViewing).DisableAntiforgery();
 
         app.MapPost("/account/change-email", async (
             [FromForm] string? currentPassword,
@@ -153,7 +153,7 @@ public static class AccountEndpoints
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await TruckerSignIn.SignInAsync(http, user!);
             return Results.Redirect("/profile?email=changed");
-        }).RequireAuthorization().DisableAntiforgery();
+        }).RequireAuthorization().AddEndpointFilter(ViewAs.NotWhileViewing).DisableAntiforgery();
 
         app.MapPost("/account/update-profile", async (
             [FromForm] string firstName,
@@ -169,7 +169,7 @@ public static class AccountEndpoints
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/account/profile?error=" + await ErrorParam(response, "Could not update your account."));
             return Results.Redirect("/profile?profile=updated");
-        }).RequireAuthorization().DisableAntiforgery();
+        }).RequireAuthorization().AddEndpointFilter(ViewAs.NotWhileViewing).DisableAntiforgery();
 
         app.MapPost("/account/logout", async (HttpContext http) =>
         {

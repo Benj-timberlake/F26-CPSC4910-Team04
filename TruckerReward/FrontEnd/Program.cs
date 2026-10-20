@@ -21,7 +21,7 @@ void ConfigureBackendClient(HttpClient client)
         client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
 }
 
-builder.Services.AddHttpClient("Backend", ConfigureBackendClient);
+builder.Services.AddHttpClient("Backend", ConfigureBackendClient).AddViewAsReadOnly();
 
 var app = builder.Build();
 
@@ -49,6 +49,7 @@ app.UseAuthorization();
 app.MapAccountEndpoints();
 app.MapDriverViewEndpoints();
 app.MapAuditExport();
+app.MapViewAs();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
