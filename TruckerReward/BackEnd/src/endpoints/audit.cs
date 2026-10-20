@@ -1,12 +1,13 @@
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
 
-// one audit log over sign-ins, password changes and point changes
+// one audit log over sign-ins, password changes, point changes and view-as sessions
 public static class AuditEndpoints
 {
     public const string Logins = "logins";
     public const string Passwords = "passwords";
     public const string Points = "points";
+    public const string Views = "views";
     public const int MaxRows = 500;
 
     public static void MapAuditEndpoints(this WebApplication app)
@@ -29,8 +30,8 @@ public static class AuditEndpoints
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
             return (Results.NotFound(), null);
-        if (category is not (null or "" or Logins or Passwords or Points))
-            return (Results.BadRequest(new { message = "Category must be logins, passwords or points." }), null);
+        if (category is not (null or "" or Logins or Passwords or Points or Views))
+            return (Results.BadRequest(new { message = "Category must be logins, passwords, points or views." }), null);
         if (!PointsEndpoints.CanManage(actor))
             return (Results.StatusCode(StatusCodes.Status403Forbidden), null);
 
@@ -45,6 +46,8 @@ public static class AuditEndpoints
             rows.AddRange(await PasswordRows(db, ids, start, end));
         if (all || category == Points)
             rows.AddRange(await PointRows(db, ids, start, end));
+        if (all || category == Views)
+            rows.AddRange(await ViewRows(db, ids, start, end));
         return (null, rows.OrderByDescending(r => r.At).Take(MaxRows).ToList());
     }
 
@@ -115,8 +118,21 @@ public static class AuditEndpoints
             })
             .ToListAsync();
         return rows.Select(h => new AuditEntry(h.Timestamp ?? DateTime.MinValue, Points, h.UserId, h.Username,
-            $"{h.PointsDelta:+#,0;-#,0} points: " + (h.Order ? "order" : h.Audit?.Resoning ?? "no reason given"),
+            $"{h.PointsDelta:+#,0;-#,0} points: " + (h.Order ? "order" + (h.Audit is null ? "" : ": " + h.Audit.Resoning) : h.Audit?.Resoning ?? "no reason given"),
             h.Order ? null : h.Audit?.Username));
+    }
+
+    private static Task<List<AuditEntry>> ViewRows(AppDbContext db, IQueryable<int>? ids, DateTime start, DateTime end)
+    {
+        var views = db.Impersonations.AsNoTracking().Where(v => v.StartedAt >= start && v.StartedAt < end);
+        if (ids is not null)
+            views = views.Where(v => ids.Contains(v.UserId));
+        return views
+            .OrderByDescending(v => v.StartedAt).Take(MaxRows)
+            .Join(db.Users, v => v.UserId, u => u.Id, (v, u) => new { v, u.Username })
+            .Join(db.Users, x => x.v.ViewerId, u => u.Id, (x, viewer) => new AuditEntry(x.v.StartedAt, Views, x.v.UserId, x.Username,
+                "Site viewed as this account" + (x.v.IpAddress == null || x.v.IpAddress == "" ? "" : " from " + x.v.IpAddress), viewer.Username))
+            .ToListAsync();
     }
 
     private static string PasswordText(string changeType) => changeType switch
@@ -128,5 +144,5 @@ public static class AuditEndpoints
     };
 }
 
-// by is whoever made a point change
+// by names the point changer or viewer
 public record AuditEntry(DateTime At, string Category, int? UserId, string Username, string Detail, string? By);

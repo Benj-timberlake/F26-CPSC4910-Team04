@@ -30,11 +30,13 @@
             <AuthorizeView Roles="driver" Context="driver">
                 <a href="points">Points</a>
             </AuthorizeView>
+            <a href="leaderboard">Leaderboard</a>
             <AuthorizeView Roles="sponsor,admin" Context="pointsNav">
                 <a href="manage-points">Driver points</a>
                 <a href="audit">Audit log</a>
             </AuthorizeView>
             <AuthorizeView Roles="sponsor" Context="sponsorNav">
+                <a href="sponsor-team">Your team</a>
                 <a href="sponsors">Other sponsors</a>
             </AuthorizeView>
             <span class="spacer"></span>
@@ -58,6 +60,17 @@
         </NotAuthorized>
     </AuthorizeView>
 </nav>
+<AuthorizeView Context="viewing">
+    @if (viewing.User.FindFirst(FrontEnd.Auth.ViewAs.ViewerNameClaim) is { } viewer)
+    {
+        <div class="view-as-banner" role="status">
+            Viewing the site as @viewing.User.Identity?.Name, read-only.
+            <form method="post" action="account/view-as/stop">
+                <button type="submit">Return to @viewer.Value</button>
+            </form>
+        </div>
+    }
+</AuthorizeView>
 
 @code {
     [CascadingParameter]
@@ -114,6 +127,25 @@
 
     .account-bar .spacer {
         flex: 1;
+    }
+
+    .view-as-banner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 24px;
+        background: #fef3c7;
+        color: #78350f;
+    }
+
+    .view-as-banner button {
+        padding: 4px 10px;
+        border: 1px solid #78350f;
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
     }
 
     .account-bar button,

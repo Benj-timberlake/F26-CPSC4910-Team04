@@ -35,13 +35,11 @@ public static class PasswordEndpoints
             if (user is null)
                 return reply;
 
-            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             var now = clock.GetUtcNow().UtcDateTime;
-            db.PasswordResets.Add(new PasswordReset { UserId = user.Id, TokenHash = Hash(token), ExpiresAt = now + ResetLinkLifetime });
+            var link = ResetLink(db, user, now + ResetLinkLifetime, config);
             db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = PasswordChange.ResetRequested, IpAddress = req.IpAddress, ChangedAt = now });
             await db.SaveChangesAsync();
 
-            var link = $"{config["FRONTEND_URL"]?.TrimEnd('/')}/reset-password?token={token}";
             await notifications.ResetLinkSent(user, link);
             await notifications.ResetRequested(user, req.IpAddress);
             return reply;
@@ -63,6 +61,14 @@ public static class PasswordEndpoints
             await notifications.PasswordChanged(user!, byReset: true);
             return Results.NoContent();
         });
+    }
+
+    // the caller saves
+    internal static string ResetLink(AppDbContext db, User user, DateTime expiresAt, IConfiguration config)
+    {
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        db.PasswordResets.Add(new PasswordReset { UserId = user.Id, TokenHash = Hash(token), ExpiresAt = expiresAt });
+        return $"{config["FRONTEND_URL"]?.TrimEnd('/')}/reset-password?token={token}";
     }
 
     private static async Task SetPassword(AppDbContext db, User user, string password, string changeType, string? ip, TimeProvider clock)

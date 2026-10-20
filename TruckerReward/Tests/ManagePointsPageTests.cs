@@ -17,12 +17,14 @@ public sealed class ManagePointsPageTests : TestContext
          {"id":9,"username":"amy","firstName":"Amy","lastName":"Zane","email":"amy@example.com","points":0}]
         """;
 
-    private IRenderedComponent<ManagePoints> Render()
+    private IRenderedComponent<ManagePoints> Render(params Claim[] extra) => Render("sponsor", extra);
+
+    private IRenderedComponent<ManagePoints> Render(string role, params Claim[] extra)
     {
         var auth = this.AddTestAuthorization();
         auth.SetAuthorized("sue");
-        auth.SetRoles("sponsor");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "5"));
+        auth.SetRoles(role);
+        auth.SetClaims([new Claim(ClaimTypes.NameIdentifier, "5"), .. extra]);
         Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
             .ConfigurePrimaryHttpMessageHandler(() => backend);
         return RenderComponent<ManagePoints>();
@@ -97,5 +99,36 @@ public sealed class ManagePointsPageTests : TestContext
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.Forbidden, "");
         var page = Render();
         page.WaitForAssertion(() => Assert.Contains("You aren't with a company yet", page.Markup));
+    }
+
+    // sponsors get the driver view on the dashboard instead
+    [Theory]
+    [InlineData("admin", false, 2)]
+    [InlineData("admin", true, 0)]
+    [InlineData("sponsor", false, 0)]
+    public void ViewAsIsOfferedToAdminsUnlessAlreadyViewing(string role, bool viewing, int forms)
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        var page = Render(role, viewing ? [new Claim(FrontEnd.Auth.ViewAs.ViewerIdClaim, "4")] : []);
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        Assert.Equal(forms, page.FindAll("form.view-as").Count);
+    }
+
+    [Fact]
+    public void RemovingADriverPostsTheReasonAndDropsTheRow()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        backend.Routes["POST /users/5/points/drivers/8/remove"] = (HttpStatusCode.NoContent, "");
+        var page = Render();
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+
+        page.FindAll("button.remove").First().Click();
+        page.Find("input[aria-label='Why remove bob']").Change("Left the company");
+        page.FindAll("button").First(b => b.TextContent == "Remove from sponsor").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("bob was removed and told why.", page.Find(".tr-alert-success").TextContent));
+        Assert.Equal("""{"reason":"Left the company"}""", backend.Bodies["POST /users/5/points/drivers/8/remove"]);
+        Assert.Single(page.FindAll("tbody tr"));
     }
 }

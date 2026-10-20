@@ -42,7 +42,7 @@ public sealed class Migration004Tests
         Assert.Contains("ALTER TABLE accounts_history MODIFY password VARCHAR(255) NULL;", sql);
     }
 
-    private static string RepoRoot()
+    internal static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (!Directory.Exists(Path.Combine(dir!.FullName, "db")))

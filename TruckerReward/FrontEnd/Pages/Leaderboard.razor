@@ -1,0 +1,232 @@
+@page "/leaderboard"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Leaderboard</PageTitle>
+
+<div class="tr-page">
+    <h1>Leaderboard</h1>
+
+    <form class="filters" @onsubmit="Load">
+        <select aria-label="Period" @bind="period">
+            <option value="all">All time</option>
+            <option value="month">This month</option>
+            <option value="week">This week</option>
+        </select>
+        @if (admin)
+        {
+            <select aria-label="Sponsor" @bind="companyId">
+                <option value="0">Pick a sponsor</option>
+                @foreach (var c in companies)
+                {
+                    <option value="@c.Id">@c.Name</option>
+                }
+            </select>
+        }
+        <button type="submit" class="tr-btn">Show</button>
+    </form>
+
+    @if (notice is not null)
+    {
+        <p role="status" class="tr-alert-success">@notice</p>
+    }
+    @if (error is not null)
+    {
+        <p role="alert" class="tr-alert-error">@error</p>
+    }
+    else if (board is null)
+    {
+        @if (!admin || companyId != 0)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+    }
+    else if (board.Rows.Count == 0)
+    {
+        <p class="tr-muted">No drivers on this board yet.</p>
+    }
+    else
+    {
+        @if (board.YourRank is not null)
+        {
+            <p class="your-rank">You're #@board.YourRank of @board.Rows.Count.</p>
+        }
+
+        <h2>Top 5</h2>
+        <ol class="top5">
+            @foreach (var r in board.Rows.Take(5))
+            {
+                <li>#@r.Rank @r.FirstName @r.LastName (@r.Username): @r.Points.ToString("N0")</li>
+            }
+        </ol>
+
+        @if (manager)
+        {
+            var top = board.Rows[0];
+            @if (award is null)
+            {
+                <button type="button" class="tr-btn-outline award" @onclick="() => award = new() { Reason = AwardReason }">Award @top.Username</button>
+            }
+            else
+            {
+                <form class="award-form" @onsubmit="() => Award(top)">
+                    <input type="number" aria-label="Award points" min="1" @bind="award.Points" />
+                    <input aria-label="Award reason" @bind="award.Reason" />
+                    <button type="submit" class="tr-btn" disabled="@busy">Award @top.Username</button>
+                    <button type="button" class="tr-btn-outline" @onclick="() => award = null">Cancel</button>
+                </form>
+            }
+        }
+
+        <div class="tr-table-wrap">
+            <table class="tr-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Driver</th>
+                        <th>@(period == "all" ? "Points" : "Points earned")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in board.Rows)
+                    {
+                        <tr class="@(r.Id.ToString() == id ? "me" : "")">
+                            <td>@r.Rank</td>
+                            <td>@r.FirstName @r.LastName (@r.Username)</td>
+                            <td>@r.Points.ToString("N0")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<style>
+    .filters, .award-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .award {
+        margin-bottom: 16px;
+    }
+
+    tr.me td {
+        font-weight: 700;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string? id;
+    private bool admin;
+    private bool manager;
+    private string period = "all";
+    private int companyId;
+    private List<Company> companies = [];
+    private Board? board;
+    private AwardForm? award;
+    private bool busy;
+    private string? error;
+    private string? notice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        admin = user.IsInRole("admin");
+        manager = admin || user.IsInRole("sponsor");
+        if (admin)
+        {
+            try
+            {
+                using var client = HttpClientFactory.CreateClient("Backend");
+                companies = await client.GetFromJsonAsync<List<Company>>("companies") ?? [];
+            }
+            catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+            {
+                error = "Couldn't load the sponsors right now. Try again in a moment.";
+            }
+            return;
+        }
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        award = null;
+        if (admin && companyId == 0)
+        {
+            board = null;
+            return;
+        }
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.GetAsync($"users/{id}/leaderboard?period={period}" + (admin ? $"&companyId={companyId}" : ""));
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                board = null;
+                error = "You aren't with a sponsor yet, so there's no leaderboard.";
+                return;
+            }
+            response.EnsureSuccessStatusCode();
+            board = await response.Content.ReadFromJsonAsync<Board>();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load the leaderboard right now. Try again in a moment.";
+        }
+    }
+
+    private string AwardReason => period switch
+    {
+        "week" => "Top driver this week",
+        "month" => "Top driver this month",
+        _ => "Top driver overall"
+    };
+
+    private async Task Award(Row top)
+    {
+        var a = award!;
+        busy = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/points/drivers/{top.Id}", new { points = a.Points, reason = a.Reason });
+            if (response.IsSuccessStatusCode)
+            {
+                await Load();
+                notice = $"{top.Username} got {a.Points:N0} points.";
+            }
+            else
+            {
+                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private sealed record Company(int Id, string Name);
+    private sealed record Row(int Rank, int Id, string Username, string FirstName, string LastName, long Points);
+    private sealed record Board(string Period, int? YourRank, List<Row> Rows);
+    private sealed record Problem(string? Message);
+
+    private sealed class AwardForm
+    {
+        public int Points { get; set; } = 100;
+        public string Reason { get; set; } = "";
+    }
+}
