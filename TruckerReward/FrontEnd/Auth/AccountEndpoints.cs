@@ -32,8 +32,25 @@ public static class AccountEndpoints
                 return Results.Redirect("/login?error=backend" + ReturnParam(returnUrl));
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
-            await TruckerSignIn.SignInAsync(http, user!);
-            return Results.LocalRedirect(SafeReturn(returnUrl));
+await TruckerSignIn.SignInAsync(http, user!);
+
+if (string.Equals(user!.UserType, "admin",
+    StringComparison.OrdinalIgnoreCase))
+{
+    http.Response.Cookies.Append(
+        "adminDance",
+        "1",
+        new CookieOptions
+        {
+            Path = "/dashboard",
+            MaxAge = TimeSpan.FromSeconds(30),
+            HttpOnly = false,
+            Secure = http.Request.IsHttps,
+            SameSite = SameSiteMode.Lax
+        });
+}
+
+return Results.LocalRedirect(SafeReturn(returnUrl));
         }).DisableAntiforgery();
 
         app.MapPost("/account/register", async (
