@@ -56,5 +56,5 @@ export function showAdminDance() {
     // Remove after 0.5 seconds
     setTimeout(() => {
         img.remove();
-    }, 1000);
+    }, 3000);
 }
