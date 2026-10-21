@@ -336,6 +336,21 @@
 </style>
 
 @code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var user = (await AuthState).User;
+
+        if (!user.IsInRole("admin")) return;
+
+        var module = await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./js/adminDance.js");
+
+        await module.InvokeVoidAsync("showAdminDance");
+
+        await module.DisposeAsync();
+    }
     [CascadingParameter]
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
