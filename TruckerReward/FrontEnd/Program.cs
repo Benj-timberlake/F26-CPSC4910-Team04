@@ -1,3 +1,4 @@
+using FrontEnd;
 using FrontEnd.Auth;
 using Microsoft.AspNetCore.HttpOverrides;
 
@@ -28,6 +29,8 @@ var app = builder.Build();
 // behind cloudfront and the beanstalk nginx the browser's scheme and ip only arrive in headers
 if (!app.Environment.IsDevelopment())
 {
+    app.UseCloudFrontRedirect(app.Configuration["FRONTEND_URL"]);
+
     var forwarded = new ForwardedHeadersOptions
     {
         ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
