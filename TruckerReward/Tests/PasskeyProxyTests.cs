@@ -99,6 +99,21 @@ public sealed class PasskeyProxyTests : IAsyncDisposable
         Assert.Equal(["POST /users/8/passkeys/begin"], backend.Requests);
     }
 
+    [Fact]
+    public async Task SavedPasskeyPassesThroughAnEmptyNoContent()
+    {
+        backend.Routes["POST /users/8/passkeys/complete"] = (HttpStatusCode.NoContent, "");
+        var client = await Start();
+
+        var signin = await client.GetAsync("/signin");
+        var request = new HttpRequestMessage(HttpMethod.Post, "/account/passkeys") { Content = JsonContent.Create(new { requestId = "r2", name = "phone", response = new { } }) };
+        request.Headers.Add("Cookie", signin.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(".AspNetCore.Cookies=")).Split(';')[0]);
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("", await response.Content.ReadAsStringAsync());
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (app is not null) await app.DisposeAsync();
