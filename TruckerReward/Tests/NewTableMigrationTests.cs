@@ -8,6 +8,7 @@ public sealed class NewTableMigrationTests
 {
     [Theory]
     [InlineData(typeof(Impersonation), "005_impersonations.sql")]
+    [InlineData(typeof(PasskeyCredential), "006_passkeys.sql")]
     public void TablesMatchTheirMigration(Type entity, string file)
     {
         using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()

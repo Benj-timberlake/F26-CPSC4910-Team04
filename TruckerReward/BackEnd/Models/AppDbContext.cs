@@ -34,6 +34,8 @@ public partial class AppDbContext : DbContext
 
     public DbSet<Impersonation> Impersonations { get; set; }
 
+    public DbSet<PasskeyCredential> PasskeyCredentials { get; set; }
+
     public virtual DbSet<PasswordChange> PasswordChanges { get; set; }
 
     public virtual DbSet<PasswordReset> PasswordResets { get; set; }
@@ -415,6 +417,24 @@ public partial class AppDbContext : DbContext
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_impersonations_user");
+        });
+
+        modelBuilder.Entity<PasskeyCredential>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("passkey_credentials");
+            entity.HasIndex(e => e.CredentialId, "uq_passkey_credentials_credential").IsUnique();
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.CredentialId).HasMaxLength(1023).HasColumnName("credential_id");
+            entity.Property(e => e.PublicKey).HasColumnType("blob").HasColumnName("public_key");
+            entity.Property(e => e.SignCount).HasColumnName("sign_count");
+            entity.Property(e => e.Name).HasMaxLength(100).HasColumnName("name");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.LastUsedAt).HasColumnType("datetime").HasColumnName("last_used_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_passkey_credentials_user");
         });
 
         modelBuilder.Entity<User>(entity =>

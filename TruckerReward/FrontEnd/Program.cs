@@ -53,6 +53,7 @@ app.MapAccountEndpoints();
 app.MapDriverViewEndpoints();
 app.MapAuditExport();
 app.MapViewAs();
+app.MapPasskeyProxy();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
