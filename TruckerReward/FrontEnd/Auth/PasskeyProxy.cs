@@ -43,7 +43,10 @@ public static class PasskeyProxy
         using (response)
         {
             var body = await response.Content.ReadAsStringAsync();
-            return Results.Text(body == "" ? "{}" : body, "application/json", statusCode: (int)response.StatusCode);
+            // kestrel refuses a body on a 204
+            return body == ""
+                ? Results.StatusCode((int)response.StatusCode)
+                : Results.Text(body, "application/json", statusCode: (int)response.StatusCode);
         }
     }
 
