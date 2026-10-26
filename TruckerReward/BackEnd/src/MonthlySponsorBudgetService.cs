@@ -67,7 +67,7 @@ public sealed class MonthlySponsorBudgetService(
 
             var points = (int)company.MonthlyBudget;
             var sponsorIds = CompanyMembershipQueries.FirstPerUser(db)
-                .Where(membership => membership.CompanyId == company.Id).Select(membership => membership.UserId);
+                .Where(membership => membership.CompanyId == company.Id).Select(membership => membership.Account.UserId);
             // One atomic statement prevents duplicate resets across retries or multiple app instances.
             await db.Users
                 .Where(u => u.UserType == "sponsor" && sponsorIds.Contains(u.Id) &&

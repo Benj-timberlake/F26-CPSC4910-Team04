@@ -54,10 +54,10 @@ public static class AdminEndpoints
                 users = users.Where(u => u.Status == status);
             if (companyId is not null)
                 users = users.Where(u => CompanyMembershipQueries.FirstPerUser(db)
-                    .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId));
+                    .Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == companyId));
             if (noSponsor == true)
                 users = users.Where(u => u.UserType != AuthEndpoints.Admin &&
-                    !CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id));
+                    !CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.Account.UserId == u.Id));
 
             var rows = users.Select(u => new
             {

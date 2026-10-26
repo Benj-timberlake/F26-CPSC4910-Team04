@@ -60,12 +60,12 @@ public static class PointsEndpoints
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         var drivers = db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Driver &&
-            CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id));
+            CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.Account.UserId == u.Id));
         if (actor.UserType == AuthEndpoints.Sponsor)
         {
             var companyId = await CompanyMembershipQueries.FirstCompanyId(db, actor.Id);
             drivers = drivers.Where(u => CompanyMembershipQueries.FirstPerUser(db)
-                .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId));
+                .Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == companyId));
         }
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -178,7 +178,7 @@ public static class PointsEndpoints
 
         var drivers = db.Users.AsNoTracking()
             .Where(u => u.UserType == AuthEndpoints.Driver && u.Status == User.Active &&
-                CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id && membership.CompanyId == company));
+                CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == company));
         var totals = await drivers.Select(u => new
         {
             u.Id, u.Username, u.FirstName, u.LastName,

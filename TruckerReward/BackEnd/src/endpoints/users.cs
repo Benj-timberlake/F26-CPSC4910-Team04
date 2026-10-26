@@ -16,7 +16,7 @@ public static class UserEndpoints
 
             var driver = await db.Users.AsNoTracking()
                 .Where(u => u.Id == driverId && u.UserType == "driver" && u.Status == User.Active &&
-                    CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id && membership.CompanyId == sponsorCompanyId))
+                    CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == sponsorCompanyId))
                 .Select(u => new { u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address, u.Points })
                 .FirstOrDefaultAsync();
             return driver is null ? Results.NotFound() : Results.Ok(driver);
