@@ -6,6 +6,7 @@ namespace BackEnd.Models;
 
 public partial class AppDbContext : DbContext
 {
+    public DbSet<WishlistItem> WishlistItems { get; set; }
     public DbSet<CatalogItem> CatalogItems { get; set; }
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
@@ -47,6 +48,14 @@ public partial class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<WishlistItem>(entity =>
+        {
+            entity.ToTable("driver_wishlist");
+            entity.HasKey(e => new { e.UserId, e.ItemId });
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.ItemId).HasColumnName("item_id").HasMaxLength(255);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<CatalogItem>(entity =>
         {
             entity.ToTable("catalog");

@@ -83,3 +83,9 @@
 .error {
     color: #b42318;
 }
+.product-price-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.product-price-row .product-price { margin: 0; }
+.wishlist-button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 1px solid #ddd; border-radius: 50%; background: white; color: #b42348; cursor: pointer; }
+.wishlist-button:hover { background: #fff1f4; }
+.wishlist-button:focus-visible { outline: 3px solid #2455a4; outline-offset: 3px; }
+.wishlist-button:disabled { opacity: .6; cursor: wait; }

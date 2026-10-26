@@ -6,42 +6,49 @@
 @inject IHttpClientFactory HttpClientFactory
 
 
-<PageTitle>Product Catalog</PageTitle>
+<PageTitle>@(WishlistOnly ? "Wishlist" : "Product Catalog")</PageTitle>
 
 <div class="catalog">
-    <h1>Product Catalog</h1>
+    <h1>@(WishlistOnly ? "Wishlist" : "Product Catalog")</h1>
 
-    <form class="search-bar"
-          @onsubmit="SearchProducts"
-          @onsubmit:preventDefault="true">
+    @if (!WishlistOnly)
+    {
+        <form class="search-bar"
+              @onsubmit="SearchProducts"
+              @onsubmit:preventDefault="true">
 
-        <input @bind="search"
-               placeholder="Search products..."
-               aria-label="Search products" />
+            <input @bind="search"
+                   placeholder="Search products..."
+                   aria-label="Search products" />
 
-        <button type="submit" disabled="@loading">
-            @(loading ? "Searching..." : "Search")
-        </button>
-        <fieldset class="catalog-controls" disabled="@loading">
-            <legend>Sort and filter products</legend>
-            <label for="product-sort">Sort by</label>
-            <select id="product-sort" @bind="sort">
-                <option value="">Best match</option>
-                <option value="price">Points: low to high</option>
-                <option value="-price">Points: high to low</option>
-                <option value="mostWatched">Popularity</option>
-                <option value="availability">Availability</option>
-                <option value="newlyListed">Creation date: newest first</option>
-            </select>
-            <label><input id="available-only" type="checkbox" @bind="availableOnly" /> In stock</label>
-        </fieldset>
-    </form>
+            <button type="submit" disabled="@loading">
+                @(loading ? "Searching..." : "Search")
+            </button>
+            <fieldset class="catalog-controls" disabled="@loading">
+                <legend>Sort and filter products</legend>
+                <label for="product-sort">Sort by</label>
+                <select id="product-sort" @bind="sort">
+                    <option value="">Best match</option>
+                    <option value="price">Points: low to high</option>
+                    <option value="-price">Points: high to low</option>
+                    <option value="mostWatched">Popularity</option>
+                    <option value="availability">Availability</option>
+                    <option value="newlyListed">Creation date: newest first</option>
+                </select>
+                <label><input id="available-only" type="checkbox" @bind="availableOnly" /> In stock</label>
+            </fieldset>
+        </form>
+    }
 
     @if (!string.IsNullOrEmpty(notice))
     {
         <p role="note">@notice</p>
     }
 
+    @if (wishlistError is not null)
+    {
+        <p role="alert" class="error">@wishlistError</p>
+    }
     @if (loading)
     {
         <p role="status">Loading products...</p>
@@ -52,7 +59,7 @@
     }
     else if (products.Count == 0)
     {
-        <p>@(DriverCatalog ? "No catalog products found. Your sponsor may not have added items yet, or no items match your filters." : "No products found. Enter a search or adjust your filters.")</p>
+        <p>@(WishlistOnly ? "Your wishlist is empty. Tap a heart in the catalog to save a product." : DriverCatalog ? "No catalog products found. Your sponsor may not have added items yet, or no items match your filters." : "No products found. Enter a search or adjust your filters.")</p>
     }
     else
     {
@@ -72,7 +79,15 @@
                     }
 
                     <h2>@product.Title</h2>
-                    <p class="product-price">@(product.Price?.Display ?? "Price unavailable")</p>
+                    <div class="product-price-row">
+                        <p class="product-price">@(product.Price?.Display ?? "Price unavailable")</p>
+                        @if (DriverCatalog && product.ItemId is not null)
+                        {
+                            <button type="button" class="wishlist-button" aria-label="@((favorites.Contains(product.ItemId) ? "Remove from wishlist: " : "Add to wishlist: ") + product.Title)" aria-pressed="@(favorites.Contains(product.ItemId) ? "true" : "false")" disabled="@(savingFavorite is not null)" @onclick="() => ToggleFavorite(product)">
+                                <FrontEnd.Shared.HeartIcon Filled="@favorites.Contains(product.ItemId)" />
+                            </button>
+                        }
+                    </div>
                     @if (!string.IsNullOrWhiteSpace(product.ItemId))
                     {
                         <a class="product-link" href="@("/product?itemId=" + Uri.EscapeDataString(product.ItemId))"
@@ -93,6 +108,11 @@
 </div>
 
 @code {
+    [Parameter] public bool WishlistOnly { get; set; }
+    private HashSet<string> favorites = [];
+    private string? savingFavorite;
+    private string? wishlistError;
+    private int driverId;
     [Parameter] public bool DriverCatalog { get; set; }
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
     private string search = "";
@@ -171,7 +191,9 @@
             error = "Please log in as a driver to view your catalog.";
             return;
         }
-        var itemIds = await client.GetFromJsonAsync<List<string>>($"users/{id}/catalog") ?? [];
+        driverId = id;
+        favorites = (await client.GetFromJsonAsync<List<string>>($"users/{id}/wishlist") ?? []).ToHashSet();
+        var itemIds = WishlistOnly ? favorites.ToList() : await client.GetFromJsonAsync<List<string>>($"users/{id}/catalog") ?? [];
         var savedProducts = new List<Product>();
         foreach (var itemId in itemIds.Distinct())
         {
@@ -200,6 +222,32 @@
             _ => filtered
         };
         products = filtered.ToList();
+    }
+
+    private async Task ToggleFavorite(Product product)
+    {
+        if (savingFavorite is not null || product.ItemId is null) return;
+        var itemId = product.ItemId;
+        var saved = !favorites.Contains(itemId);
+        savingFavorite = itemId;
+        wishlistError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PutAsJsonAsync($"users/{driverId}/wishlist", new { ItemId = itemId, Saved = saved });
+            response.EnsureSuccessStatusCode();
+            if (saved) favorites.Add(itemId);
+            else
+            {
+                favorites.Remove(itemId);
+                if (WishlistOnly) products.Remove(product);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            wishlistError = "Could not update your wishlist. Please try again.";
+        }
+        finally { savingFavorite = null; }
     }
 
     private static decimal? PriceForSort(Product item) =>

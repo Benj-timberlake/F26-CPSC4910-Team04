@@ -1,0 +1,4 @@
+@page "/wishlist"
+@attribute [Authorize(Roles = "driver")]
+
+<Products DriverCatalog="true" WishlistOnly="true" />

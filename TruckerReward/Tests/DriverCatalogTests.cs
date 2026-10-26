@@ -36,7 +36,7 @@ public sealed class DriverCatalogTests : TestContext
         {
             var path = request.RequestUri!.PathAndQuery;
             Paths.Add(path);
-            var body = path == "/users/7/catalog" ? """["v1|123|0"]"""
+            var body = path == "/users/7/wishlist" ? "[]" : path == "/users/7/catalog" ? """["v1|123|0"]"""
                 : """{"itemId":"v1|123|0","title":"GPS","price":{"value":"10","currency":"USD"}}""";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
         }

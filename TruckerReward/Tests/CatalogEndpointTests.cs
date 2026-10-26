@@ -69,6 +69,69 @@ public sealed class CatalogEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/users/99999/catalog", item)).StatusCode);
     }
 
+    [Fact]
+    public async Task WishlistsArePersonalAndLimitedToTheDriversCatalog()
+    {
+        await using var app = new TestApp();
+        using var client = await app.Start();
+        using var db = app.Db();
+        var company = new Company { Name = "Acme" };
+        db.Add(company);
+        await db.SaveChangesAsync();
+        var driver = NewUser("driver");
+        var sponsor = NewUser("sponsor");
+        var other = NewUser("driver");
+        other.Username = "other";
+        other.Email = "other@example.com";
+        driver.CompanyId = sponsor.CompanyId = other.CompanyId = company.Id;
+        db.Users.AddRange(driver, sponsor, other);
+        await db.SaveChangesAsync();
+        db.CatalogItems.Add(new CatalogItem { SponsorId = sponsor.Id, ItemId = "gps" });
+        await db.SaveChangesAsync();
+        var path = $"/users/{driver.Id}/wishlist";
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync(path, new UpdateWishlist("gps", true))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync(path, new UpdateWishlist("gps", true))).StatusCode);
+        Assert.Single(await db.WishlistItems.ToListAsync());
+        Assert.Equal(new[] { "gps" }, await client.GetFromJsonAsync<string[]>(path));
+        Assert.Empty((await client.GetFromJsonAsync<string[]>($"/users/{other.Id}/wishlist"))!);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync(path, new UpdateWishlist("outside-catalog", true))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync($"/users/{sponsor.Id}/wishlist", new UpdateWishlist("gps", true))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/users/{sponsor.Id}/wishlist")).StatusCode);
+        driver.CompanyId = null;
+        await db.SaveChangesAsync();
+        Assert.Empty((await client.GetFromJsonAsync<string[]>(path))!);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync(path, new UpdateWishlist("gps", false))).StatusCode);
+        Assert.Empty(await db.WishlistItems.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("too-long")]
+    public async Task InvalidWishlistProductIdsDoNotCreateFavorites(string itemId)
+    {
+        await using var app = new TestApp();
+        using var client = await app.Start();
+        using var db = app.Db();
+        var driver = NewUser("driver");
+        db.Users.Add(driver);
+        await db.SaveChangesAsync();
+        if (itemId == "too-long") itemId = new string('x', 256);
+        var response = await client.PutAsJsonAsync($"/users/{driver.Id}/wishlist", new UpdateWishlist(itemId, true));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await db.WishlistItems.ToListAsync());
+    }
+
+    [Fact]
+    public async Task MissingUsersCannotReadOrUpdateAWishlist()
+    {
+        await using var app = new TestApp();
+        using var client = await app.Start();
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/users/999/wishlist")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync("/users/999/wishlist", new UpdateWishlist("gps", true))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync("/users/999/wishlist", new UpdateWishlist("gps", false))).StatusCode);
+    }
+
     private static User NewUser(string role) => new()
     {
         UserType = role, Username = role, Email = role + "@example.com", Password = "hash",

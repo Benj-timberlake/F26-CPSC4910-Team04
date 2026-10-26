@@ -10,6 +10,32 @@ namespace TruckerReward.Tests;
 
 public sealed class AccountBarTests : TestContext
 {
+    [Theory]
+    [InlineData("driver", true)]
+    [InlineData("sponsor", false)]
+    [InlineData("admin", false)]
+    public void WishlistHeartAppearsBesideCartOnlyForDrivers(string role, bool shown)
+    {
+        var backend = new JsonBackend();
+        backend.Routes["GET /users/7/notifications/unread"] = (HttpStatusCode.OK, """{"count":0}""");
+        backend.Routes["GET /users/7"] = (HttpStatusCode.OK, """{"companyId":1}""");
+        var auth = this.AddTestAuthorization();
+        auth.SetAuthorized("user");
+        auth.SetRoles(role);
+        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
+            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        var bar = RenderComponent<AccountBar>();
+        Assert.Equal(shown ? 1 : 0, bar.FindAll("a[href=wishlist]").Count);
+        if (shown)
+        {
+            var heart = bar.Find("a[href=wishlist]");
+            Assert.Equal("Wishlist", heart.GetAttribute("aria-label"));
+            Assert.Equal("currentColor", heart.QuerySelector("svg")!.GetAttribute("stroke"));
+            Assert.Equal("cart", heart.NextElementSibling!.GetAttribute("href"));
+        }
+    }
+
     [Fact]
     public void CartIconIsAnSvgThatFollowsTheBarColor()
     {

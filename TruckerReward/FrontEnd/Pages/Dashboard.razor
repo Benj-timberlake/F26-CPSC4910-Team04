@@ -77,6 +77,10 @@
                 </section>
             }
 
+            @if (account.UserType == "driver")
+            {
+                <FrontEnd.Shared.WishlistGoal UserId="@account.Id" Points="@account.Points" />
+            }
         </div>
 
         @if (account.UserType == "sponsor")

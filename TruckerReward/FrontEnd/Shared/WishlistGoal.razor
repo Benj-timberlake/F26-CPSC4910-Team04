@@ -1,0 +1,75 @@
+@namespace FrontEnd.Shared
+@inject IHttpClientFactory HttpClientFactory
+
+<section class="tr-card wishlist-goal" aria-labelledby="wishlist-goal-title">
+    <h2 id="wishlist-goal-title">Wishlist goal</h2>
+    @if (loading)
+    {
+        <p role="status">Loading your wishlist goal...</p>
+    }
+    else if (error is not null)
+    {
+        <p role="alert">@error</p>
+    }
+    else if (itemCount == 0)
+    {
+        <p>Save items to your wishlist to see how many points you need.</p>
+    }
+    else
+    {
+        <p>Wishlist total: <strong>@RewardPoints.Format(total)</strong></p>
+        <p>Your balance: @RewardPoints.Format(Points)</p>
+        @if (Points >= total)
+        {
+            <p class="wishlist-remaining"><strong>You have enough points for all your wishlisted items!</strong></p>
+        }
+        else
+        {
+            <p class="wishlist-remaining"><strong>@RewardPoints.Format(total - Points) away</strong> from affording all your wishlisted items.</p>
+        }
+    }
+    <a href="wishlist">View wishlist</a>
+</section>
+
+@code {
+    [Parameter] public int UserId { get; set; }
+    [Parameter] public int Points { get; set; }
+    private int? loadedUserId;
+    private bool loading = true;
+    private string? error;
+    private decimal total;
+    private int itemCount;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedUserId == UserId) return;
+        loadedUserId = UserId;
+        loading = true;
+        error = null;
+        total = 0;
+        itemCount = 0;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var ids = (await client.GetFromJsonAsync<List<string>>($"users/{UserId}/wishlist") ?? []).Distinct().ToList();
+            itemCount = ids.Count;
+            foreach (var id in ids)
+            {
+                var product = await client.GetFromJsonAsync<WishlistProduct>("api/products/detail?itemId=" + Uri.EscapeDataString(id));
+                if (product?.ItemId != id || product.Price is null || !product.Price.TryGetDollars(out var dollars))
+                {
+                    error = "Your wishlist total is unavailable because an item's price could not be loaded. Please try again later.";
+                    return;
+                }
+                total += RewardPoints.FromDollars(dollars);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load your wishlist total. Please try again later.";
+        }
+        finally { loading = false; }
+    }
+
+    private sealed record WishlistProduct(string? ItemId, ProductPrice? Price);
+}
