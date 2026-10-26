@@ -19,7 +19,7 @@ public static class CatalogEndpoints
             var itemIds = await db.CatalogItems.AsNoTracking()
                 .Where(item => db.Users.Any(sponsor => sponsor.Id == item.SponsorId
                     && sponsor.UserType == "sponsor" && CompanyMembershipQueries.FirstPerUser(db)
-                        .Any(membership => membership.Account.UserId == sponsor.Id && membership.CompanyId == companyId)))
+                        .Any(membership => membership.AccountId == sponsor.Id && membership.CompanyId == companyId)))
                 .OrderBy(item => item.Id).Select(item => item.ItemId).Distinct().ToListAsync();
             return Results.Ok(itemIds);
         });

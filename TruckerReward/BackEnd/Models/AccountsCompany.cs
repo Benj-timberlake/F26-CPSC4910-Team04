@@ -6,7 +6,7 @@ public partial class AccountsCompany
 
     public int CompanyId { get; set; }
 
-    public virtual AccountsHistory Account { get; set; } = null!;
+    public virtual User Account { get; set; } = null!;
 
     public virtual Company Company { get; set; } = null!;
 }
