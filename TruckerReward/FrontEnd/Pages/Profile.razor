@@ -30,10 +30,10 @@
                 </div>
                 <dl class="tr-kv">
                     @if ((account.UserType == "sponsor" || account.UserType == "driver") &&
-                        !string.IsNullOrWhiteSpace(account.CompanyName))
+                        ((account.CompanyNames?.Count ?? 0) > 0 || !string.IsNullOrWhiteSpace(account.CompanyName)))
                     {
                         <dt>Company</dt>
-                        <dd>@(account.UserType == "driver" && (account.CompanyNames?.Count ?? 0) > 0 ? string.Join(", ", account.CompanyNames!) : account.CompanyName)</dd>
+                        <dd>@((account.CompanyNames?.Count ?? 0) > 0 ? string.Join(", ", account.CompanyNames!) : account.CompanyName)</dd>
                     }
                     <dt>Username</dt>
                     <dd>@account.Username</dd>

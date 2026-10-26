@@ -16,7 +16,7 @@ public static class UserEndpoints
 
             var driver = await db.Users.AsNoTracking()
                 .Where(u => u.Id == driverId && u.UserType == "driver" && u.Status == User.Active &&
-                    CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == sponsorCompanyId))
+                    CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id && membership.CompanyId == sponsorCompanyId))
                 .Select(u => new { u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address, u.Points })
                 .FirstOrDefaultAsync();
             return driver is null ? Results.NotFound() : Results.Ok(driver);
@@ -215,8 +215,7 @@ public static class UserEndpoints
             }
             else if (decision == "active" && previous == "approved")
             {
-                var historyIds = db.AccountsHistories.Where(history => history.UserId == applicant.Id).Select(history => history.Id);
-                await db.AccountsCompanies.Where(membership => historyIds.Contains(membership.AccountId) && membership.CompanyId == application.CompanyId)
+                await db.AccountsCompanies.Where(membership => membership.UserId == applicant.Id && membership.CompanyId == application.CompanyId)
                     .ExecuteDeleteAsync();
             }
 
@@ -235,10 +234,14 @@ public static class UserEndpoints
                 .Where(c => c.Id == effectiveCompanyId)
                 .Select(c => new { c.Name, c.MonthlyBudget })
                 .FirstOrDefaultAsync();
-            var companyNames = await db.AccountsCompanies.AsNoTracking()
-                .Where(link => db.AccountsHistories.Any(history => history.Id == link.AccountId && history.UserId == id))
-                .Join(db.Companies.AsNoTracking(), link => link.CompanyId, c => c.Id, (link, c) => new { c.Id, c.Name })
-                .Distinct().OrderBy(c => c.Id).Select(c => c.Name).ToListAsync();
+            var companyNames = (await db.AccountsCompanies.AsNoTracking()
+                .Where(link => link.UserId == id)
+                .OrderBy(link => link.CompanyId)
+                .ThenBy(link => link.CompanyId)
+                .Select(link => link.Company.Name)
+                .ToListAsync())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
             if (companyNames.Count == 0 && company is not null)
                 companyNames.Add(company.Name);
             var pendingCompany = await db.Applications.AsNoTracking()
@@ -354,23 +357,11 @@ public static class UserEndpoints
 
     internal static async Task AddCompanyMembership(AppDbContext db, User user, int companyId)
     {
-        var alreadyLinked = await db.AccountsCompanies.AnyAsync(link => link.CompanyId == companyId &&
-            db.AccountsHistories.Any(history => history.Id == link.AccountId && history.UserId == user.Id));
+        var alreadyLinked = await db.AccountsCompanies.AnyAsync(link => link.CompanyId == companyId && link.UserId == user.Id);
         if (alreadyLinked)
             return;
 
-        // The join table has no timestamp or sequence column. Give each accepted
-        // company a fresh history row so ascending account_id records join order.
-        var history = new AccountsHistory
-        {
-            UserId = user.Id, Timestamp = DateTime.UtcNow, UserType = user.UserType, Username = user.Username,
-            Password = user.Password ?? "", Email = user.Email, PhoneNumber = user.PhoneNumber,
-            Address = user.Address, Points = user.Points, FirstName = user.FirstName, LastName = user.LastName
-        };
-        db.AccountsHistories.Add(history);
-        await db.SaveChangesAsync();
-
-        db.AccountsCompanies.Add(new AccountsCompany { AccountId = history.Id, CompanyId = companyId });
+        db.AccountsCompanies.Add(new AccountsCompany { UserId = user.Id, CompanyId = companyId });
     }
 }
 

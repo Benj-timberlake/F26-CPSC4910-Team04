@@ -72,10 +72,10 @@ public static class AuditEndpoints
     {
         IQueryable<User>? scope = actor.UserType == AuthEndpoints.Sponsor
             ? db.Users.Where(u => u.UserType == AuthEndpoints.Driver && CompanyMembershipQueries.FirstPerUser(db)
-                .Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == CompanyMembershipQueries.FirstPerUser(db)
-                    .Where(actorMembership => actorMembership.Account.UserId == actor.Id).Select(actorMembership => actorMembership.CompanyId).FirstOrDefault()))
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == CompanyMembershipQueries.FirstPerUser(db)
+                    .Where(actorMembership => actorMembership.UserId == actor.Id).Select(actorMembership => actorMembership.CompanyId).FirstOrDefault()))
             : companyId is null ? null : db.Users.Where(u => CompanyMembershipQueries.FirstPerUser(db)
-                .Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == companyId));
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId));
         if (driverId is not null)
             scope = (scope ?? db.Users).Where(u => u.Id == driverId);
         return scope?.Select(u => u.Id);

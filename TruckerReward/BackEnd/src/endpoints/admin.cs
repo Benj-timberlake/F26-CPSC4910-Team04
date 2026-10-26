@@ -54,10 +54,10 @@ public static class AdminEndpoints
                 users = users.Where(u => u.Status == status);
             if (companyId is not null)
                 users = users.Where(u => CompanyMembershipQueries.FirstPerUser(db)
-                    .Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == companyId));
+                    .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId));
             if (noSponsor == true)
                 users = users.Where(u => u.UserType != AuthEndpoints.Admin &&
-                    !CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.Account.UserId == u.Id));
+                    !CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id));
 
             var rows = users.Select(u => new
             {
@@ -180,8 +180,7 @@ public static class AdminEndpoints
         await db.SaveChangesAsync();
         if (account.UserType == AuthEndpoints.Sponsor)
         {
-            var historyIds = db.AccountsHistories.Where(history => history.UserId == account.Id).Select(history => history.Id);
-            await db.AccountsCompanies.Where(membership => historyIds.Contains(membership.AccountId)).ExecuteDeleteAsync();
+            await db.AccountsCompanies.Where(membership => membership.UserId == account.Id).ExecuteDeleteAsync();
             if (req.CompanyId is int companyId)
             {
                 await UserEndpoints.AddCompanyMembership(db, account, companyId);

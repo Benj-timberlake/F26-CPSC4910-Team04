@@ -117,15 +117,15 @@ public partial class AppDbContext : DbContext
 
         modelBuilder.Entity<AccountsCompany>(entity =>
         {
-            entity.HasKey(e => new { e.AccountId, e.CompanyId }).HasName("PRIMARY");
+            entity.HasKey(e => new { e.UserId, e.CompanyId }).HasName("PRIMARY");
 
             entity.ToTable("accounts_companies");
 
-            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.CompanyId).HasColumnName("company_id");
 
-            entity.HasOne(e => e.Account).WithMany(e => e.AccountsCompanies)
-                .HasForeignKey(e => e.AccountId)
+            entity.HasOne(e => e.User).WithMany(e => e.AccountsCompanies)
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull);
 
             entity.HasOne(e => e.Company).WithMany(e => e.AccountsCompanies)

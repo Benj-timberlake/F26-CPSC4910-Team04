@@ -60,12 +60,12 @@ public static class PointsEndpoints
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         var drivers = db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Driver &&
-            CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.Account.UserId == u.Id));
+            CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id));
         if (actor.UserType == AuthEndpoints.Sponsor)
         {
             var companyId = await CompanyMembershipQueries.FirstCompanyId(db, actor.Id);
             drivers = drivers.Where(u => CompanyMembershipQueries.FirstPerUser(db)
-                .Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == companyId));
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId));
         }
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -141,8 +141,7 @@ public static class PointsEndpoints
         if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && actorCompanyId != company))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        var historyIds = db.AccountsHistories.Where(history => history.UserId == driverId).Select(history => history.Id);
-        await db.AccountsCompanies.Where(membership => historyIds.Contains(membership.AccountId) && membership.CompanyId == company)
+        await db.AccountsCompanies.Where(membership => membership.UserId == driverId && membership.CompanyId == company)
             .ExecuteDeleteAsync();
         var now = clock.GetUtcNow().UtcDateTime;
         foreach (var application in await db.Applications.Where(a => a.ApplicantId == driverId && a.CompanyId == company && a.Status == "approved").ToListAsync())
@@ -178,7 +177,7 @@ public static class PointsEndpoints
 
         var drivers = db.Users.AsNoTracking()
             .Where(u => u.UserType == AuthEndpoints.Driver && u.Status == User.Active &&
-                CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.Account.UserId == u.Id && membership.CompanyId == company));
+                CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id && membership.CompanyId == company));
         var totals = await drivers.Select(u => new
         {
             u.Id, u.Username, u.FirstName, u.LastName,
