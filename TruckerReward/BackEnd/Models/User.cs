@@ -37,8 +37,6 @@ public partial class User
 
     public virtual ICollection<AccountsHistory> AccountsHistories { get; set; } = new List<AccountsHistory>();
 
-    public virtual ICollection<AccountsCompany> AccountsCompanies { get; set; } = new List<AccountsCompany>();
-
     public virtual Application? ApplicationDriver { get; set; }
 
     public virtual ICollection<Application> ApplicationSponsors { get; set; } = new List<Application>();

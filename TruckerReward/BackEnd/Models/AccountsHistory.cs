@@ -28,5 +28,8 @@ public partial class AccountsHistory
     public string? FirstName { get; set; }
 
     public string? LastName { get; set; }
+
+    public virtual ICollection<AccountsCompany> AccountsCompanies { get; set; } = new List<AccountsCompany>();
+
     public virtual User User { get; set; } = null!;
 }
