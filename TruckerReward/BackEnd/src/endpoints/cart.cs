@@ -14,7 +14,7 @@ public static class CartEndpoints
             var items = await db.CartItems.AsNoTracking().Include(item => item.User).Include(item => item.PointsHistory)
                 .Where(item => item.User.UserType == "driver" && item.User.CompanyId == sponsor.CompanyId
                     && !item.WasOrdered && !item.InCart && item.PointsHistory != null
-                    && item.PointsHistory.UserId == item.UserId).ToListAsync();
+                    && item.PointsHistory.UserId == item.UserId && item.PointsHistory.RejectionReason == null).ToListAsync();
             var orderIds = items.Select(item => item.PointsHistoryId!.Value).Distinct().ToList();
             var reasons = await db.AuditHistories.AsNoTracking().Where(a => orderIds.Contains(a.PointsHistoryId))
                 .GroupBy(a => a.PointsHistoryId).Select(g => new { g.Key, Reason = g.Min(a => a.Resoning) }).ToDictionaryAsync(r => r.Key, r => r.Reason);
@@ -34,19 +34,58 @@ public static class CartEndpoints
             if (sponsor is null) return Results.NotFound();
             if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
             if (sponsor.CompanyId is null) return Results.NotFound();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var driverId = await db.PointsHistory.Where(h => h.Id == orderId).Select(h => (int?)h.UserId).SingleOrDefaultAsync();
+            if (driverId is null) return Results.NotFound();
+            await db.Users.Where(u => u.Id == driverId).ExecuteUpdateAsync(update => update.SetProperty(u => u.Points, u => u.Points));
             // Materialize IDs before updating: MySQL forbids reading the target
             // cart table from a subquery inside the same UPDATE statement.
             var eligible = await db.CartItems.Where(item => item.PointsHistoryId == orderId
                     && !item.InCart && !item.WasOrdered && item.User.UserType == "driver"
                     && item.User.CompanyId == sponsor.CompanyId && item.PointsHistory != null
-                    && item.PointsHistory.UserId == item.UserId).Select(item => item.Id).ToListAsync();
+                    && item.PointsHistory.UserId == item.UserId && item.PointsHistory.RejectionReason == null).Select(item => item.Id).ToListAsync();
             if (eligible.Count == 0) return Results.NotFound();
             var changed = await db.CartItems.Where(item => eligible.Contains(item.Id)
                     && item.PointsHistoryId == orderId && !item.InCart && !item.WasOrdered)
                 .ExecuteUpdateAsync(update => update.SetProperty(item => item.WasOrdered, true));
             if (changed == 0) return Results.NotFound();
             var bought = await db.CartItems.AsNoTracking().Include(item => item.User).Where(item => eligible.Contains(item.Id)).ToListAsync();
+            await transaction.CommitAsync();
             await notifications.OrderSent(bought[0].User, bought);
+            return Results.NoContent();
+        });
+
+        app.MapPost("/users/{id:int}/driver-orders/{orderId:int}/reject", async (int id, int orderId, RejectOrderRequest request, AppDbContext db, Notifications notifications, TimeProvider clock) =>
+        {
+            var reason = request.Reason?.Trim() ?? "";
+            if (reason.Length is 0 or > PointsEndpoints.MaxReasonLength)
+                return Results.BadRequest(new { message = "Give a rejection reason of up to 500 characters." });
+            var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id);
+            if (sponsor is null) return Results.NotFound();
+            if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
+            if (sponsor.CompanyId is null) return Results.NotFound();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var driverId = await db.PointsHistory.Where(h => h.Id == orderId).Select(h => (int?)h.UserId).SingleOrDefaultAsync();
+            if (driverId is null) return Results.NotFound();
+            await db.Users.Where(u => u.Id == driverId).ExecuteUpdateAsync(update => update.SetProperty(u => u.Points, u => u.Points));
+            var driver = await db.Users.SingleOrDefaultAsync(u => u.Id == driverId && u.UserType == "driver" && u.CompanyId == sponsor.CompanyId);
+            if (driver is null) return Results.NotFound();
+            var history = await db.PointsHistory.SingleOrDefaultAsync(h => h.Id == orderId && h.UserId == driver.Id);
+            var items = await db.CartItems.Where(i => i.PointsHistoryId == orderId).ToListAsync();
+            if (history is null || items.Count == 0 || items.Any(i => i.UserId != driver.Id || i.InCart)) return Results.NotFound();
+            if (history.RejectionReason != null || items.Any(i => i.WasOrdered))
+                return Results.Conflict(new { message = "Only pending orders can be rejected." });
+            var refund = -(long)history.PointsDelta;
+            if (refund < 0 || refund > int.MaxValue || (long)driver.Points + refund > int.MaxValue)
+                return Results.BadRequest(new { message = "The refund would exceed the maximum points balance." });
+            driver.Points += (int)refund;
+            history.RejectionReason = reason;
+            var credit = new PointsHistory { UserId = driver.Id, PointsDelta = (int)refund, Timestamp = clock.GetUtcNow().UtcDateTime };
+            db.PointsHistory.Add(credit);
+            db.AuditHistories.Add(new AuditHistory { UserId = id, PointsHistory = credit, Resoning = reason });
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+            await notifications.PointsChanged(driver, (int)refund, "Your sponsor rejected your order: " + reason);
             return Results.NoContent();
         });
 
@@ -61,7 +100,7 @@ public static class CartEndpoints
             {
                 var history = group.First().PointsHistory!;
                 return new PastOrderDetails(history.Id, history.Timestamp, -(long)history.PointsDelta,
-                    CanRefund(history, now), group.All(item => item.WasOrdered) ? OrderOrdered : OrderPending, group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList());
+                    CanRefund(history, now) && !group.Any(item => item.WasOrdered), history.RejectionReason != null ? OrderRejected : group.All(item => item.WasOrdered) ? OrderOrdered : OrderPending, group.Select(item => new CartItemDetails(item.Id, item.Name, item.Price, item.Description, item.Quantity)).ToList(), history.RejectionReason);
             }).OrderByDescending(order => order.Timestamp).ThenByDescending(order => order.PointsHistoryId));
         });
 
@@ -80,6 +119,8 @@ public static class CartEndpoints
             var items = await db.CartItems.Where(item => item.PointsHistoryId == historyId).ToListAsync();
             if (items.Count == 0 || items.Any(item => item.UserId != id || item.InCart))
                 return Results.BadRequest(new { message = "This history entry is not a refundable order." });
+            if (items.Any(item => item.WasOrdered))
+                return Results.BadRequest(new { message = "Orders cannot be refunded once your sponsor has placed them." });
             var balance = (long)user.Points - history.PointsDelta;
             if (balance > int.MaxValue)
                 return Results.BadRequest(new { message = "The refund would exceed the maximum points balance." });
@@ -105,8 +146,8 @@ public static class CartEndpoints
             var items = await db.CartItems.Where(item => item.PointsHistoryId == historyId).ToListAsync();
             if (user is null || history is null || items.Count == 0 || items.Any(item => item.UserId != id || item.InCart))
                 return Results.NotFound(new { message = "That order wasn't found." });
-            if (items.Any(item => item.WasOrdered))
-                return Results.Conflict(new { message = "Your sponsor already ordered this, so it can't be changed." });
+            if (history.RejectionReason != null || items.Any(item => item.WasOrdered))
+                return Results.Conflict(new { message = "This order has already been ordered or rejected, so it can't be changed." });
 
             user.Points -= history.PointsDelta;
             foreach (var item in items)
@@ -228,9 +269,10 @@ public static class CartEndpoints
     // pending until the sponsor orders it
     public const string OrderPending = "pending";
     public const string OrderOrdered = "ordered";
+    public const string OrderRejected = "rejected";
 
     private static bool CanRefund(PointsHistory history, DateTime now) =>
-        history.PointsDelta <= 0 && history.Timestamp is DateTime timestamp
+        history.RejectionReason == null && history.PointsDelta <= 0 && history.Timestamp is DateTime timestamp
         && timestamp <= now && now - timestamp < TimeSpan.FromHours(24);
 }
 
@@ -241,4 +283,5 @@ public record AddCartItem(string Name, decimal Price, string? Description);
 public record SponsorOrderDetails(int OrderId, int DriverId, string DriverName, DateTime? Timestamp, decimal TotalPrice, List<CartItemDetails> Items, string? Reason = null);
 
 public record SendOrderRequest(string? Reason);
-public record PastOrderDetails(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, string Status, List<CartItemDetails> Items);
+public record PastOrderDetails(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, string Status, List<CartItemDetails> Items, string? RejectionReason = null);
+public record RejectOrderRequest(string? Reason);

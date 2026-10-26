@@ -13,12 +13,13 @@ public sealed class OrderStatusPageTests : TestContext
     [Theory]
     [InlineData("pending", "Waiting for your sponsor")]
     [InlineData("ordered", "Ordered by your sponsor")]
+    [InlineData("rejected", "Rejected by your sponsor — points refunded")]
     public void PastOrdersShowEachOrdersStatus(string status, string shown)
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         var backend = new JsonBackend();
         backend.Routes["GET /users/7/orders"] = (HttpStatusCode.OK,
-            $$"""[{"pointsHistoryId":42,"timestamp":"2026-09-26T12:00:00","totalPoints":300,"canRefund":false,"status":"{{status}}","items":[{"id":1,"name":"Mug","price":1.5,"quantity":2}]}]""");
+            $$"""[{"pointsHistoryId":42,"timestamp":"2026-09-26T12:00:00","totalPoints":300,"canRefund":false,"status":"{{status}}","rejectionReason":"Out of stock","items":[{"id":1,"name":"Mug","price":1.5,"quantity":2}]}]""");
         var auth = this.AddTestAuthorization();
         auth.SetAuthorized("bob");
         auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
@@ -28,6 +29,11 @@ public sealed class OrderStatusPageTests : TestContext
         var page = RenderComponent<PastOrders>();
 
         page.WaitForAssertion(() => Assert.Equal(shown, page.Find("td.status span").TextContent));
+        if (status == "rejected")
+        {
+            Assert.Equal("Reason: Out of stock", page.Find(".rejection-reason").TextContent);
+            Assert.Empty(page.FindAll("button.change-order"));
+        }
     }
 
     [Fact]

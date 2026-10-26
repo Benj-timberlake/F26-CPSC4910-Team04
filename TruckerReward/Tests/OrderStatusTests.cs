@@ -65,5 +65,57 @@ public sealed class OrderStatusTests : IAsyncDisposable
         Assert.Empty(await app.Db().NotificationsHistories.Where(n => n.UserId == bob).ToListAsync());
     }
 
+    [Fact]
+    public async Task RejectionPreservesOrderAndRefundsOnlyOnceEvenAfter24Hours()
+    {
+        await Start();
+        app.Clock.Advance(TimeSpan.FromDays(2));
+        var url = $"/users/{sue}/driver-orders/{order}/reject";
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await client.PostAsJsonAsync(url, new RejectOrderRequest(" "))).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/users/{bob}/driver-orders/{order}/reject", new RejectOrderRequest("No"))).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, (await client.PostAsJsonAsync(url, new RejectOrderRequest("  Out of stock  "))).StatusCode);
+        var rejected = Assert.Single((await client.GetFromJsonAsync<List<PastOrderDetails>>($"/users/{bob}/orders"))!);
+        Assert.Equal(CartEndpoints.OrderRejected, rejected.Status);
+        Assert.Equal("Out of stock", rejected.RejectionReason);
+        Assert.False(rejected.CanRefund);
+        Assert.Equal(2, rejected.Items.Count);
+        Assert.Empty((await client.GetFromJsonAsync<List<SponsorOrderDetails>>($"/users/{sue}/driver-orders"))!);
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, (await client.PostAsJsonAsync(url, new RejectOrderRequest("Again"))).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, (await client.PostAsync($"/users/{sue}/driver-orders/{order}/buy", null)).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, (await client.PostAsync($"/users/{bob}/orders/{order}/edit", null)).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await client.PostAsync($"/users/{bob}/orders/{order}/refund", null)).StatusCode);
+        using var db = app.Db();
+        Assert.Equal(2500, (await db.Users.SingleAsync(u => u.Id == bob)).Points);
+        Assert.Equal(2500, (await db.PointsHistory.SingleAsync(h => h.UserId == bob && h.PointsDelta > 0)).PointsDelta);
+    }
+
+    [Fact]
+    public async Task PurchasedOrdersCannotBeRejected()
+    {
+        await Start();
+        await client.PostAsync($"/users/{sue}/driver-orders/{order}/buy", null);
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"/users/{sue}/driver-orders/{order}/reject", new RejectOrderRequest("No"))).StatusCode);
+        using var db = app.Db();
+        Assert.Equal(0, (await db.Users.SingleAsync(u => u.Id == bob)).Points);
+    }
+
+    [Fact]
+    public async Task SponsorPurchaseDisablesRefundAndStaleRefundRequestsAreBlocked()
+    {
+        await Start();
+        var before = Assert.Single((await client.GetFromJsonAsync<List<PastOrderDetails>>($"/users/{bob}/orders"))!);
+        Assert.True(before.CanRefund);
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, (await client.PostAsync($"/users/{sue}/driver-orders/{order}/buy", null)).StatusCode);
+        var after = Assert.Single((await client.GetFromJsonAsync<List<PastOrderDetails>>($"/users/{bob}/orders"))!);
+        Assert.False(after.CanRefund);
+        var response = await client.PostAsync($"/users/{bob}/orders/{order}/refund", null);
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("once your sponsor has placed", await response.Content.ReadAsStringAsync());
+        using var db = app.Db();
+        Assert.Equal(0, (await db.Users.SingleAsync(u => u.Id == bob)).Points);
+        Assert.Equal(2, await db.CartItems.CountAsync(i => i.PointsHistoryId == order));
+        Assert.NotNull(await db.PointsHistory.FindAsync(order));
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }

@@ -25,7 +25,8 @@ public sealed class CartEndpointTests
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INT NOT NULL REFERENCES users(id),
                 timestamp DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
-                points_delta INT NOT NULL
+                points_delta INT NOT NULL,
+                rejection_reason TEXT NULL
             );
             """);
         var owner = NewUser("sender");

@@ -19,14 +19,14 @@ public sealed class OrderTests
         await using var app = new TestApp();
         using var client = await app.Start();
         using var db = app.Db();
-        var user = new User { Username = "buyer", Email = "buyer@test.com", UserType = "driver", PhoneNumber = "", Address = "", Points = 100 };
-        var other = new User { Username = "other", Email = "other@test.com", UserType = "driver", PhoneNumber = "", Address = "" };
+        var user = new User { Username = "buyer", Email = "buyer@test.com", UserType = "driver", FirstName = "Test", LastName = "Driver", PhoneNumber = "", Address = "", Points = 100 };
+        var other = new User { Username = "other", Email = "other@test.com", UserType = "driver", FirstName = "Test", LastName = "Driver", PhoneNumber = "", Address = "" };
         db.Users.AddRange(user, other);
         await db.SaveChangesAsync();
         var history = new PointsHistory { UserId = user.Id, PointsDelta = -300, Timestamp = app.Clock.GetUtcNow().UtcDateTime.AddSeconds(-ageSeconds) };
         db.CartItems.AddRange(
-            new CartItem { UserId = user.Id, Name = "Mug", Price = 1, Quantity = 2, InCart = false, WasOrdered = true, PointsHistory = history },
-            new CartItem { UserId = user.Id, Name = "Pen", Price = 1, InCart = false, WasOrdered = true, PointsHistory = history },
+            new CartItem { UserId = user.Id, Name = "Mug", Price = 1, Quantity = 2, InCart = false, WasOrdered = false, PointsHistory = history },
+            new CartItem { UserId = user.Id, Name = "Pen", Price = 1, InCart = false, WasOrdered = false, PointsHistory = history },
             new CartItem { UserId = user.Id, Name = "Unordered", Price = 1 });
         await db.SaveChangesAsync();
         var orders = await client.GetFromJsonAsync<List<PastOrderDetails>>($"/users/{user.Id}/orders");
@@ -57,9 +57,9 @@ public sealed class OrderTests
         await using var app = new TestApp();
         using var client = await app.Start();
         using var db = app.Db();
-        var user = new User { Username = "buyer", Email = "buyer@test.com", UserType = "driver", PhoneNumber = "", Address = "", Points = 10 };
+        var user = new User { Username = "buyer", Email = "buyer@test.com", UserType = "driver", FirstName = "Test", LastName = "Driver", PhoneNumber = "", Address = "", Points = 10 };
         var history = new PointsHistory { User = user, PointsDelta = -100, Timestamp = app.Clock.GetUtcNow().UtcDateTime };
-        db.CartItems.Add(new CartItem { User = user, Name = "Mug", Price = 1, InCart = false, WasOrdered = true, PointsHistory = history });
+        db.CartItems.Add(new CartItem { User = user, Name = "Mug", Price = 1, InCart = false, WasOrdered = false, PointsHistory = history });
         await db.SaveChangesAsync();
         await db.Database.ExecuteSqlRawAsync("CREATE TRIGGER reject_refund BEFORE DELETE ON Points_History BEGIN SELECT RAISE(ABORT, 'test failure'); END;");
         await Assert.ThrowsAnyAsync<Exception>(() => client.PostAsync($"/users/{user.Id}/orders/{history.Id}/refund", null));

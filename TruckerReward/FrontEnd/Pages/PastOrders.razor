@@ -29,7 +29,7 @@
         }
         else
         {
-            <p>Purchases can be refunded within 24 hours. All timestamps are UTC.</p>
+            <p>Purchases can be refunded within 24 hours, until your sponsor places the order. All timestamps are UTC.</p>
             <div class="tr-table-wrap">
                 <table class="tr-table">
                     <thead><tr><th>Points history ID</th><th>Purchased at (UTC)</th><th>Items</th><th>Total</th><th>Status</th><th>Refund</th></tr></thead>
@@ -45,7 +45,11 @@
                                     }</ul></td>
                                 <td>@RewardPoints.Format(order.TotalPoints)</td>
                                 <td class="status">
-                                    <span>@(order.Status == "ordered" ? "Ordered by your sponsor" : "Waiting for your sponsor")</span>
+                                    <span>@(order.Status == "rejected" ? "Rejected by your sponsor — points refunded" : order.Status == "ordered" ? "Ordered by your sponsor" : "Waiting for your sponsor")</span>
+                                    @if (order.Status == "rejected")
+                                    {
+                                        <p class="rejection-reason">Reason: @order.RejectionReason</p>
+                                    }
                                     @if (order.Status == "pending")
                                     {
                                         <button type="button" class="tr-btn-outline change-order" disabled="@saving" @onclick="() => ChangeOrder(order)">Change order</button>
@@ -180,7 +184,7 @@
     }
 
     private sealed record Problem(string? Message);
-    private sealed record PastOrder(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, string Status, List<OrderItem> Items);
+    private sealed record PastOrder(int PointsHistoryId, DateTime? Timestamp, long TotalPoints, bool CanRefund, string Status, List<OrderItem> Items, string? RejectionReason = null);
     private sealed record OrderItem(uint Id, string Name, decimal Price, string? Description, int Quantity);
     private sealed record OrderError(string Message);
 }
