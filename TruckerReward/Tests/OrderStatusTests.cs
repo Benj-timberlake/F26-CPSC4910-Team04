@@ -99,10 +99,13 @@ public sealed class OrderStatusTests : IAsyncDisposable
         Assert.Equal(0, (await db.Users.SingleAsync(u => u.Id == bob)).Points);
     }
 
-    [Fact]
-    public async Task SponsorPurchaseDisablesRefundAndStaleRefundRequestsAreBlocked()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(86399)]
+    public async Task SponsorPurchaseDisablesRefundAndStaleRefundRequestsAreBlocked(int ageSeconds)
     {
         await Start();
+        app.Clock.Advance(TimeSpan.FromSeconds(ageSeconds));
         var before = Assert.Single((await client.GetFromJsonAsync<List<PastOrderDetails>>($"/users/{bob}/orders"))!);
         Assert.True(before.CanRefund);
         Assert.Equal(System.Net.HttpStatusCode.NoContent, (await client.PostAsync($"/users/{sue}/driver-orders/{order}/buy", null)).StatusCode);
@@ -115,6 +118,61 @@ public sealed class OrderStatusTests : IAsyncDisposable
         Assert.Equal(0, (await db.Users.SingleAsync(u => u.Id == bob)).Points);
         Assert.Equal(2, await db.CartItems.CountAsync(i => i.PointsHistoryId == order));
         Assert.NotNull(await db.PointsHistory.FindAsync(order));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("too long")]
+    public async Task InvalidRejectionReasonsLeaveTheOrderAndPointsUnchanged(string? reason)
+    {
+        await Start();
+        if (reason == "too long") reason = new string('x', 501);
+        var response = await client.PostAsJsonAsync($"/users/{sue}/driver-orders/{order}/reject", new RejectOrderRequest(reason));
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(CartEndpoints.OrderPending, await Status());
+        using var db = app.Db();
+        Assert.Equal(0, (await db.Users.SingleAsync(u => u.Id == bob)).Points);
+        Assert.Null((await db.PointsHistory.FindAsync(order))!.RejectionReason);
+        Assert.Single(await db.PointsHistory.ToListAsync());
+        Assert.Empty(await db.NotificationsHistories.ToListAsync());
+    }
+
+    [Fact]
+    public async Task SponsorCannotRejectAnotherCompanysOrder()
+    {
+        await Start();
+        using var db = app.Db();
+        var company = new Company { Name = "Other company" };
+        db.Add(company);
+        await db.SaveChangesAsync();
+        var outsider = User("outsider", "sponsor", company.Id);
+        db.Users.Add(outsider);
+        await db.SaveChangesAsync();
+        var response = await client.PostAsJsonAsync($"/users/{outsider.Id}/driver-orders/{order}/reject", new RejectOrderRequest("Not approved"));
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(CartEndpoints.OrderPending, await Status());
+        db.ChangeTracker.Clear();
+        Assert.Equal(0, (await db.Users.SingleAsync(u => u.Id == bob)).Points);
+        Assert.Single(await db.PointsHistory.ToListAsync());
+    }
+
+    [Fact]
+    public async Task RejectionThatWouldOverflowBalanceDoesNotPartiallySave()
+    {
+        await Start();
+        using var db = app.Db();
+        var driver = await db.Users.SingleAsync(u => u.Id == bob);
+        driver.Points = int.MaxValue;
+        await db.SaveChangesAsync();
+        var response = await client.PostAsJsonAsync($"/users/{sue}/driver-orders/{order}/reject", new RejectOrderRequest("Out of stock"));
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(CartEndpoints.OrderPending, await Status());
+        db.ChangeTracker.Clear();
+        Assert.Equal(int.MaxValue, (await db.Users.SingleAsync(u => u.Id == bob)).Points);
+        Assert.Null((await db.PointsHistory.FindAsync(order))!.RejectionReason);
+        Assert.Single(await db.PointsHistory.ToListAsync());
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();

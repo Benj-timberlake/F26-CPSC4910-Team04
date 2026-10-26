@@ -29,4 +29,44 @@ public sealed class SponsorOrderReasonPageTests : TestContext
 
         page.WaitForAssertion(() => Assert.Equal(shown, page.Find(".order-reason").TextContent));
     }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NoContent)]
+    [InlineData(HttpStatusCode.Conflict)]
+    public void RejectRequiresAReasonAndOnlyRemovesOrderAfterSuccess(HttpStatusCode result)
+    {
+        var backend = new JsonBackend();
+        backend.Routes["GET /users/5/driver-orders"] = (HttpStatusCode.OK,
+            """[{"orderId":3,"driverId":8,"driverName":"Bob Baker","totalPrice":20,"items":[]}]""");
+        const string reject = "POST /users/5/driver-orders/3/reject";
+        backend.Routes[reject] = (result, result == HttpStatusCode.NoContent ? "" : """{"message":"Only pending orders can be rejected."}""");
+        var auth = this.AddTestAuthorization();
+        auth.SetAuthorized("sue");
+        auth.SetRoles("sponsor");
+        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "5"));
+        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
+            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        var page = RenderComponent<SponsorOrders>();
+        page.WaitForAssertion(() => Assert.True(page.Find("button.reject-order").HasAttribute("disabled")));
+        page.Find("textarea").Change("   ");
+        Assert.True(page.Find("button.reject-order").HasAttribute("disabled"));
+        Assert.DoesNotContain(reject, backend.Requests);
+        page.Find("textarea").Change("Out of stock");
+        Assert.False(page.Find("button.reject-order").HasAttribute("disabled"));
+        page.Find("button.reject-order").Click();
+        page.WaitForAssertion(() => Assert.Contains(reject, backend.Requests));
+        using var body = System.Text.Json.JsonDocument.Parse(backend.Bodies[reject]);
+        Assert.Equal("Out of stock", body.RootElement.GetProperty("reason").GetString());
+        if (result == HttpStatusCode.NoContent)
+        {
+            page.WaitForAssertion(() => Assert.Empty(page.FindAll("section.tr-card")));
+            Assert.Contains("Points returned to the driver", page.Find("[role=status]").TextContent);
+        }
+        else
+        {
+            page.WaitForAssertion(() => Assert.Contains("Only pending orders", page.Find("[role=alert]").TextContent));
+            Assert.Single(page.FindAll("section.tr-card"));
+            Assert.Equal("Out of stock", page.Find("textarea").GetAttribute("value"));
+        }
+    }
 }

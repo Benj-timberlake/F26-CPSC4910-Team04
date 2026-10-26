@@ -29,6 +29,11 @@ public sealed class OrderStatusPageTests : TestContext
         var page = RenderComponent<PastOrders>();
 
         page.WaitForAssertion(() => Assert.Equal(shown, page.Find("td.status span").TextContent));
+        if (status is "ordered" or "rejected")
+        {
+            Assert.Empty(page.FindAll("tbody button"));
+            Assert.Contains("Refund unavailable", page.Find("tbody").TextContent);
+        }
         if (status == "rejected")
         {
             Assert.Equal("Reason: Out of stock", page.Find(".rejection-reason").TextContent);
