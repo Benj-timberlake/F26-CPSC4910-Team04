@@ -14,6 +14,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<AccountsHistory> AccountsHistories { get; set; }
 
+    public virtual DbSet<AccountsCompany> AccountsCompanies { get; set; }
+
     public virtual DbSet<AboutPage> AboutPages { get; set; }
 
     public virtual DbSet<Application> Applications { get; set; }
@@ -79,7 +81,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Address)
                 .HasMaxLength(255)
                 .HasColumnName("address");
-            entity.Property(e => e.CompanyId).HasColumnName("company_id");
             entity.Property(e => e.Email)
                 .HasMaxLength(255)
                 .HasColumnName("email");
@@ -112,6 +113,24 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_accounts_history_user");
+        });
+
+        modelBuilder.Entity<AccountsCompany>(entity =>
+        {
+            entity.HasKey(e => new { e.AccountId, e.CompanyId }).HasName("PRIMARY");
+
+            entity.ToTable("accounts_companies");
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.CompanyId).HasColumnName("company_id");
+
+            entity.HasOne(e => e.Account).WithMany(e => e.AccountsCompanies)
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(e => e.Company).WithMany(e => e.AccountsCompanies)
+                .HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
         });
 
         modelBuilder.Entity<Application>(entity =>
