@@ -14,33 +14,52 @@
     }
     else
     {
-        <form class="filters" @onsubmit="Load">
-            <select aria-label="Category" @bind="category">
-                <option value="">All categories</option>
-                <option value="logins">Sign-ins</option>
-                <option value="passwords">Password changes</option>
-                <option value="points">Point changes</option>
-                <option value="views">Viewed as</option>
-            </select>
+        <form class="filters @(admin ? "admin-filters" : "sponsor-filters")" @onsubmit="Load">
+            <label class="filter-field">
+                <span>Category</span>
+                <select aria-label="Category" @bind="category">
+                    <option value="">All categories</option>
+                    <option value="logins">Sign-ins</option>
+                    <option value="passwords">Password changes</option>
+                    <option value="points">Point changes</option>
+                    <option value="views">Viewed as</option>
+                </select>
+            </label>
             @if (admin)
             {
-                <select aria-label="Sponsor" @bind="companyId">
-                    <option value="0">All sponsors</option>
-                    @foreach (var c in companies)
+                <label class="filter-field">
+                    <span>Company</span>
+                    <select aria-label="Company" @bind="companyId">
+                        <option value="0">All companies</option>
+                        @foreach (var c in companies)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </select>
+                </label>
+            }
+            <label class="filter-field">
+                <span>Account</span>
+                <select aria-label="Account" @bind="driverId">
+                    <option value="0">All accounts</option>
+                    @foreach (var account in accounts)
                     {
-                        <option value="@c.Id">@c.Name</option>
+                        <option value="@account.Id">@account.Name</option>
                     }
                 </select>
-            }
-            <select aria-label="Driver" @bind="driverId">
-                <option value="0">@(admin ? "All accounts" : "All drivers")</option>
-                @foreach (var d in drivers)
-                {
-                    <option value="@d.Id">@d.FirstName @d.LastName (@d.Username)</option>
-                }
-            </select>
-            <label>From <input type="date" @bind="from" /></label>
-            <label>To <input type="date" @bind="to" /></label>
+            </label>
+            <label class="filter-field">
+                <span>Made by</span>
+                <select aria-label="Made by" @bind="madeBy">
+                    <option value="">All sponsors/admins</option>
+                    @foreach (var maker in makers)
+                    {
+                        <option value="@maker">@maker</option>
+                    }
+                </select>
+            </label>
+            <label class="filter-field"><span>From</span><input type="date" @bind="from" /></label>
+            <label class="filter-field"><span>To</span><input type="date" @bind="to" /></label>
             <button type="submit" class="tr-btn">Apply</button>
         </form>
 
@@ -90,11 +109,43 @@
 
 <style>
     .filters {
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
         align-items: center;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(140px, 1.2fr) repeat(2, minmax(110px, .85fr)) auto;
         gap: 8px;
         margin-bottom: 16px;
+    }
+
+    .filters.sponsor-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(140px, 1.2fr) repeat(2, minmax(110px, .85fr)) auto;
+    }
+
+    .filter-field {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .filter-field select,
+    .filter-field input[type="date"] {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+    }
+
+    @@media (max-width: 1000px) {
+        .filters,
+        .filters.sponsor-filters {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .filters,
+        .filters.sponsor-filters {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 </style>
 
@@ -106,11 +157,13 @@
     private bool admin;
     private bool noCompany;
     private List<Company> companies = [];
-    private List<Driver> drivers = [];
+    private List<AccountOption> accounts = [];
+    private List<string> makers = [];
     private List<Row>? rows;
     private string category = "";
     private int companyId;
     private int driverId;
+    private string madeBy = "";
     private DateOnly? from;
     private DateOnly? to;
     private string? error;
@@ -132,7 +185,6 @@
                 return;
             }
             response.EnsureSuccessStatusCode();
-            drivers = await response.Content.ReadFromJsonAsync<List<Driver>>() ?? [];
             if (admin)
                 companies = await client.GetFromJsonAsync<List<Company>>("companies") ?? [];
         }
@@ -151,6 +203,7 @@
         if (category != "") query.Add("category=" + category);
         if (companyId != 0) query.Add("companyId=" + companyId);
         if (driverId != 0) query.Add("driverId=" + driverId);
+        if (!string.IsNullOrWhiteSpace(madeBy)) query.Add("by=" + Uri.EscapeDataString(madeBy));
         if (from is not null) query.Add("from=" + from.Value.ToString("yyyy-MM-dd"));
         if (to is not null) query.Add("to=" + to.Value.ToString("yyyy-MM-dd"));
         try
@@ -158,6 +211,14 @@
             using var client = HttpClientFactory.CreateClient("Backend");
             applied = string.Join("&", query);
             rows = await client.GetFromJsonAsync<List<Row>>($"users/{id}/audit" + (applied == "" ? "" : "?" + applied)) ?? [];
+            if (madeBy == "" && driverId == 0)
+            {
+                makers = rows.Select(row => row.By).Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Select(name => name!).Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
+                accounts = rows.Where(row => row.UserId is not null)
+                    .Select(row => new AccountOption(row.UserId!.Value, $"{row.Username} ({row.UserId})"))
+                    .DistinctBy(account => account.Id).OrderBy(account => account.Name).ToList();
+            }
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
@@ -177,6 +238,6 @@
     };
 
     private sealed record Company(int Id, string Name);
-    private sealed record Driver(int Id, string Username, string FirstName, string LastName);
+    private sealed record AccountOption(int Id, string Name);
     private sealed record Row(DateTime At, string Category, int? UserId, string Username, string Detail, string? By);
 }

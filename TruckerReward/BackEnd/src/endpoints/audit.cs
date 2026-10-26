@@ -12,20 +12,20 @@ public static class AuditEndpoints
 
     public static void MapAuditEndpoints(this WebApplication app)
     {
-        app.MapGet("/users/{id:int}/audit", async (int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
+        app.MapGet("/users/{id:int}/audit", async (int id, string? category, string? by, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
         {
-            var (error, rows) = await Query(db, id, category, from, to, companyId, driverId);
+            var (error, rows) = await Query(db, id, category, by, from, to, companyId, driverId);
             return error ?? Results.Ok(rows);
         });
 
-        app.MapGet("/users/{id:int}/audit.csv", async (int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
+        app.MapGet("/users/{id:int}/audit.csv", async (int id, string? category, string? by, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
         {
-            var (error, rows) = await Query(db, id, category, from, to, companyId, driverId);
+            var (error, rows) = await Query(db, id, category, by, from, to, companyId, driverId);
             return error ?? Results.File(System.Text.Encoding.UTF8.GetBytes(Csv(rows!)), "text/csv", "audit-log.csv");
         });
     }
 
-    private static async Task<(IResult? Error, List<AuditEntry>? Rows)> Query(AppDbContext db, int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId)
+    private static async Task<(IResult? Error, List<AuditEntry>? Rows)> Query(AppDbContext db, int id, string? category, string? by, DateOnly? from, DateOnly? to, int? companyId, int? driverId)
     {
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
@@ -48,6 +48,8 @@ public static class AuditEndpoints
             rows.AddRange(await PointRows(db, ids, start, end));
         if (all || category == Views)
             rows.AddRange(await ViewRows(db, ids, start, end));
+        if (!string.IsNullOrWhiteSpace(by))
+            rows = rows.Where(row => row.By?.Contains(by.Trim(), StringComparison.OrdinalIgnoreCase) == true).ToList();
         return (null, rows.OrderByDescending(r => r.At).Take(MaxRows).ToList());
     }
 
