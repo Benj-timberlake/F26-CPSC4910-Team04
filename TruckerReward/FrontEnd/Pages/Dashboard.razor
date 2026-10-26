@@ -45,7 +45,8 @@
                 </section>
             }
 
-            @if ((account.UserType == "sponsor" || account.UserType == "driver") && account.CompanyId is null)
+            @if ((account.UserType == "sponsor" || account.UserType == "driver") &&
+                (account.CompanyId is null || account.UserType == "driver"))
             {
                 <section class="tr-card">
                     <div class="company-card-heading">
@@ -55,10 +56,23 @@
                             <button type="button" class="cancel-application-button" @onclick="OpenCancelApplication">Cancel</button>
                         }
                     </div>
-                    @if (!string.IsNullOrWhiteSpace(account.PendingCompanyName))
+                    @if (account.UserType == "driver" && account.CompanyId is not null)
+                    {
+                        <p>Associated companies: @string.Join(", ", account.CompanyNames ?? [])</p>
+                        @if (!string.IsNullOrWhiteSpace(account.PendingCompanyName))
+                        {
+                            <p class="pending-company-name">@account.PendingCompanyName <span class="pending-badge">Pending...</span></p>
+                        }
+                        <button type="button" class="tr-btn" @onclick="ShowCompanyModal">Apply To Another Company</button>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(account.PendingCompanyName))
                     {
                         <p class="pending-company-name">@account.PendingCompanyName <span class="pending-badge">Pending...</span></p>
                         <p class="pending-help">Your application is waiting for review.</p>
+                        @if (account.UserType == "driver")
+                        {
+                            <button type="button" class="tr-btn" @onclick="ShowCompanyModal">Apply To Another Company</button>
+                        }
                     }
                     else
                     {
@@ -536,7 +550,7 @@
         }
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
     private sealed record CompanyOption(int Id, string Name, string? Description);
     private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);

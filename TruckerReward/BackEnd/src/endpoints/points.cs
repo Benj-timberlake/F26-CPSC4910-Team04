@@ -56,12 +56,17 @@ public static class PointsEndpoints
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
             return Results.NotFound();
-        if (!CanManage(actor))
+        if (!await CanManage(db, actor))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        var drivers = db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Driver && u.CompanyId != null);
+        var drivers = db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Driver &&
+            CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id));
         if (actor.UserType == AuthEndpoints.Sponsor)
-            drivers = drivers.Where(u => u.CompanyId == actor.CompanyId);
+        {
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, actor.Id);
+            drivers = drivers.Where(u => CompanyMembershipQueries.FirstPerUser(db)
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId));
+        }
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
@@ -100,9 +105,11 @@ public static class PointsEndpoints
         await db.Users.Where(u => u.Id == driverId)
             .ExecuteUpdateAsync(update => update.SetProperty(u => u.Points, u => u.Points));
         var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == driverId && u.UserType == AuthEndpoints.Driver);
-        if (driver?.CompanyId is null)
+        var driverCompanyId = driver is null ? null : await CompanyMembershipQueries.FirstCompanyId(db, driverId);
+        var actorCompanyId = actor.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, id) : null;
+        if (driver is null || driverCompanyId is null)
             return Results.NotFound(new { message = "That driver isn't with a sponsor." });
-        if (!CanManage(actor) || (actor.UserType == AuthEndpoints.Sponsor && actor.CompanyId != driver.CompanyId))
+        if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && actorCompanyId != driverCompanyId))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var balance = (long)driver.Points + req.Points;
         if (balance is > int.MaxValue or < int.MinValue)
@@ -127,12 +134,16 @@ public static class PointsEndpoints
             return Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." });
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == driverId && u.UserType == AuthEndpoints.Driver);
-        if (actor is null || driver?.CompanyId is not { } company)
+        var companyId = driver is null ? null : await CompanyMembershipQueries.FirstCompanyId(db, driverId);
+        var actorCompanyId = actor?.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, id) : null;
+        if (actor is null || driver is null || companyId is not { } company)
             return Results.NotFound(new { message = "That driver isn't with a sponsor." });
-        if (!CanManage(actor) || (actor.UserType == AuthEndpoints.Sponsor && actor.CompanyId != company))
+        if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && actorCompanyId != company))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        driver.CompanyId = null;
+        var historyIds = db.AccountsHistories.Where(history => history.UserId == driverId).Select(history => history.Id);
+        await db.AccountsCompanies.Where(membership => historyIds.Contains(membership.AccountId) && membership.CompanyId == company)
+            .ExecuteDeleteAsync();
         var now = clock.GetUtcNow().UtcDateTime;
         foreach (var application in await db.Applications.Where(a => a.ApplicantId == driverId && a.CompanyId == company && a.Status == "approved").ToListAsync())
         {
@@ -161,12 +172,13 @@ public static class PointsEndpoints
         };
         if (period is not ("all" or "month" or "week"))
             return Results.BadRequest(new { message = "Period must be all, month or week." });
-        var company = viewer.UserType == AuthEndpoints.Admin ? companyId : viewer.CompanyId;
+        var company = viewer.UserType == AuthEndpoints.Admin ? companyId : await CompanyMembershipQueries.FirstCompanyId(db, id);
         if (company is null)
             return Results.BadRequest(new { message = "Pick a sponsor to see its leaderboard." });
 
         var drivers = db.Users.AsNoTracking()
-            .Where(u => u.UserType == AuthEndpoints.Driver && u.CompanyId == company && u.Status == User.Active);
+            .Where(u => u.UserType == AuthEndpoints.Driver && u.Status == User.Active &&
+                CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id && membership.CompanyId == company));
         var totals = await drivers.Select(u => new
         {
             u.Id, u.Username, u.FirstName, u.LastName,
@@ -182,8 +194,9 @@ public static class PointsEndpoints
     }
 
     // admins or sponsors with a company
-    internal static bool CanManage(User actor) =>
-        actor.UserType == AuthEndpoints.Admin || (actor.UserType == AuthEndpoints.Sponsor && actor.CompanyId is not null);
+    internal static async Task<bool> CanManage(AppDbContext db, User actor) =>
+        actor.UserType == AuthEndpoints.Admin || (actor.UserType == AuthEndpoints.Sponsor &&
+            await CompanyMembershipQueries.FirstCompanyId(db, actor.Id) is not null);
 }
 
 public record LeaderboardRow(int Rank, int Id, string Username, string FirstName, string LastName, long Points);

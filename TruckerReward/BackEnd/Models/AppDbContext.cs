@@ -465,8 +465,6 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("users");
 
-            entity.HasIndex(e => e.CompanyId, "fk_users_company");
-
             entity.HasIndex(e => e.Email, "uq_users_email").IsUnique();
 
             entity.HasIndex(e => e.Username, "uq_users_username").IsUnique();
@@ -475,7 +473,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Address)
                 .HasMaxLength(255)
                 .HasColumnName("address");
-            entity.Property(e => e.CompanyId).HasColumnName("company_id");
             entity.Property(e => e.Email).HasColumnName("email");
             entity.Property(e => e.FirstName)
                 .HasMaxLength(100)
@@ -497,10 +494,6 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("enum('admin','sponsor','driver')")
                 .HasColumnName("user_type");
             entity.Property(e => e.Username).HasColumnName("username");
-
-            entity.HasOne(d => d.Company).WithMany(p => p.Users)
-                .HasForeignKey(d => d.CompanyId)
-                .HasConstraintName("fk_users_company");
 
             // These legacy navigations are not columns or relationships in the users mapping.
             // Ignore them to prevent EF from inferring a shadow ApplicationDriverId column.

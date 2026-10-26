@@ -9,12 +9,14 @@ public static class UserEndpoints
         app.MapGet("/users/{id:int}/drivers/{driverId:int}/view", async (int id, int driverId, AppDbContext db) =>
         {
             var sponsor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
-            if (sponsor is null || sponsor.UserType != "sponsor" || sponsor.CompanyId is null ||
+            var sponsorCompanyId = sponsor is null ? null : await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (sponsor is null || sponsor.UserType != "sponsor" || sponsorCompanyId is null ||
                 sponsor.Status != User.Active)
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
 
             var driver = await db.Users.AsNoTracking()
-                .Where(u => u.Id == driverId && u.UserType == "driver" && u.CompanyId == sponsor.CompanyId && u.Status == User.Active)
+                .Where(u => u.Id == driverId && u.UserType == "driver" && u.Status == User.Active &&
+                    CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id && membership.CompanyId == sponsorCompanyId))
                 .Select(u => new { u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address, u.Points })
                 .FirstOrDefaultAsync();
             return driver is null ? Results.NotFound() : Results.Ok(driver);
@@ -31,15 +33,18 @@ public static class UserEndpoints
             var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == id);
             if (applicant is null)
                 return Results.NotFound();
-            if ((applicant.UserType != "driver" && applicant.UserType != "sponsor") || applicant.CompanyId is not null)
-                return Results.BadRequest(new { message = "Only drivers or sponsors without a company can apply." });
+            if (applicant.UserType != "driver" && applicant.UserType != "sponsor")
+                return Results.BadRequest(new { message = "Only drivers or sponsors can apply." });
+            if (applicant.UserType == "sponsor" && await CompanyMembershipQueries.FirstCompanyId(db, id) is not null)
+                return Results.BadRequest(new { message = "Sponsors can only belong to one company." });
             var companyName = await db.Companies.Where(company => company.Id == request.CompanyId)
                 .Select(company => company.Name).FirstOrDefaultAsync();
             if (companyName is null)
                 return Results.BadRequest(new { message = "The selected company does not exist." });
             if (await db.Applications.AnyAsync(application =>
-                application.ApplicantId == id && (application.Status == "active" || application.Status == "approved")))
-                return Results.Conflict(new { message = "An application already exists for this driver." });
+                application.ApplicantId == id && application.CompanyId == request.CompanyId &&
+                (application.Status == "active" || application.Status == "approved")))
+                return Results.Conflict(new { message = "You already have an active or accepted application for this company." });
 
             db.Applications.Add(new Application
             {
@@ -94,8 +99,10 @@ public static class UserEndpoints
                     (application, applicant) => new { application, applicant })
                 .Where(row => row.applicant.UserType == applicantType);
 
+            var reviewerCompanyId = reviewer.UserType == "sponsor"
+                ? await CompanyMembershipQueries.FirstCompanyId(db, reviewerId) : null;
             if (reviewer.UserType == "sponsor")
-                query = query.Where(row => reviewer.CompanyId != null && row.application.CompanyId == reviewer.CompanyId);
+                query = query.Where(row => reviewerCompanyId != null && row.application.CompanyId == reviewerCompanyId);
 
             var applicationData = await query
                 .OrderByDescending(row => row.application.Id)
@@ -182,18 +189,20 @@ public static class UserEndpoints
                 return Results.NotFound();
             var companyName = await db.Companies.Where(company => company.Id == application.CompanyId)
                 .Select(company => company.Name).FirstOrDefaultAsync() ?? "the company";
+            var reviewerCompanyId = reviewer.UserType == "sponsor"
+                ? await CompanyMembershipQueries.FirstCompanyId(db, reviewerId) : null;
             if (reviewer.UserType == "sponsor" &&
-                (reviewer.CompanyId is null || application.CompanyId != reviewer.CompanyId || applicant.UserType != "driver"))
+                (reviewerCompanyId is null || application.CompanyId != reviewerCompanyId || applicant.UserType != "driver"))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
 
             if (decision == "active" && application.Status == "active")
                 return Results.Conflict(new { message = "This application is already active." });
             if (decision != "active" && application.Status != "active")
                 return Results.Conflict(new { message = "Only active applications can be accepted or denied." });
-            if (decision == "active" && application.Status != "approved" && await db.Applications.AnyAsync(item =>
-                item.ApplicantId == application.ApplicantId &&
-                (item.Status == "active" || item.Status == "approved")))
-                return Results.Conflict(new { message = "This applicant already has an active or accepted application." });
+            if (decision == "approved" && await db.Applications.AnyAsync(item =>
+                item.Id != application.Id && item.ApplicantId == application.ApplicantId &&
+                item.CompanyId == application.CompanyId && item.Status == "approved"))
+                return Results.Conflict(new { message = "This applicant is already accepted by this company." });
 
             var previous = application.Status;
             application.ReviewerId = reviewer.Id;
@@ -201,9 +210,15 @@ public static class UserEndpoints
             application.Status = decision;
             application.ResponseTimestamp = clock.GetUtcNow().UtcDateTime;
             if (decision == "approved")
-                applicant.CompanyId = application.CompanyId;
-            else if (decision == "active" && applicant.CompanyId == application.CompanyId)
-                applicant.CompanyId = null;
+            {
+                await AddCompanyMembership(db, applicant, application.CompanyId);
+            }
+            else if (decision == "active" && previous == "approved")
+            {
+                var historyIds = db.AccountsHistories.Where(history => history.UserId == applicant.Id).Select(history => history.Id);
+                await db.AccountsCompanies.Where(membership => historyIds.Contains(membership.AccountId) && membership.CompanyId == application.CompanyId)
+                    .ExecuteDeleteAsync();
+            }
 
             await db.SaveChangesAsync();
             await notifications.CompanyApplicationReviewed(applicant, reviewer, previous, decision, companyName, reasoning);
@@ -215,15 +230,22 @@ public static class UserEndpoints
             var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
             if (user is null)
                 return Results.NotFound();
+            var effectiveCompanyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
             var company = await db.Companies.AsNoTracking()
-                .Where(c => c.Id == user.CompanyId)
+                .Where(c => c.Id == effectiveCompanyId)
                 .Select(c => new { c.Name, c.MonthlyBudget })
                 .FirstOrDefaultAsync();
+            var companyNames = await db.AccountsCompanies.AsNoTracking()
+                .Where(link => db.AccountsHistories.Any(history => history.Id == link.AccountId && history.UserId == id))
+                .Join(db.Companies.AsNoTracking(), link => link.CompanyId, c => c.Id, (link, c) => new { c.Id, c.Name })
+                .Distinct().OrderBy(c => c.Id).Select(c => c.Name).ToListAsync();
+            if (companyNames.Count == 0 && company is not null)
+                companyNames.Add(company.Name);
             var pendingCompany = await db.Applications.AsNoTracking()
                 .Where(application => application.ApplicantId == id && application.Status == "active")
                 .Join(db.Companies.AsNoTracking(), application => application.CompanyId, c => c.Id, (application, c) => c.Name)
                 .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, user.CompanyId, user.Points, pendingCompany,
+            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, effectiveCompanyId, user.Points, pendingCompany,
                 user.UserType == "sponsor" ? company?.MonthlyBudget : null));
         });
 
@@ -329,6 +351,27 @@ public static class UserEndpoints
 
     // users.username is varchar(255)
     private const int MaxUsernameLength = 255;
+
+    internal static async Task AddCompanyMembership(AppDbContext db, User user, int companyId)
+    {
+        var alreadyLinked = await db.AccountsCompanies.AnyAsync(link => link.CompanyId == companyId &&
+            db.AccountsHistories.Any(history => history.Id == link.AccountId && history.UserId == user.Id));
+        if (alreadyLinked)
+            return;
+
+        // The join table has no timestamp or sequence column. Give each accepted
+        // company a fresh history row so ascending account_id records join order.
+        var history = new AccountsHistory
+        {
+            UserId = user.Id, Timestamp = DateTime.UtcNow, UserType = user.UserType, Username = user.Username,
+            Password = user.Password ?? "", Email = user.Email, PhoneNumber = user.PhoneNumber,
+            Address = user.Address, Points = user.Points, FirstName = user.FirstName, LastName = user.LastName
+        };
+        db.AccountsHistories.Add(history);
+        await db.SaveChangesAsync();
+
+        db.AccountsCompanies.Add(new AccountsCompany { AccountId = history.Id, CompanyId = companyId });
+    }
 }
 
 public record ChangeUsernameRequest(string? CurrentPassword, string? NewUsername);
@@ -340,7 +383,7 @@ public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, str
 public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
 
 public record CompanyOption(int Id, string Name, string? Description);
 

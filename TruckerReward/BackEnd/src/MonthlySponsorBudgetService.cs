@@ -66,9 +66,11 @@ public sealed class MonthlySponsorBudgetService(
                 throw new InvalidOperationException($"Company {company.Id} monthly budget must be a nonnegative whole number of points within the user balance limit.");
 
             var points = (int)company.MonthlyBudget;
+            var sponsorIds = CompanyMembershipQueries.FirstPerUser(db)
+                .Where(membership => membership.CompanyId == company.Id).Select(membership => membership.UserId);
             // One atomic statement prevents duplicate resets across retries or multiple app instances.
             await db.Users
-                .Where(u => u.UserType == "sponsor" && u.CompanyId == company.Id &&
+                .Where(u => u.UserType == "sponsor" && sponsorIds.Contains(u.Id) &&
                     (u.BudgetResetMonth == null || u.BudgetResetMonth < month))
                 .ExecuteUpdateAsync(update => update
                     .SetProperty(u => u.Points, points)

@@ -55,7 +55,8 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             await Send(admin, subject, reviewerBody, category: null, emailed: false);
 
         var sponsors = await db.Users.AsNoTracking()
-            .Where(u => u.UserType == AuthEndpoints.Sponsor && u.CompanyId == companyId)
+            .Where(u => u.UserType == AuthEndpoints.Sponsor && CompanyMembershipQueries.FirstPerUser(db)
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId))
             .ToListAsync();
         foreach (var sponsor in sponsors)
             await Send(sponsor, subject, reviewerBody, category: null, emailed: false);
@@ -76,7 +77,8 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             await Send(admin, subject, reviewerBody, category: null, emailed: false);
 
         var sponsors = await db.Users.AsNoTracking()
-            .Where(u => u.UserType == AuthEndpoints.Sponsor && u.CompanyId == companyId)
+            .Where(u => u.UserType == AuthEndpoints.Sponsor && CompanyMembershipQueries.FirstPerUser(db)
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId))
             .ToListAsync();
         foreach (var sponsor in sponsors)
             await Send(sponsor, subject, reviewerBody, category: null, emailed: false);
@@ -120,19 +122,19 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             $"{reason} Your balance is now {user.Points:N0} points.",
             NotificationCategory.Points);
         if (user.Points < 0)
-            await ToSponsorsOf(user.CompanyId, $"{user.Username} is negative on points",
+            await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, user.Id), $"{user.Username} is negative on points",
                 $"{user.FirstName} {user.LastName} ({user.Username}) has a balance of {user.Points:N0} points.",
                 NotificationCategory.NegativeBalances);
     }
 
-    public Task DriverPurchased(User driver, IReadOnlyList<CartItem> items, int points) =>
-        ToSponsorsOf(driver.CompanyId, $"{driver.Username} placed an order",
+    public async Task DriverPurchased(User driver, IReadOnlyList<CartItem> items, int points) =>
+        await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, driver.Id), $"{driver.Username} placed an order",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) spent {points:N0} points on " +
             string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             NotificationCategory.Purchases);
 
-    public Task DriverRefunded(User driver, IReadOnlyList<CartItem> items, int points) =>
-        ToSponsorsOf(driver.CompanyId, $"{driver.Username} refunded an order",
+    public async Task DriverRefunded(User driver, IReadOnlyList<CartItem> items, int points) =>
+        await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, driver.Id), $"{driver.Username} refunded an order",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) got {points:N0} points back for " +
             string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             NotificationCategory.Purchases);
@@ -147,8 +149,8 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             "Your sponsor placed the order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             NotificationCategory.Orders);
 
-    public Task DriverEditingOrder(User driver, IReadOnlyList<CartItem> items) =>
-        ToSponsorsOf(driver.CompanyId, $"{driver.Username} pulled an order back to change it",
+    public async Task DriverEditingOrder(User driver, IReadOnlyList<CartItem> items) =>
+        await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, driver.Id), $"{driver.Username} pulled an order back to change it",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) moved " +
             string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + " back to their cart.",
             NotificationCategory.Purchases);
@@ -169,7 +171,8 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
         if (companyId is null)
             return;
         var sponsors = await db.Users.AsNoTracking()
-            .Where(u => u.UserType == AuthEndpoints.Sponsor && u.CompanyId == companyId)
+            .Where(u => u.UserType == AuthEndpoints.Sponsor && CompanyMembershipQueries.FirstPerUser(db)
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId))
             .ToListAsync();
         foreach (var sponsor in sponsors)
             await Send(sponsor, subject, body, category);

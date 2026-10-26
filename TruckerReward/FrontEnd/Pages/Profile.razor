@@ -33,7 +33,7 @@
                         !string.IsNullOrWhiteSpace(account.CompanyName))
                     {
                         <dt>Company</dt>
-                        <dd>@account.CompanyName</dd>
+                        <dd>@(account.UserType == "driver" && (account.CompanyNames?.Count ?? 0) > 0 ? string.Join(", ", account.CompanyNames!) : account.CompanyName)</dd>
                     }
                     <dt>Username</dt>
                     <dd>@account.Username</dd>
@@ -195,7 +195,7 @@
         return rel == "" ? abs : $"{abs} ({rel})";
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, int? CompanyId, int Points, string? PendingCompanyName);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, int? CompanyId, int Points, string? PendingCompanyName);
     private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
     private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
 }

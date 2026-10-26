@@ -53,9 +53,11 @@ public static class AdminEndpoints
             if (!string.IsNullOrWhiteSpace(status))
                 users = users.Where(u => u.Status == status);
             if (companyId is not null)
-                users = users.Where(u => u.CompanyId == companyId);
+                users = users.Where(u => CompanyMembershipQueries.FirstPerUser(db)
+                    .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId));
             if (noSponsor == true)
-                users = users.Where(u => u.UserType != AuthEndpoints.Admin && u.CompanyId == null);
+                users = users.Where(u => u.UserType != AuthEndpoints.Admin &&
+                    !CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == u.Id));
 
             var rows = users.Select(u => new
             {
@@ -134,10 +136,15 @@ public static class AdminEndpoints
         var user = new User
         {
             UserType = userType, Username = username, FirstName = firstName, LastName = lastName,
-            Email = address, PhoneNumber = "", Address = "", CompanyId = companyId
+            Email = address, PhoneNumber = "", Address = ""
         };
         db.Users.Add(user);
         await db.SaveChangesAsync();
+        if (companyId is int assignedCompanyId)
+        {
+            await UserEndpoints.AddCompanyMembership(db, user, assignedCompanyId);
+            await db.SaveChangesAsync();
+        }
         var link = PasswordEndpoints.ResetLink(db, user, clock.GetUtcNow().UtcDateTime + InviteLifetime, config);
         await db.SaveChangesAsync();
         await notifications.AccountInvited(user, link, invitedBy);
@@ -170,8 +177,22 @@ public static class AdminEndpoints
         account.Email = address;
         account.PhoneNumber = phone;
         account.Address = street;
-        account.CompanyId = req.CompanyId;
         await db.SaveChangesAsync();
+        if (account.UserType == AuthEndpoints.Sponsor)
+        {
+            var historyIds = db.AccountsHistories.Where(history => history.UserId == account.Id).Select(history => history.Id);
+            await db.AccountsCompanies.Where(membership => historyIds.Contains(membership.AccountId)).ExecuteDeleteAsync();
+            if (req.CompanyId is int companyId)
+            {
+                await UserEndpoints.AddCompanyMembership(db, account, companyId);
+                await db.SaveChangesAsync();
+            }
+        }
+        else if (account.UserType == AuthEndpoints.Driver && req.CompanyId is int driverCompanyId)
+        {
+            await UserEndpoints.AddCompanyMembership(db, account, driverCompanyId);
+            await db.SaveChangesAsync();
+        }
         if (!string.Equals(oldAddress, address, StringComparison.OrdinalIgnoreCase))
             await email.SendAsync(oldAddress, "Your TruckerReward email was changed",
                 $"Hi {account.Username},\n\nAn administrator changed your account email from {oldAddress} to {address}. If that's wrong, contact an administrator.");

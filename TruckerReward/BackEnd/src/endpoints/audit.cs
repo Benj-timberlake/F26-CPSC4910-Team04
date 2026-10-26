@@ -32,7 +32,7 @@ public static class AuditEndpoints
             return (Results.NotFound(), null);
         if (category is not (null or "" or Logins or Passwords or Points or Views))
             return (Results.BadRequest(new { message = "Category must be logins, passwords, points or views." }), null);
-        if (!PointsEndpoints.CanManage(actor))
+        if (!await PointsEndpoints.CanManage(db, actor))
             return (Results.StatusCode(StatusCodes.Status403Forbidden), null);
 
         var ids = Scope(db, actor, companyId, driverId);
@@ -71,8 +71,11 @@ public static class AuditEndpoints
     private static IQueryable<int>? Scope(AppDbContext db, User actor, int? companyId, int? driverId)
     {
         IQueryable<User>? scope = actor.UserType == AuthEndpoints.Sponsor
-            ? db.Users.Where(u => u.UserType == AuthEndpoints.Driver && u.CompanyId == actor.CompanyId)
-            : companyId is null ? null : db.Users.Where(u => u.CompanyId == companyId);
+            ? db.Users.Where(u => u.UserType == AuthEndpoints.Driver && CompanyMembershipQueries.FirstPerUser(db)
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == CompanyMembershipQueries.FirstPerUser(db)
+                    .Where(actorMembership => actorMembership.UserId == actor.Id).Select(actorMembership => actorMembership.CompanyId).FirstOrDefault()))
+            : companyId is null ? null : db.Users.Where(u => CompanyMembershipQueries.FirstPerUser(db)
+                .Any(membership => membership.UserId == u.Id && membership.CompanyId == companyId));
         if (driverId is not null)
             scope = (scope ?? db.Users).Where(u => u.Id == driverId);
         return scope?.Select(u => u.Id);

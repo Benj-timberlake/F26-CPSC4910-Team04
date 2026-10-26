@@ -10,9 +10,11 @@ public static class CartEndpoints
             var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
             if (sponsor is null) return Results.NotFound();
             if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
-            if (sponsor.CompanyId is null) return Results.Ok(Array.Empty<SponsorOrderDetails>());
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null) return Results.Ok(Array.Empty<SponsorOrderDetails>());
             var items = await db.CartItems.AsNoTracking().Include(item => item.User).Include(item => item.PointsHistory)
-                .Where(item => item.User.UserType == "driver" && item.User.CompanyId == sponsor.CompanyId
+                .Where(item => item.User.UserType == "driver" && CompanyMembershipQueries.FirstPerUser(db)
+                    .Any(membership => membership.UserId == item.UserId && membership.CompanyId == companyId)
                     && !item.WasOrdered && !item.InCart && item.PointsHistory != null
                     && item.PointsHistory.UserId == item.UserId).ToListAsync();
             var orderIds = items.Select(item => item.PointsHistoryId!.Value).Distinct().ToList();
@@ -33,12 +35,14 @@ public static class CartEndpoints
             var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
             if (sponsor is null) return Results.NotFound();
             if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
-            if (sponsor.CompanyId is null) return Results.NotFound();
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null) return Results.NotFound();
             // Materialize IDs before updating: MySQL forbids reading the target
             // cart table from a subquery inside the same UPDATE statement.
             var eligible = await db.CartItems.Where(item => item.PointsHistoryId == orderId
                     && !item.InCart && !item.WasOrdered && item.User.UserType == "driver"
-                    && item.User.CompanyId == sponsor.CompanyId && item.PointsHistory != null
+                    && CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.UserId == item.UserId && membership.CompanyId == companyId)
+                    && item.PointsHistory != null
                     && item.PointsHistory.UserId == item.UserId).Select(item => item.Id).ToListAsync();
             if (eligible.Count == 0) return Results.NotFound();
             var changed = await db.CartItems.Where(item => eligible.Contains(item.Id)
