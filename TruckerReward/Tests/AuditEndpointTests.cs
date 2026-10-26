@@ -45,7 +45,8 @@ public sealed class AuditEndpointTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId) => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId
+        UserType = type, PhoneNumber = "", Address = "", Password = "x",
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     private async Task<List<AuditEntry>> Audit(int actor, string query = "") =>

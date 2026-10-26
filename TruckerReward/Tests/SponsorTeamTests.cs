@@ -32,7 +32,8 @@ public sealed class SponsorTeamTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId) => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId
+        UserType = type, PhoneNumber = "", Address = "", Password = "x",
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     private Task<HttpResponseMessage> Invite(string actor, string username = "kim", string email = "kim@example.com") =>
@@ -55,8 +56,11 @@ public sealed class SponsorTeamTests : IAsyncDisposable
 
         Assert.Equal(HttpStatusCode.Created, (await Invite("sue")).StatusCode);
 
-        var kim = await app.Db().Users.SingleAsync(u => u.Username == "kim");
-        Assert.Equal(("sponsor", (int?)acme, (string?)null), (kim.UserType, kim.CompanyId, kim.Password));
+        using var db = app.Db();
+        var kim = await db.Users.SingleAsync(u => u.Username == "kim");
+        var kimCompany = await db.AccountsCompanies.Where(membership => membership.AccountId == kim.Id)
+            .Select(membership => (int?)membership.CompanyId).FirstOrDefaultAsync();
+        Assert.Equal(("sponsor", (int?)acme, (string?)null), (kim.UserType, kimCompany, kim.Password));
         var mail = Assert.Single(app.Email.Sent, m => m.To == "kim@example.com");
         Assert.Contains("sue Test at Acme made you a TruckerReward sponsor account", mail.Body);
         Assert.Contains("reset-password?token=", mail.Body);

@@ -42,7 +42,7 @@ public sealed class DriverViewTests
     {
         Username = name, FirstName = name, LastName = "Test",
         Email = name + "@example.com", PhoneNumber = "", UserType = type,
-        CompanyId = companyId, Points = 200
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : [], Points = 200
     };
 
     private sealed record Preview(int Id, string Username, int Points);

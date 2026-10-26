@@ -50,7 +50,8 @@ public sealed class SponsorOrderTests
 
     private static User NewUser(string name, string role, int? companyId) => new()
     {
-        Username = name, Email = name + "@example.com", UserType = role, CompanyId = companyId,
+        Username = name, Email = name + "@example.com", UserType = role,
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : [],
         Password = "hash", PhoneNumber = "", FirstName = name, LastName = "User", Address = ""
     };
 }

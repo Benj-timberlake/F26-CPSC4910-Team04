@@ -24,9 +24,12 @@ public sealed class CatalogEndpointTests
         var other = NewUser("sponsor");
         other.Username = "other";
         other.Email = "other@example.com";
-        driver.CompanyId = sponsor.CompanyId = company.Id;
-        other.CompanyId = otherCompany.Id;
         db.Users.AddRange(driver, sponsor, other);
+        await db.SaveChangesAsync();
+        db.AccountsCompanies.AddRange(
+            new AccountsCompany { AccountId = driver.Id, CompanyId = company.Id },
+            new AccountsCompany { AccountId = sponsor.Id, CompanyId = company.Id },
+            new AccountsCompany { AccountId = other.Id, CompanyId = otherCompany.Id });
         await db.SaveChangesAsync();
         db.CatalogItems.AddRange(
             new CatalogItem { SponsorId = sponsor.Id, ItemId = "v1|123|0" },
@@ -39,8 +42,7 @@ public sealed class CatalogEndpointTests
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/users/{sponsor.Id}/catalog?itemId=v1%7C123%7C0")).StatusCode);
         Assert.Empty((await client.GetFromJsonAsync<string[]>($"/users/{driver.Id}/catalog"))!);
         Assert.Equal("v1|456|0", Assert.Single(await db.CatalogItems.AsNoTracking().ToListAsync()).ItemId);
-        driver.CompanyId = null;
-        await db.SaveChangesAsync();
+        await db.AccountsCompanies.Where(membership => membership.AccountId == driver.Id).ExecuteDeleteAsync();
         Assert.Empty((await client.GetFromJsonAsync<string[]>($"/users/{driver.Id}/catalog"))!);
     }
 

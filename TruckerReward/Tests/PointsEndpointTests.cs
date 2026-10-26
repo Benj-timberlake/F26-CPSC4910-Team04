@@ -37,7 +37,8 @@ public sealed class PointsEndpointTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId, string? first = null, string? last = null, int points = 0) => new()
     {
         Username = name, FirstName = first ?? name, LastName = last ?? "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId, Points = points
+        UserType = type, PhoneNumber = "", Address = "", Password = "x", Points = points,
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     private Task<HttpResponseMessage> Change(int actor, int driver, int points, string? reason) =>

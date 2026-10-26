@@ -109,7 +109,7 @@ public sealed class PointsNotificationTests : IAsyncDisposable
             db.Add(acme);
             await db.SaveChangesAsync();
             db.Users.Add(User("sue", "sponsor", acme.Id));
-            (await db.Users.SingleAsync(u => u.Id == id)).CompanyId = acme.Id;
+            db.AccountsCompanies.Add(new AccountsCompany { AccountId = id, CompanyId = acme.Id });
             await db.SaveChangesAsync();
         }
         await client.PostAsJsonAsync($"/users/{id}/cart", new { name = "Mug", price = 3.50m, description = "A mug" });
@@ -133,7 +133,7 @@ public sealed class PointsNotificationTests : IAsyncDisposable
             db.Add(acme);
             await db.SaveChangesAsync();
             db.Users.Add(User("sue", "sponsor", acme.Id));
-            (await db.Users.SingleAsync(u => u.Id == id)).CompanyId = acme.Id;
+            db.AccountsCompanies.Add(new AccountsCompany { AccountId = id, CompanyId = acme.Id });
             await db.SaveChangesAsync();
         }
         await client.PostAsJsonAsync($"/users/{id}/cart", new { name = "Mug", price = 3.50m, description = "A mug" });
@@ -170,7 +170,8 @@ public sealed class PointsNotificationTests : IAsyncDisposable
     private static User User(string name, string type, int companyId, int points = 0) => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId, Points = points
+        UserType = type, PhoneNumber = "", Address = "", Password = "x", Points = points,
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     public ValueTask DisposeAsync() => app.DisposeAsync();

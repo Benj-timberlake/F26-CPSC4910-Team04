@@ -109,7 +109,9 @@ public sealed class AdminAccountsTests : IAsyncDisposable
             db.Add(company);
             await db.SaveChangesAsync();
             acme = company.Id;
-            await db.Users.Where(u => u.Username == "bob" || u.Username == "sue").ExecuteUpdateAsync(u => u.SetProperty(x => x.CompanyId, acme));
+            var ids = await db.Users.Where(u => u.Username == "bob" || u.Username == "sue").Select(u => u.Id).ToListAsync();
+            db.AccountsCompanies.AddRange(ids.Select(id => new AccountsCompany { AccountId = id, CompanyId = acme }));
+            await db.SaveChangesAsync();
         }
 
         Assert.Equal(["bob", "sue"], (await List($"?companyId={acme}")).Select(a => a.Username).Order());
@@ -125,7 +127,9 @@ public sealed class AdminAccountsTests : IAsyncDisposable
             var company = new Company { Name = "Acme" };
             db.Add(company);
             await db.SaveChangesAsync();
-            await db.Users.Where(u => u.Username == "bob").ExecuteUpdateAsync(u => u.SetProperty(x => x.CompanyId, company.Id));
+            var bobId = await db.Users.Where(u => u.Username == "bob").Select(u => u.Id).SingleAsync();
+            db.AccountsCompanies.Add(new AccountsCompany { AccountId = bobId, CompanyId = company.Id });
+            await db.SaveChangesAsync();
         }
 
         Assert.Equal(["amy", "sue"], (await List("?noSponsor=true")).Select(a => a.Username).Order());
@@ -159,7 +163,9 @@ public sealed class AdminAccountsTests : IAsyncDisposable
         Assert.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
         using var check = app.Db();
         var saved = await check.Users.SingleAsync(u => u.Id == bob);
-        Assert.Equal(("Robert", "rob@example.com", "555", "1 Main St", (int?)acme), (saved.FirstName, saved.Email, saved.PhoneNumber, saved.Address, saved.CompanyId));
+        Assert.Equal(("Robert", "rob@example.com", "555", "1 Main St", (int?)acme),
+            (saved.FirstName, saved.Email, saved.PhoneNumber, saved.Address,
+                await check.AccountsCompanies.Where(membership => membership.AccountId == bob).Select(membership => (int?)membership.CompanyId).FirstOrDefaultAsync()));
         Assert.Equal("bob@example.com", Assert.Single(app.Email.Sent).To);
     }
 

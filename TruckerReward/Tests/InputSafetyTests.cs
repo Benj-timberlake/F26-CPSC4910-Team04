@@ -20,9 +20,12 @@ public sealed class InputSafetyTests : IAsyncDisposable
         var company = new Company { Name = "Acme" };
         db.Add(company);
         await db.SaveChangesAsync();
-        var driver = new User { Username = "bob", FirstName = "Bob", LastName = "Baker", Email = "bob@example.com", UserType = "driver", PhoneNumber = "", Address = "", Password = "x", CompanyId = company.Id };
-        var sponsor = new User { Username = "sue", FirstName = "Sue", LastName = "Moss", Email = "sue@example.com", UserType = "sponsor", PhoneNumber = "", Address = "", Password = "x", CompanyId = company.Id };
+        var driver = new User { Username = "bob", FirstName = "Bob", LastName = "Baker", Email = "bob@example.com", UserType = "driver", PhoneNumber = "", Address = "", Password = "x" };
+        var sponsor = new User { Username = "sue", FirstName = "Sue", LastName = "Moss", Email = "sue@example.com", UserType = "sponsor", PhoneNumber = "", Address = "", Password = "x" };
         db.Users.AddRange(driver, sponsor);
+        await db.SaveChangesAsync();
+        db.AccountsCompanies.AddRange(new AccountsCompany { AccountId = driver.Id, CompanyId = company.Id },
+            new AccountsCompany { AccountId = sponsor.Id, CompanyId = company.Id });
         await db.SaveChangesAsync();
         (bob, sue) = (driver.Id, sponsor.Id);
     }
