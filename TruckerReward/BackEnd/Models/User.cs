@@ -43,6 +43,8 @@ public partial class User
 
     public virtual ICollection<AuditHistory> AuditHistories { get; set; } = new List<AuditHistory>();
 
+    public virtual ICollection<AccountsCompany> AccountsCompanies { get; set; } = new List<AccountsCompany>();
+
     public virtual ICollection<CartItem> Carts { get; set; } = new List<CartItem>();
 
     public virtual ICollection<LoginAttempt> LoginAttempts { get; set; } = new List<LoginAttempt>();

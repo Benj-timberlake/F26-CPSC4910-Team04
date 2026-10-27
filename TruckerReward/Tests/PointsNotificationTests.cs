@@ -89,8 +89,10 @@ public sealed class PointsNotificationTests : IAsyncDisposable
         using (var db = app.Db())
         {
             var bob = await db.Users.SingleAsync(u => u.Username == "bob");
+            var acmeId = await db.Companies.Where(company => company.Name == "Acme")
+                .Select(company => company.Id).SingleAsync();
             await new Notifications(db, app.Email, app.Clock, NullLogger<Notifications>.Instance)
-                .PointsChanged(bob, -125, "Points were deducted.");
+                .PointsChanged(bob, -125, "Points were deducted.", acmeId);
         }
 
         var saved = await app.Db().NotificationsHistories.Include(n => n.User).ToListAsync();
