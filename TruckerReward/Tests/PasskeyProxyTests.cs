@@ -58,6 +58,19 @@ public sealed class PasskeyProxyTests : IAsyncDisposable
     }
 
     [Theory]
+    [InlineData("admin", true)]
+    [InlineData("driver", false)]
+    public async Task AdminsGetTheDashboardImageAfterAPasskeyToo(string type, bool dance)
+    {
+        backend.Routes["POST /auth/passkey/complete"] = (HttpStatusCode.OK, $$"""{"id":4,"userType":"{{type}}","username":"ann","email":"ann@example.com","phoneNumber":"","address":""}""");
+        var client = await Start();
+
+        var response = await client.PostAsJsonAsync("/account/passkey-login", new { requestId = "r1", response = new { id = "abc" } });
+
+        Assert.Equal(dance, response.Headers.GetValues("Set-Cookie").Any(c => c.StartsWith("adminDance=1; ") && c.Contains("path=/dashboard")));
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.BadRequest, HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)]
