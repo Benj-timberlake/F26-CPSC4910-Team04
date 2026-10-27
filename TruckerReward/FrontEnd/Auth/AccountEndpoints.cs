@@ -35,25 +35,9 @@ public static class AccountEndpoints
                 return Results.Redirect("/login?error=backend" + ReturnParam(returnUrl));
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
-await TruckerSignIn.SignInAsync(http, user!);
-
-if (string.Equals(user!.UserType, "admin",
-    StringComparison.OrdinalIgnoreCase))
-{
-    http.Response.Cookies.Append(
-        "adminDance",
-        "1",
-        new CookieOptions
-        {
-            Path = "/dashboard",
-            MaxAge = TimeSpan.FromSeconds(30),
-            HttpOnly = false,
-            Secure = http.Request.IsHttps,
-            SameSite = SameSiteMode.Lax
-        });
-}
-
-return Results.LocalRedirect(SafeReturn(returnUrl));
+            await TruckerSignIn.SignInAsync(http, user!);
+            AdminDance(http, user!);
+            return Results.LocalRedirect(SafeReturn(returnUrl));
         }).DisableAntiforgery();
 
         app.MapPost("/account/register", async (
@@ -197,6 +181,21 @@ return Results.LocalRedirect(SafeReturn(returnUrl));
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.Redirect("/");
         }).DisableAntiforgery();
+    }
+
+    // the dashboard shows the admin image once when it sees this
+    internal static void AdminDance(HttpContext http, UserProfile user)
+    {
+        if (!string.Equals(user.UserType, "admin", StringComparison.OrdinalIgnoreCase))
+            return;
+        http.Response.Cookies.Append("adminDance", "1", new CookieOptions
+        {
+            Path = "/dashboard",
+            MaxAge = TimeSpan.FromSeconds(30),
+            HttpOnly = false,
+            Secure = http.Request.IsHttps,
+            SameSite = SameSiteMode.Lax
+        });
     }
 
     private static string? Ip(HttpContext http) => http.Connection.RemoteIpAddress?.ToString();
