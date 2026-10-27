@@ -121,16 +121,22 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("accounts_companies");
 
+            entity.HasIndex(e => e.CompanyId, "company_id");
+
             entity.Property(e => e.AccountId).HasColumnName("account_id");
             entity.Property(e => e.CompanyId).HasColumnName("company_id");
+            entity.Property(e => e.CurrentCompanyViewed)
+                .HasColumnName("current_company_viewed");
 
             entity.HasOne(e => e.Account).WithMany(e => e.AccountsCompanies)
                 .HasForeignKey(e => e.AccountId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("accounts_companies_ibfk_1");
 
             entity.HasOne(e => e.Company).WithMany(e => e.AccountsCompanies)
                 .HasForeignKey(e => e.CompanyId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("accounts_companies_ibfk_2");
         });
 
         modelBuilder.Entity<Application>(entity =>
