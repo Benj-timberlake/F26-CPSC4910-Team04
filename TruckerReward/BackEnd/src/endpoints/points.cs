@@ -117,31 +117,47 @@ public static class PointsEndpoints
         await db.Users.Where(u => u.Id == driverId)
             .ExecuteUpdateAsync(update => update.SetProperty(u => u.Points, u => u.Points));
         var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == driverId && u.UserType == AuthEndpoints.Driver);
-        var driverCompanyId = driver is null ? null : await CompanyMembershipQueries.FirstCompanyId(db, driverId);
+        List<int> driverCompanyIds = driver is null ? [] : await db.AccountsCompanies.Where(membership => membership.AccountId == driverId)
+            .Select(membership => membership.CompanyId).ToListAsync();
         var actorCompanyId = actor.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, id) : null;
-        if (driver is null || driverCompanyId is null)
+        if (driver is null || driverCompanyIds.Count == 0)
             return Results.NotFound(new { message = "That driver isn't with a sponsor." });
         var sponsorHasDriver = actorCompanyId is int sponsorCompany &&
-            await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == sponsorCompany);
+            driverCompanyIds.Contains(sponsorCompany);
         if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && !sponsorHasDriver))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
+        int historyCompanyId;
+        if (actor.UserType == AuthEndpoints.Sponsor)
+        {
+            historyCompanyId = actorCompanyId!.Value;
+        }
+        else if (req.CompanyId is int selectedCompanyId)
+        {
+            if (!driverCompanyIds.Contains(selectedCompanyId))
+                return Results.BadRequest(new { message = "Choose a company this driver belongs to." });
+            historyCompanyId = selectedCompanyId;
+        }
+        else if (driverCompanyIds.Count == 1)
+        {
+            historyCompanyId = driverCompanyIds[0];
+        }
+        else
+        {
+            return Results.BadRequest(new { message = "Choose which company this points change is for." });
+        }
         var balance = (long)driver.Points + req.Points;
         if (balance is > int.MaxValue or < int.MinValue)
             return Results.BadRequest(new { message = "That would put the balance out of range." });
 
         driver.Points = (int)balance;
-        var historyCompanyId = actor.UserType == AuthEndpoints.Sponsor ? actorCompanyId!.Value : driverCompanyId.Value;
         var history = new PointsHistory { UserId = driverId, CompanyId = historyCompanyId, PointsDelta = req.Points, Timestamp = clock.GetUtcNow().UtcDateTime };
         db.PointsHistory.Add(history);
         db.AuditHistories.Add(new AuditHistory { UserId = actor.Id, PointsHistory = history, Resoning = reason });
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.')}.");
-        var responseCompanyId = actor.UserType == AuthEndpoints.Sponsor ? actorCompanyId : driverCompanyId;
-        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && (responseCompanyId == null || h.CompanyId == responseCompanyId) && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
-        var displayedPoints = responseCompanyId is int pointsCompany
-            ? await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == pointsCompany).SumAsync(h => (long)h.PointsDelta)
-            : driver.Points;
+        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
+        var displayedPoints = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId).SumAsync(h => (long)h.PointsDelta);
         return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent));
     }
 
@@ -160,13 +176,14 @@ public static class PointsEndpoints
         var company = actor.UserType == AuthEndpoints.Sponsor ? actorCompanyId : driverCompanyId;
         if (!await CanManage(db, actor) || company is null)
             return Results.StatusCode(StatusCodes.Status403Forbidden);
-        var belongsToCompany = await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == company);
+        var companyToRemove = company.Value;
+        var belongsToCompany = await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == companyToRemove);
         if (!belongsToCompany)
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        var wasCurrent = await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == company && membership.CurrentCompanyViewed);
+        var wasCurrent = await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == companyToRemove && membership.CurrentCompanyViewed);
 
-        await db.AccountsCompanies.Where(membership => membership.AccountId == driverId && membership.CompanyId == company)
+        await db.AccountsCompanies.Where(membership => membership.AccountId == driverId && membership.CompanyId == companyToRemove)
             .ExecuteDeleteAsync();
         if (wasCurrent)
         {
@@ -177,7 +194,7 @@ public static class PointsEndpoints
                     .ExecuteUpdateAsync(update => update.SetProperty(membership => membership.CurrentCompanyViewed, true));
         }
         var now = clock.GetUtcNow().UtcDateTime;
-        foreach (var application in await db.Applications.Where(a => a.ApplicantId == driverId && a.CompanyId == company && a.Status == "approved").ToListAsync())
+        foreach (var application in await db.Applications.Where(a => a.ApplicantId == driverId && a.CompanyId == companyToRemove && a.Status == "approved").ToListAsync())
         {
             application.Status = "canceled";
             application.ReviewerId = actor.Id;
@@ -185,7 +202,7 @@ public static class PointsEndpoints
             application.ResponseTimestamp = now;
         }
         await db.SaveChangesAsync();
-        await notifications.DriverRemoved(driver, company, reason);
+        await notifications.DriverRemoved(driver, companyToRemove, reason);
         return Results.NoContent();
     }
 
@@ -247,7 +264,7 @@ public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Row
 
 public record RemoveDriverRequest(string? Reason);
 
-public record ChangePointsRequest(int Points, string? Reason);
+public record ChangePointsRequest(int Points, string? Reason, int? CompanyId = null);
 
 // earned is null without a date range
 public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned = null);

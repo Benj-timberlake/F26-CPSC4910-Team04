@@ -227,7 +227,7 @@
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"users/{id}/points/drivers/{top.Id}", new { points = a.Points, reason = a.Reason });
+            var response = await client.PostAsJsonAsync($"users/{id}/points/drivers/{top.Id}", new { points = a.Points, reason = a.Reason, companyId = admin ? companyId : (int?)null });
             if (response.IsSuccessStatusCode)
             {
                 await Load();

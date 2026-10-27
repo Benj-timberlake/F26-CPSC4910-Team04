@@ -260,7 +260,9 @@ public static class UserEndpoints
             var memberships = await db.AccountsCompanies.AsNoTracking()
                 .Where(link => link.AccountId == id)
                 .OrderBy(link => link.Company.Name)
-                .Select(link => new UserCompany(link.CompanyId, link.Company.Name, link.CurrentCompanyViewed))
+                .Select(link => new UserCompany(link.CompanyId, link.Company.Name, link.CurrentCompanyViewed,
+                    db.PointsHistory.Where(history => history.UserId == id && history.CompanyId == link.CompanyId)
+                        .Sum(history => (long?)history.PointsDelta) ?? 0L))
                 .ToListAsync();
             if (companyNames.Count == 0 && company is not null)
                 companyNames.Add(company.Name);
@@ -406,7 +408,7 @@ public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
 public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget);
 
-public record UserCompany(int Id, string Name, bool CurrentCompanyViewed);
+public record UserCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
 
 public record CompanyOption(int Id, string Name, string? Description);
 

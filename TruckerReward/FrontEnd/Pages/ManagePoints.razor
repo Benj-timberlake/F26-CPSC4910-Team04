@@ -90,15 +90,6 @@
                                             <button type="button" class="tr-btn-outline" @onclick="() => removing = null">Cancel</button>
                                         </div>
                                     }
-                                    else if (editing == d.Id)
-                                    {
-                                        <div class="change">
-                                            <input type="number" aria-label="Points for @d.Username" placeholder="+100 or -50" @bind="amount" />
-                                            <input type="text" aria-label="Reason for @d.Username" placeholder="Reason" maxlength="500" @bind="reason" />
-                                            <button type="button" class="tr-btn" disabled="@busy" @onclick="() => Save(d)">Save</button>
-                                            <button type="button" class="tr-btn-outline" @onclick="() => editing = null">Cancel</button>
-                                        </div>
-                                    }
                                     else
                                     {
                                         <button type="button" class="tr-btn-outline" @onclick="() => Edit(d)">Change points</button>
@@ -120,6 +111,75 @@
                 </table>
             </div>
         }
+    }
+    @if (editingDriver is not null)
+    {
+        <div class="modal-backdrop">
+            <section class="change-modal" role="dialog" aria-modal="true" aria-labelledby="change-modal-title">
+                <h2 id="change-modal-title">Change points for @editingDriver.FirstName @editingDriver.LastName</h2>
+                <p><strong>Username:</strong> @editingDriver.Username<br /><strong>Email:</strong> @editingDriver.Email</p>
+                <dl class="change-summary">
+                    <dt>@(admin ? "Balance in selected company" : "Current company balance")</dt>
+                    <dd>@(admin ? selectedCompany?.Points.ToString("N0") ?? "Select a company" : editingDriver.Points.ToString("N0"))</dd>
+                    @if (admin)
+                    {
+                        <dt>Points across companies</dt>
+                        <dd>@editingDriver.Points.ToString("N0")</dd>
+                    }
+                    <dt>Spent on orders</dt>
+                    <dd>@editingDriver.Spent.ToString("N0")</dd>
+                    @if (ranged)
+                    {
+                        <dt>Earned @RangeLabel</dt>
+                        <dd>@editingDriver.Earned?.ToString("N0")</dd>
+                    }
+                </dl>
+
+                @if (admin)
+                {
+                    @if (companyChoicesLoading)
+                    {
+                        <p role="status"><em>Loading the driver's companies...</em></p>
+                    }
+                    else if (editCompanies is { Count: > 1 })
+                    {
+                        <label for="change-company">Company for this points change</label>
+                        <select id="change-company" value="@selectedCompanyId" @onchange="SelectEditCompany">
+                            <option value="">Choose a company</option>
+                            @foreach (var company in editCompanies)
+                            {
+                                <option value="@company.Id">@company.Name (@company.Points.ToString("N0") points)</option>
+                            }
+                        </select>
+                    }
+                    else if (selectedCompany is not null)
+                    {
+                        <p><strong>Company:</strong> @selectedCompany.Name</p>
+                    }
+                    @if (companyChoiceError is not null)
+                    {
+                        <p role="alert" class="tr-alert-error">@companyChoiceError</p>
+                    }
+                }
+
+                <label for="change-amount">Points change</label>
+                <input id="change-amount" type="number" placeholder="+100 or -50" @bind="amount" />
+                @if (amount is not null)
+                {
+                    <p>New balance: @(proposedBalance?.ToString("N0") ?? "Choose a company to preview the balance")</p>
+                }
+                @if (error is not null)
+                {
+                    <p role="alert" class="tr-alert-error">@error</p>
+                }
+                <label for="change-reason">Reason</label>
+                <input id="change-reason" type="text" maxlength="500" @bind="reason" />
+                <div class="modal-actions">
+                    <button type="button" class="tr-btn" disabled="@(!CanSaveChange)" @onclick="Save">Save change</button>
+                    <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="CloseEdit">Cancel</button>
+                </div>
+            </section>
+        </div>
     }
 </div>
 
@@ -150,6 +210,15 @@
     .change input[type=number] {
         width: 120px;
     }
+
+    .modal-backdrop { position: fixed; inset: 0; z-index: 1050; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0009; }
+    .change-modal { width: min(560px, 100%); max-height: 90vh; overflow-y: auto; padding: 24px; border-radius: 12px; background: white; color: #222; box-shadow: 0 18px 60px #0005; }
+    .change-modal h2 { margin-top: 0; }
+    .change-modal label { display: block; margin: 12px 0 5px; font-weight: 600; }
+    .change-modal input, .change-modal select { width: 100%; padding: 8px 10px; border: 1px solid #aeb7c4; border-radius: 6px; font: inherit; }
+    .change-summary { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 12px; background: #f4f6f9; border-radius: 8px; }
+    .change-summary dd { margin: 0; font-weight: 700; text-align: right; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 </style>
 
 @code {
@@ -163,7 +232,6 @@
     private DateOnly? from;
     private DateOnly? to;
     private bool ranged;
-    private int? editing;
     private int? removing;
     private int? amount;
     private string? reason;
@@ -173,6 +241,11 @@
     private bool admin;
     private string? error;
     private string? notice;
+    private Driver? editingDriver;
+    private List<DriverCompany>? editCompanies;
+    private int? selectedCompanyId;
+    private bool companyChoicesLoading;
+    private string? companyChoiceError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -223,32 +296,82 @@
         }
     }
 
-    private void Edit(Driver d)
+    private async Task Edit(Driver d)
     {
-        editing = d.Id;
+        editingDriver = d;
         removing = null;
         amount = null;
         reason = null;
         notice = null;
+        error = null;
+        editCompanies = null;
+        selectedCompanyId = null;
+        companyChoiceError = null;
+        if (!admin)
+            return;
+
+        companyChoicesLoading = true;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var details = await client.GetFromJsonAsync<DriverDetails>($"users/{d.Id}");
+            editCompanies = details?.Companies ?? [];
+            if (editCompanies.Count == 1)
+                selectedCompanyId = editCompanies[0].Id;
+            else if (editCompanies.Count == 0)
+                companyChoiceError = "This driver is not associated with a company.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            companyChoiceError = "Couldn't load the driver's companies. Try again.";
+        }
+        finally
+        {
+            companyChoicesLoading = false;
+        }
     }
 
-    private async Task Save(Driver d)
+    private void SelectEditCompany(ChangeEventArgs args)
     {
+        selectedCompanyId = int.TryParse(args.Value?.ToString(), out var value) ? value : null;
+    }
+
+    private DriverCompany? selectedCompany => editCompanies?.FirstOrDefault(company => company.Id == selectedCompanyId);
+    private long? proposedBalance => (admin ? selectedCompany?.Points : editingDriver?.Points) is long current && amount is int delta
+        ? current + delta
+        : null;
+
+    private bool CanSaveChange => !busy && !companyChoicesLoading && editingDriver is not null && amount is not null &&
+        (!admin || selectedCompanyId is not null);
+
+    private void CloseEdit()
+    {
+        if (!busy)
+            editingDriver = null;
+    }
+
+    private async Task Save()
+    {
+        if (editingDriver is null || !CanSaveChange)
+            return;
+        var d = editingDriver;
         busy = true;
         error = null;
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"users/{id}/points/drivers/{d.Id}", new { points = amount ?? 0, reason });
+            var response = await client.PostAsJsonAsync($"users/{id}/points/drivers/{d.Id}", new { points = amount ?? 0, reason, companyId = admin ? selectedCompanyId : null });
             if (response.IsSuccessStatusCode)
             {
                 var updated = await response.Content.ReadFromJsonAsync<Driver>();
-                if (ranged)
+                if (ranged || admin)
                     await Load();
                 else
                     drivers = drivers!.Select(x => x.Id == d.Id && updated is not null ? updated : x).ToList();
-                notice = $"{d.Username} now has {updated?.Points.ToString("N0")} points.";
-                editing = null;
+                notice = admin
+                    ? $"{d.Username}'s selected company balance is now {updated?.Points.ToString("N0")} points."
+                    : $"{d.Username} now has {updated?.Points.ToString("N0")} points.";
+                editingDriver = null;
             }
             else
             {
@@ -265,7 +388,7 @@
     private void StartRemove(Driver d)
     {
         removing = d.Id;
-        editing = null;
+        editingDriver = null;
         reason = null;
         notice = null;
     }
@@ -304,5 +427,7 @@
     };
 
     private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned);
+    private sealed record DriverDetails(List<DriverCompany>? Companies);
+    private sealed record DriverCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
     private sealed record Problem(string? Message);
 }
