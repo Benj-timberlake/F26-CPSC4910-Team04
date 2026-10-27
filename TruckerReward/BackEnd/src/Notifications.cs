@@ -55,7 +55,7 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             await Send(admin, subject, reviewerBody, category: null, emailed: false);
 
         var sponsors = await db.Users.AsNoTracking()
-            .Where(u => u.UserType == AuthEndpoints.Sponsor && CompanyMembershipQueries.FirstPerUser(db)
+            .Where(u => u.UserType == AuthEndpoints.Sponsor && db.AccountsCompanies
                 .Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId))
             .ToListAsync();
         foreach (var sponsor in sponsors)
@@ -77,7 +77,7 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             await Send(admin, subject, reviewerBody, category: null, emailed: false);
 
         var sponsors = await db.Users.AsNoTracking()
-            .Where(u => u.UserType == AuthEndpoints.Sponsor && CompanyMembershipQueries.FirstPerUser(db)
+            .Where(u => u.UserType == AuthEndpoints.Sponsor && db.AccountsCompanies
                 .Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId))
             .ToListAsync();
         foreach (var sponsor in sponsors)
@@ -176,7 +176,7 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
         if (companyId is null)
             return;
         var sponsors = await db.Users.AsNoTracking()
-            .Where(u => u.UserType == AuthEndpoints.Sponsor && CompanyMembershipQueries.FirstPerUser(db)
+            .Where(u => u.UserType == AuthEndpoints.Sponsor && db.AccountsCompanies
                 .Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId))
             .ToListAsync();
         foreach (var sponsor in sponsors)

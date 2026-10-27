@@ -13,7 +13,7 @@ public static class SponsorTeamEndpoints
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
             return Results.Ok(await db.Users.AsNoTracking()
-                .Where(u => u.UserType == AuthEndpoints.Sponsor && CompanyMembershipQueries.FirstPerUser(db)
+                .Where(u => u.UserType == AuthEndpoints.Sponsor && db.AccountsCompanies
                     .Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId))
                 .OrderBy(u => u.LastName).ThenBy(u => u.FirstName)
                 .Select(u => new TeamMember(u.Id, u.Username, u.FirstName, u.LastName, u.Email, u.Status))

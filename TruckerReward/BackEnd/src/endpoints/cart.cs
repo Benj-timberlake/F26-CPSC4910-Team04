@@ -13,7 +13,7 @@ public static class CartEndpoints
             var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
             if (companyId is null) return Results.Ok(Array.Empty<SponsorOrderDetails>());
             var items = await db.CartItems.AsNoTracking().Include(item => item.User).Include(item => item.PointsHistory)
-                .Where(item => item.User.UserType == "driver" && CompanyMembershipQueries.FirstPerUser(db)
+                .Where(item => item.User.UserType == "driver" && db.AccountsCompanies
                     .Any(membership => membership.AccountId == item.UserId && membership.CompanyId == companyId)
                     && !item.WasOrdered && !item.InCart && item.PointsHistory != null
                     && item.PointsHistory.UserId == item.UserId).ToListAsync();
@@ -41,7 +41,7 @@ public static class CartEndpoints
             // cart table from a subquery inside the same UPDATE statement.
             var eligible = await db.CartItems.Where(item => item.PointsHistoryId == orderId
                     && !item.InCart && !item.WasOrdered && item.User.UserType == "driver"
-                    && CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.AccountId == item.UserId && membership.CompanyId == companyId)
+                    && db.AccountsCompanies.Any(membership => membership.AccountId == item.UserId && membership.CompanyId == companyId)
                     && item.PointsHistory != null
                     && item.PointsHistory.UserId == item.UserId).Select(item => item.Id).ToListAsync();
             if (eligible.Count == 0) return Results.NotFound();

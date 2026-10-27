@@ -68,7 +68,7 @@ public static class PointsEndpoints
         if (actor.UserType == AuthEndpoints.Sponsor)
         {
             companyId = await CompanyMembershipQueries.FirstCompanyId(db, actor.Id);
-            drivers = drivers.Where(u => CompanyMembershipQueries.FirstPerUser(db)
+            drivers = drivers.Where(u => db.AccountsCompanies
                 .Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId));
         }
         if (!string.IsNullOrWhiteSpace(search))
@@ -121,7 +121,9 @@ public static class PointsEndpoints
         var actorCompanyId = actor.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, id) : null;
         if (driver is null || driverCompanyId is null)
             return Results.NotFound(new { message = "That driver isn't with a sponsor." });
-        if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && actorCompanyId != driverCompanyId))
+        var sponsorHasDriver = actorCompanyId is int sponsorCompany &&
+            await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == sponsorCompany);
+        if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && !sponsorHasDriver))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var balance = (long)driver.Points + req.Points;
         if (balance is > int.MaxValue or < int.MinValue)
@@ -135,8 +137,12 @@ public static class PointsEndpoints
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.')}.");
-        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
-        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, driver.Points, spent));
+        var responseCompanyId = actor.UserType == AuthEndpoints.Sponsor ? actorCompanyId : driverCompanyId;
+        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && (responseCompanyId == null || h.CompanyId == responseCompanyId) && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
+        var displayedPoints = responseCompanyId is int pointsCompany
+            ? await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == pointsCompany).SumAsync(h => (long)h.PointsDelta)
+            : driver.Points;
+        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent));
     }
 
     // cancels the accepted application to allow reapplying
@@ -147,15 +153,29 @@ public static class PointsEndpoints
             return Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." });
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == driverId && u.UserType == AuthEndpoints.Driver);
-        var companyId = driver is null ? null : await CompanyMembershipQueries.FirstCompanyId(db, driverId);
+        var driverCompanyId = driver is null ? null : await CompanyMembershipQueries.FirstCompanyId(db, driverId);
         var actorCompanyId = actor?.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, id) : null;
-        if (actor is null || driver is null || companyId is not { } company)
+        if (actor is null || driver is null || driverCompanyId is null)
             return Results.NotFound(new { message = "That driver isn't with a sponsor." });
-        if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && actorCompanyId != company))
+        var company = actor.UserType == AuthEndpoints.Sponsor ? actorCompanyId : driverCompanyId;
+        if (!await CanManage(db, actor) || company is null)
             return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var belongsToCompany = await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == company);
+        if (!belongsToCompany)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        var wasCurrent = await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == company && membership.CurrentCompanyViewed);
 
         await db.AccountsCompanies.Where(membership => membership.AccountId == driverId && membership.CompanyId == company)
             .ExecuteDeleteAsync();
+        if (wasCurrent)
+        {
+            var nextCompany = await db.AccountsCompanies.Where(membership => membership.AccountId == driverId)
+                .OrderBy(membership => membership.CompanyId).Select(membership => (int?)membership.CompanyId).FirstOrDefaultAsync();
+            if (nextCompany is int next)
+                await db.AccountsCompanies.Where(membership => membership.AccountId == driverId && membership.CompanyId == next)
+                    .ExecuteUpdateAsync(update => update.SetProperty(membership => membership.CurrentCompanyViewed, true));
+        }
         var now = clock.GetUtcNow().UtcDateTime;
         foreach (var application in await db.Applications.Where(a => a.ApplicantId == driverId && a.CompanyId == company && a.Status == "approved").ToListAsync())
         {
@@ -193,7 +213,7 @@ public static class PointsEndpoints
 
         var drivers = db.Users.AsNoTracking()
             .Where(u => u.UserType == AuthEndpoints.Driver && u.Status == User.Active &&
-                CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.AccountId == u.Id && membership.CompanyId == company));
+                db.AccountsCompanies.Any(membership => membership.AccountId == u.Id && membership.CompanyId == company));
         var history = db.PointsHistory.Where(h => h.CompanyId == company && (start == null || h.Timestamp >= start));
         var totals = await (category switch
         {
