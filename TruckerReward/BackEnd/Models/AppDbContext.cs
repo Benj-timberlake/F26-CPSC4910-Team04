@@ -392,9 +392,14 @@ public partial class AppDbContext : DbContext
             entity.ToTable("points_history");
 
             entity.HasIndex(e => e.UserId, "user_id");
+            entity.HasIndex(e => e.CompanyId, "fk_points_history_company");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.PointsDelta).HasColumnName("points_delta");
+            entity.Property(e => e.RejectionReason)
+                .HasMaxLength(500)
+                .HasColumnName("rejection_reason");
+            entity.Property(e => e.CompanyId).HasColumnName("company_id");
             entity.Property(e => e.Timestamp)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp")
@@ -405,6 +410,11 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("points_history_ibfk_1");
+
+            entity.HasOne(d => d.Company).WithMany(p => p.PointsHistories)
+                .HasForeignKey(d => d.CompanyId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_points_history_company");
         });
 
         modelBuilder.Entity<NotificationPreference>(entity =>

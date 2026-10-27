@@ -140,6 +140,9 @@ public static class CartEndpoints
             var user = await db.Users.SingleOrDefaultAsync(user => user.Id == id);
             if (user is null)
                 return Results.NotFound();
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null)
+                return Results.BadRequest(new { message = "Join a company before placing an order." });
 
             var items = await db.CartItems
                 .Where(item => item.UserId == id && item.InCart && !item.WasOrdered).ToListAsync();
@@ -157,7 +160,7 @@ public static class CartEndpoints
             user.Points -= (int)totalPoints;
             var history = new PointsHistory
             {
-                UserId = id, PointsDelta = -(int)totalPoints,
+                UserId = id, CompanyId = companyId.Value, PointsDelta = -(int)totalPoints,
                 Timestamp = clock.GetUtcNow().UtcDateTime
             };
             db.PointsHistory.Add(history);

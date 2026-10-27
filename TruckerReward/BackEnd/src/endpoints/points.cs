@@ -125,7 +125,7 @@ public static class PointsEndpoints
             return Results.BadRequest(new { message = "That would put the balance out of range." });
 
         driver.Points = (int)balance;
-        var history = new PointsHistory { UserId = driverId, PointsDelta = req.Points, Timestamp = clock.GetUtcNow().UtcDateTime };
+        var history = new PointsHistory { UserId = driverId, CompanyId = driverCompanyId.Value, PointsDelta = req.Points, Timestamp = clock.GetUtcNow().UtcDateTime };
         db.PointsHistory.Add(history);
         db.AuditHistories.Add(new AuditHistory { UserId = actor.Id, PointsHistory = history, Resoning = reason });
         await db.SaveChangesAsync();
