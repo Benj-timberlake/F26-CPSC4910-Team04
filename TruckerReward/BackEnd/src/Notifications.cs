@@ -149,6 +149,11 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             "Your sponsor placed the order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
             NotificationCategory.Orders);
 
+    public Task OrderPlaced(User driver, IReadOnlyList<CartItem> items) =>
+        Send(driver, "Your order is pending",
+            "Your order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + " is waiting on your sponsor.",
+            NotificationCategory.Orders);
+
     public async Task DriverEditingOrder(User driver, IReadOnlyList<CartItem> items) =>
         await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, driver.Id), $"{driver.Username} pulled an order back to change it",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) moved " +
