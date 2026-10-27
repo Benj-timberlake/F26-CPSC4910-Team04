@@ -50,9 +50,11 @@ public static class PointsEndpoints
             entries));
     }
 
-    // sort is name, points or spent
-    private static async Task<IResult> Drivers(int id, string? search, string? sort, AppDbContext db)
+    // sort is name, points, spent or earned
+    private static async Task<IResult> Drivers(int id, string? search, string? sort, DateOnly? from, DateOnly? to, AppDbContext db)
     {
+        if (from > to)
+            return Results.BadRequest(new { message = "The start date has to be on or before the end date." });
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
             return Results.NotFound();
@@ -72,19 +74,26 @@ public static class PointsEndpoints
             var term = search.Trim().ToLower();
             drivers = drivers.Where(u => u.Username.ToLower().Contains(term) || (u.FirstName + " " + u.LastName).ToLower().Contains(term));
         }
+        DateTime? start = from?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        // to is inclusive
+        DateTime? end = to?.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var rows = drivers.Select(u => new
         {
             User = u,
-            Spent = db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta)
+            Spent = db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta),
+            Earned = db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta > 0 &&
+                (start == null || h.Timestamp >= start) && (end == null || h.Timestamp < end)).Sum(h => (long)h.PointsDelta)
         });
         rows = sort switch
         {
             "points" => rows.OrderByDescending(r => r.User.Points).ThenBy(r => r.User.Username),
             "spent" => rows.OrderByDescending(r => r.Spent).ThenBy(r => r.User.Username),
+            "earned" => rows.OrderByDescending(r => r.Earned).ThenBy(r => r.User.Username),
             _ => rows.OrderBy(r => r.User.LastName).ThenBy(r => r.User.FirstName).ThenBy(r => r.User.Username)
         };
         return Results.Ok(await rows
-            .Select(r => new PointsDriver(r.User.Id, r.User.Username, r.User.FirstName, r.User.LastName, r.User.Email, r.User.Points, r.Spent))
+            .Select(r => new PointsDriver(r.User.Id, r.User.Username, r.User.FirstName, r.User.LastName, r.User.Email, r.User.Points, r.Spent,
+                from == null && to == null ? null : r.Earned))
             .ToListAsync());
     }
 
@@ -207,7 +216,8 @@ public record RemoveDriverRequest(string? Reason);
 
 public record ChangePointsRequest(int Points, string? Reason);
 
-public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent);
+// earned is null without a date range
+public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent, long? Earned = null);
 
 // by is null for orders
 public record PointsEntry(DateTime? At, int Points, string Reason, string? By);

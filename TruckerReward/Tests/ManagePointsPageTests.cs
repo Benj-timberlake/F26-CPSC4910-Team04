@@ -60,6 +60,23 @@ public sealed class ManagePointsPageTests : TestContext
     }
 
     [Fact]
+    public void DatesShowPointsEarnedInThem()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        backend.Routes["GET /users/5/points/drivers?from=2026-09-01&to=2026-09-15"] = (HttpStatusCode.OK, """[{"id":8,"username":"bob","firstName":"Bob","lastName":"Baker","email":"bob@example.com","points":100,"earned":75}]""");
+        var page = Render();
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        Assert.Empty(page.FindAll("td.earned"));
+
+        page.Find("#from").Change("2026-09-01");
+        page.Find("#to").Change("2026-09-15");
+        page.Find("form").Submit();
+
+        page.WaitForAssertion(() => Assert.Equal("75", page.Find("td.earned").TextContent));
+        Assert.Contains("Earned Sep 1 to Sep 15", page.Find("thead").TextContent);
+    }
+
+    [Fact]
     public void ChangingPointsSendsTheAmountAndReason()
     {
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
