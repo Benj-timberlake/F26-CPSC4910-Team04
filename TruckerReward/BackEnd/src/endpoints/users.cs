@@ -28,6 +28,21 @@ public static class UserEndpoints
                 .Select(c => new CompanyOption(c.Id, c.Name, c.Description))
                 .ToListAsync()));
 
+        app.MapPost("/users/{id:int}/companies/{companyId:int}/switch", async (int id, int companyId, AppDbContext db) =>
+        {
+            var user = await db.Users.FirstOrDefaultAsync(user => user.Id == id && user.UserType == AuthEndpoints.Driver);
+            if (user is null)
+                return Results.NotFound();
+
+            var membership = await db.AccountsCompanies.FirstOrDefaultAsync(link => link.AccountId == id && link.CompanyId == companyId);
+            if (membership is null)
+                return Results.NotFound(new { message = "You are not associated with that company." });
+
+            await db.AccountsCompanies.Where(link => link.AccountId == id)
+                .ExecuteUpdateAsync(update => update.SetProperty(link => link.CurrentCompanyViewed, link => link.CompanyId == companyId));
+            return Results.Ok();
+        });
+
         app.MapPost("/users/{id:int}/applications", async (int id, CreateApplicationRequest request, AppDbContext db, Notifications notifications) =>
         {
             var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == id);
@@ -242,13 +257,18 @@ public static class UserEndpoints
                 .ToListAsync())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            var memberships = await db.AccountsCompanies.AsNoTracking()
+                .Where(link => link.AccountId == id)
+                .OrderBy(link => link.Company.Name)
+                .Select(link => new UserCompany(link.CompanyId, link.Company.Name, link.CurrentCompanyViewed))
+                .ToListAsync();
             if (companyNames.Count == 0 && company is not null)
                 companyNames.Add(company.Name);
             var pendingCompany = await db.Applications.AsNoTracking()
                 .Where(application => application.ApplicantId == id && application.Status == "active")
                 .Join(db.Companies.AsNoTracking(), application => application.CompanyId, c => c.Id, (application, c) => c.Name)
                 .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, effectiveCompanyId, user.Points, pendingCompany,
+            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, memberships, effectiveCompanyId, user.Points, pendingCompany,
                 user.UserType == "sponsor" ? company?.MonthlyBudget : null));
         });
 
@@ -361,7 +381,13 @@ public static class UserEndpoints
         if (alreadyLinked)
             return;
 
-        db.AccountsCompanies.Add(new AccountsCompany { AccountId = user.Id, CompanyId = companyId });
+        var hasCurrentCompany = await db.AccountsCompanies.AnyAsync(link => link.AccountId == user.Id && link.CurrentCompanyViewed);
+        db.AccountsCompanies.Add(new AccountsCompany
+        {
+            AccountId = user.Id,
+            CompanyId = companyId,
+            CurrentCompanyViewed = !hasCurrentCompany
+        });
     }
 }
 
@@ -374,7 +400,9 @@ public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, str
 public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
+
+public record UserCompany(int Id, string Name, bool CurrentCompanyViewed);
 
 public record CompanyOption(int Id, string Name, string? Description);
 

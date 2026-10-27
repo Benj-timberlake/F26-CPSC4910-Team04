@@ -58,7 +58,28 @@
                     </div>
                     @if (account.UserType == "driver" && account.CompanyId is not null)
                     {
-                        <p>Associated companies: @string.Join(", ", account.CompanyNames ?? [])</p>
+                        <ul class="driver-company-list">
+                            @foreach (var company in account.Companies ?? [])
+                            {
+                                <li>
+                                    <span>@company.Name</span>
+                                    @if (company.CurrentCompanyViewed)
+                                    {
+                                        <span class="current-company-badge">Currently viewing</span>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="tr-btn" disabled="@(switchingCompanyId is not null)" @onclick="() => SwitchCompany(company.Id)">
+                                            @(switchingCompanyId == company.Id ? "Switching..." : "Switch here")
+                                        </button>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                        @if (companySwitchError is not null)
+                        {
+                            <p role="alert" class="tr-alert-error">@companySwitchError</p>
+                        }
                         @if (!string.IsNullOrWhiteSpace(account.PendingCompanyName))
                         {
                             <p class="pending-company-name">@account.PendingCompanyName <span class="pending-badge">Pending...</span></p>
@@ -250,6 +271,9 @@
     .pending-badge { display: inline-block; padding: 4px 9px; border-radius: 20px; background: #fbf0cf; color: #8a641e; font-size: 12px; font-weight: 700; vertical-align: middle; }
     .company-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
     .company-card-heading h2 { margin: 0 0 12px; }
+    .driver-company-list { list-style: none; padding: 0; margin: 0 0 14px; }
+    .driver-company-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e3e7ee; }
+    .current-company-badge { color: #176b3a; font-size: 13px; font-weight: 700; }
     .cancel-application-button, .cancel-submit-button { border: 1px solid #b42318; border-radius: 6px; background: #b42318; color: white; padding: 6px 11px; font-size: 13px; font-weight: 600; cursor: pointer; }
     .cancel-submit-button { display: block; margin-left: auto; padding: 9px 14px; }
     .cancel-application-button:disabled, .cancel-submit-button:disabled { opacity: .65; cursor: wait; }
@@ -384,6 +408,8 @@
     private string cancellationReason = "";
     private string? cancellationError;
     private bool isCancelling;
+    private int? switchingCompanyId;
+    private string? companySwitchError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -431,6 +457,44 @@
             }
         }
         showCompanyModal = true;
+    }
+
+    private async Task SwitchCompany(int companyId)
+    {
+        if (switchingCompanyId is not null)
+            return;
+
+        var user = (await AuthState).User;
+        var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            companySwitchError = "Couldn't identify your account. Please sign in again.";
+            return;
+        }
+
+        switchingCompanyId = companyId;
+        companySwitchError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsync($"users/{id}/companies/{companyId}/switch", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                companySwitchError = "Couldn't switch companies. Please try again.";
+                return;
+            }
+
+            account = await client.GetFromJsonAsync<Account>($"users/{id}");
+            notice = "Your current company has been switched.";
+        }
+        catch (HttpRequestException)
+        {
+            companySwitchError = "Couldn't switch companies right now. Please try again.";
+        }
+        finally
+        {
+            switchingCompanyId = null;
+        }
     }
 
     private void SelectCompany(int companyId)
@@ -550,7 +614,8 @@
         }
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, List<CompanyMembership>? Companies, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
+    private sealed record CompanyMembership(int Id, string Name, bool CurrentCompanyViewed);
     private sealed record CompanyOption(int Id, string Name, string? Description);
     private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
