@@ -107,6 +107,7 @@ public static class AdminEndpoints
         app.MapPost("/admin/accounts", CreateAccount);
         // username, password and type have their own flows
         app.MapPut("/admin/accounts/{id:int}", EditAccount);
+        app.MapDelete("/admin/accounts/{id:int}", DeleteAccount);
     }
 
     private static async Task<IResult> CreateAccount(CreateAccountRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config)
@@ -195,6 +196,44 @@ public static class AdminEndpoints
         if (!string.Equals(oldAddress, address, StringComparison.OrdinalIgnoreCase))
             await email.SendAsync(oldAddress, "Your TruckerReward email was changed",
                 $"Hi {account.Username},\n\nAn administrator changed your account email from {oldAddress} to {address}. If that's wrong, contact an administrator.");
+        return Results.NoContent();
+    }
+
+    // accounts with history get deactivated instead
+    private static async Task<IResult> DeleteAccount(int id, int adminId, AppDbContext db)
+    {
+        if (!await IsAdmin(db, adminId))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (adminId == id)
+            return Results.BadRequest(new { message = "You can't delete your own account." });
+        var account = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (account is null)
+            return Results.NotFound();
+        if (await db.PointsHistory.AnyAsync(h => h.UserId == id) || await db.AuditHistories.AnyAsync(a => a.UserId == id) ||
+            await db.Applications.AnyAsync(a => a.ReviewerId == id))
+            return Results.Conflict(new { message = $"{account.Username} has history on record, so deactivate the account instead." });
+
+        try
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await db.LoginAttempts.Where(a => a.UserId == id).ExecuteUpdateAsync(u => u.SetProperty(a => a.UserId, (int?)null));
+            await db.Applications.Where(a => a.ApplicantId == id).ExecuteDeleteAsync();
+            await db.CartItems.Where(c => c.UserId == id).ExecuteDeleteAsync();
+            await db.NotificationsHistories.Where(n => n.UserId == id).ExecuteDeleteAsync();
+            await db.NotificationPreferences.Where(n => n.UserId == id).ExecuteDeleteAsync();
+            await db.PasswordChanges.Where(c => c.UserId == id).ExecuteDeleteAsync();
+            await db.PasswordResets.Where(r => r.UserId == id).ExecuteDeleteAsync();
+            await db.PasskeyCredentials.Where(c => c.UserId == id).ExecuteDeleteAsync();
+            await db.Impersonations.Where(i => i.UserId == id || i.ViewerId == id).ExecuteDeleteAsync();
+            await db.AccountsCompanies.Where(m => m.AccountId == id).ExecuteDeleteAsync();
+            await db.AccountsHistories.Where(h => h.UserId == id).ExecuteDeleteAsync();
+            await db.Users.Where(u => u.Id == id).ExecuteDeleteAsync();
+            await transaction.CommitAsync();
+        }
+        catch (System.Data.Common.DbException)
+        {
+            return Results.Conflict(new { message = $"{account.Username} couldn't be deleted, so deactivate the account instead." });
+        }
         return Results.NoContent();
     }
 
