@@ -1,0 +1,98 @@
+
+.trucker-chat {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    font-family: Arial, sans-serif;
+}
+
+.chat-toggle {
+    background: #1769aa;
+    color: white;
+    border: none;
+    border-radius: 30px;
+    padding: 14px 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px #0003;
+}
+
+.chat-window {
+    width: min(350px, calc(100vw - 48px));
+    height: 440px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 6px 25px #0003;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.chat-header {
+    background: #1769aa;
+    color: white;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+}
+
+.chat-header button {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+}
+
+.chat-messages {
+    flex: 1;
+    padding: 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-message {
+    padding: 10px 12px;
+    border-radius: 12px;
+    max-width: 85%;
+    overflow-wrap: anywhere;
+}
+
+.chat-message.bot {
+    background: #e9eef4;
+    color: #172b40;
+    align-self: flex-start;
+}
+
+.chat-message.user {
+    background: #1769aa;
+    color: white;
+    align-self: flex-end;
+}
+
+.chat-input {
+    display: flex;
+    padding: 10px;
+    gap: 6px;
+    border-top: 1px solid #ddd;
+}
+
+.chat-input input {
+    flex: 1;
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.chat-input button {
+    background: #1769aa;
+    color: white;
+    border: none;
+    padding: 9px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
