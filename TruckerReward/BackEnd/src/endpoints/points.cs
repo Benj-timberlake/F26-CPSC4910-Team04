@@ -155,9 +155,9 @@ public static class PointsEndpoints
         db.AuditHistories.Add(new AuditHistory { UserId = actor.Id, PointsHistory = history, Resoning = reason });
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
-        await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.')}.");
         var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
         var displayedPoints = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId).SumAsync(h => (long)h.PointsDelta);
+        await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.') }.", historyCompanyId, actor.Username);
         return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent));
     }
 

@@ -116,52 +116,87 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
     private static string WithReasoning(string body, string? reasoning) =>
         string.IsNullOrWhiteSpace(reasoning) ? body : $"{body}\nReason given: {reasoning}";
 
-    public async Task PointsChanged(User user, int delta, string reason)
+    public async Task PointsChanged(User user, int delta, string reason, int companyId, string? changedBy = null)
     {
-        await Send(user, delta >= 0 ? $"{delta:N0} points added" : $"{-delta:N0} points deducted",
-            $"{reason} Your balance is now {user.Points:N0} points.",
+        var companyName = await CompanyName(companyId);
+        var companyBalance = await CompanyBalance(user.Id, companyId);
+        var action = delta >= 0 ? $"{delta:N0} points added" : $"{-delta:N0} points deducted";
+        var attribution = string.IsNullOrWhiteSpace(changedBy) ? "" : $" by {changedBy}";
+        var title = $"{action}{attribution} on {companyName}";
+        await Send(user, title,
+            $"{reason} Your balance is now {companyBalance:N0} points for {companyName}.",
             NotificationCategory.Points);
-        if (user.Points < 0)
-            await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, user.Id), $"{user.Username} is negative on points",
-                $"{user.FirstName} {user.LastName} ({user.Username}) has a balance of {user.Points:N0} points.",
+
+        if (companyBalance < 0)
+            await ToSponsorsOf(companyId, $"{user.Username} is negative on points",
+                $"{user.FirstName} {user.LastName} ({user.Username}) has a balance of {companyBalance:N0} points for {companyName}.",
                 NotificationCategory.NegativeBalances);
     }
 
-    public async Task DriverPurchased(User driver, IReadOnlyList<CartItem> items, int points) =>
-        await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, driver.Id), $"{driver.Username} placed an order",
+    public async Task DriverPurchased(User driver, IReadOnlyList<CartItem> items, int points, int companyId)
+    {
+        var companyName = await CompanyName(companyId);
+        var balance = await CompanyBalance(driver.Id, companyId);
+        await ToSponsorsOf(companyId, $"{driver.Username} placed an order on {companyName}",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) spent {points:N0} points on " +
-            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
+            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) +
+            $". Their balance is now {balance:N0} points for {companyName}.",
             NotificationCategory.Purchases);
+    }
 
-    public async Task DriverRefunded(User driver, IReadOnlyList<CartItem> items, int points) =>
-        await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, driver.Id), $"{driver.Username} refunded an order",
+    public async Task DriverRefunded(User driver, IReadOnlyList<CartItem> items, int points, int companyId)
+    {
+        var companyName = await CompanyName(companyId);
+        var balance = await CompanyBalance(driver.Id, companyId);
+        await ToSponsorsOf(companyId, $"{driver.Username} refunded an order on {companyName}",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) got {points:N0} points back for " +
-            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
+            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) +
+            $". Their balance is now {balance:N0} points for {companyName}.",
             NotificationCategory.Purchases);
+    }
 
     public Task AccountViewed(User user, User viewer) =>
         Send(user, "Someone viewed the site as you",
             $"{viewer.FirstName} {viewer.LastName} ({viewer.Username}), {(viewer.UserType == AuthEndpoints.Admin ? "an administrator" : "your sponsor")}, viewed the site as you.",
             null, emailed: false);
 
-    public Task OrderSent(User driver, IReadOnlyList<CartItem> items) =>
-        Send(driver, "Your sponsor ordered your items",
-            "Your sponsor placed the order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + ".",
+    public async Task OrderSent(User driver, IReadOnlyList<CartItem> items, int companyId)
+    {
+        var companyName = await CompanyName(companyId);
+        var balance = await CompanyBalance(driver.Id, companyId);
+        await Send(driver, $"Your sponsor ordered your items for {companyName}",
+            "Your sponsor placed the order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) +
+            $". Your balance is now {balance:N0} points for {companyName}.",
             NotificationCategory.Orders);
+    }
 
-    public Task OrderPlaced(User driver, IReadOnlyList<CartItem> items) =>
-        Send(driver, "Your order is pending",
-            "Your order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + " is waiting on your sponsor.",
+    public async Task OrderPlaced(User driver, IReadOnlyList<CartItem> items, int companyId)
+    {
+        var companyName = await CompanyName(companyId);
+        var balance = await CompanyBalance(driver.Id, companyId);
+        await Send(driver, $"Your order is pending for {companyName}",
+            "Your order for " + string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) +
+            $" is waiting on your sponsor. Your balance is now {balance:N0} points for {companyName}.",
             NotificationCategory.Orders);
+    }
 
-    public async Task DriverEditingOrder(User driver, IReadOnlyList<CartItem> items) =>
-        await ToSponsorsOf(await CompanyMembershipQueries.FirstCompanyId(db, driver.Id), $"{driver.Username} pulled an order back to change it",
+    public async Task DriverEditingOrder(User driver, IReadOnlyList<CartItem> items, int companyId)
+    {
+        var companyName = await CompanyName(companyId);
+        var balance = await CompanyBalance(driver.Id, companyId);
+        await ToSponsorsOf(companyId, $"{driver.Username} pulled an order back on {companyName}",
             $"{driver.FirstName} {driver.LastName} ({driver.Username}) moved " +
-            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) + " back to their cart.",
+            string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Name} x{i.Quantity}" : i.Name)) +
+            $" back to their cart. Their balance is now {balance:N0} points for {companyName}.",
             NotificationCategory.Purchases);
+    }
 
     private async Task<string> CompanyName(int companyId) =>
         await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "the company";
+
+    private Task<long> CompanyBalance(int userId, int companyId) =>
+        db.PointsHistory.Where(history => history.UserId == userId && history.CompanyId == companyId)
+            .SumAsync(history => (long)history.PointsDelta);
 
     private async Task ToAdmins(string subject, string body, NotificationCategory? category)
     {

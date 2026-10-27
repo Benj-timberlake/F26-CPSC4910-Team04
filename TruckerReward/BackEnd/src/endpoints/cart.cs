@@ -49,8 +49,9 @@ public static class CartEndpoints
                     && item.PointsHistoryId == orderId && !item.InCart && !item.WasOrdered)
                 .ExecuteUpdateAsync(update => update.SetProperty(item => item.WasOrdered, true));
             if (changed == 0) return Results.NotFound();
-            var bought = await db.CartItems.AsNoTracking().Include(item => item.User).Where(item => eligible.Contains(item.Id)).ToListAsync();
-            await notifications.OrderSent(bought[0].User, bought);
+            var bought = await db.CartItems.AsNoTracking().Include(item => item.User).Include(item => item.PointsHistory)
+                .Where(item => eligible.Contains(item.Id)).ToListAsync();
+            await notifications.OrderSent(bought[0].User, bought, bought[0].PointsHistory!.CompanyId);
             return Results.NoContent();
         });
 
@@ -93,8 +94,8 @@ public static class CartEndpoints
             db.PointsHistory.Remove(history);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was refunded.");
-            await notifications.DriverRefunded(user, items, -history.PointsDelta);
+            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was refunded.", history.CompanyId);
+            await notifications.DriverRefunded(user, items, -history.PointsDelta, history.CompanyId);
             return Results.NoContent();
         });
 
@@ -122,8 +123,8 @@ public static class CartEndpoints
             db.PointsHistory.Remove(history);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was moved back to your cart.");
-            await notifications.DriverEditingOrder(user, items);
+            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was moved back to your cart.", history.CompanyId);
+            await notifications.DriverEditingOrder(user, items, history.CompanyId);
             return Results.NoContent();
         });
 
@@ -175,9 +176,9 @@ public static class CartEndpoints
             }
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            await notifications.PointsChanged(user, history.PointsDelta, "Your order was placed.");
-            await notifications.OrderPlaced(user, items);
-            await notifications.DriverPurchased(user, items, -history.PointsDelta);
+            await notifications.PointsChanged(user, history.PointsDelta, "Your order was placed.", history.CompanyId);
+            await notifications.OrderPlaced(user, items, history.CompanyId);
+            await notifications.DriverPurchased(user, items, -history.PointsDelta, history.CompanyId);
             return Results.NoContent();
         });
 

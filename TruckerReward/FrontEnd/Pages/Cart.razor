@@ -4,10 +4,10 @@
 @using FrontEnd.Shared
 @inject IHttpClientFactory HttpClientFactory
 
-<PageTitle>Cart</PageTitle>
+<PageTitle>@CartHeading</PageTitle>
 
 <div class="tr-page cart-page">
-    <h1>cart</h1>
+    <h1>@CartHeading</h1>
     @if (loadError is not null)
     {
         <p role="alert" class="tr-alert-error">@loadError</p>
@@ -81,7 +81,9 @@
     private bool saving;
     private int userId;
     private bool orderSent;
-    private int? balance;
+    private long? balance;
+    private string? companyName;
+    private bool hasMultipleCompanies;
     private string? reason;
 
     private async Task SendOrder()
@@ -167,13 +169,20 @@
 
     private decimal Total => items?.Sum(item => RewardPoints.FromDollars(item.Price) * item.Quantity) ?? 0;
 
+    private string CartHeading => hasMultipleCompanies && !string.IsNullOrWhiteSpace(companyName)
+        ? $"Cart (for {companyName})"
+        : "Cart";
+
     // a missing balance just hides the line
     private async Task LoadBalance()
     {
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            balance = (await client.GetFromJsonAsync<Account>($"users/{userId}"))?.Points;
+            var account = await client.GetFromJsonAsync<Account>($"users/{userId}");
+            balance = account?.Points;
+            companyName = account?.CompanyName;
+            hasMultipleCompanies = account?.UserType == "driver" && (account.Companies?.Count ?? 0) > 1;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -183,5 +192,6 @@
 
     private sealed record CartItem(uint Id, string Name, decimal Price, string? Description, int Quantity = 1);
     private sealed record OrderError(string Message);
-    private sealed record Account(int Points);
+    private sealed record Account(string UserType, long Points, string? CompanyName, List<CompanyMembership>? Companies);
+    private sealed record CompanyMembership(int Id, string Name, bool CurrentCompanyViewed, long Points);
 }
