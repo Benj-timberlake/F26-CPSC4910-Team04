@@ -95,7 +95,7 @@ public sealed class AdminAccountsTests : IAsyncDisposable
 
         var counts = await client.GetFromJsonAsync<AccountCounts>("/admin/accounts/counts");
 
-        Assert.Equal(new AccountCounts(1, 1, 1, 1), counts);
+        Assert.Equal(new AccountCounts(1, 1, 1, 1, 1), counts);
     }
 
     [Fact]
@@ -230,9 +230,10 @@ public sealed class AdminAccountsTests : IAsyncDisposable
     [Theory]
     [InlineData("sue", "driver", "kim", "kim@example.com", 403)]
     [InlineData("ann", "boss", "kim", "kim@example.com", 400)]
-    [InlineData("ann", "driver", "bob", "kim@example.com", 409)]
-    [InlineData("ann", "driver", "kim", "bob@example.com", 409)]
-    [InlineData("ann", "driver", "kim", "nope", 400)]
+    [InlineData("ann", "sponsor", "bob", "kim@example.com", 409)]
+    [InlineData("ann", "sponsor", "kim", "bob@example.com", 409)]
+    [InlineData("ann", "sponsor", "kim", "nope", 400)]
+    [InlineData("ann", "driver", "kim", "kim@example.com", 400)]
     public async Task AdminCreatesAreChecked(string actor, string type, string username, string email, int status)
     {
         await Start();

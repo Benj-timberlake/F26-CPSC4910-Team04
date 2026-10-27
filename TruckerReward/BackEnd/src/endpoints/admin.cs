@@ -35,7 +35,9 @@ public static class AdminEndpoints
                 await active.CountAsync(u => u.UserType == AuthEndpoints.Driver),
                 await active.CountAsync(u => u.UserType == AuthEndpoints.Sponsor),
                 await active.CountAsync(u => u.UserType == AuthEndpoints.Admin),
-                await db.Users.CountAsync(u => u.Status == User.Inactive)));
+                await db.Users.CountAsync(u => u.Status == User.Inactive),
+                await active.CountAsync(u => u.UserType == AuthEndpoints.Driver &&
+                    !db.AccountsCompanies.Any(membership => membership.AccountId == u.Id))));
         });
 
         // sort is name, created or last-login
@@ -115,6 +117,8 @@ public static class AdminEndpoints
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (req.UserType is not (AuthEndpoints.Driver or AuthEndpoints.Sponsor or AuthEndpoints.Admin))
             return Results.BadRequest(new { message = "Account type must be driver, sponsor or admin." });
+        if (req.UserType == AuthEndpoints.Driver && req.CompanyId is null)
+            return Results.BadRequest(new { message = "Pick a sponsor for the driver." });
         return await Invite(db, notifications, clock, config, "An administrator", req.UserType, req.Username, req.FirstName, req.LastName, req.Email, req.CompanyId);
     }
 
@@ -226,7 +230,7 @@ public static class AdminEndpoints
 
 public record AdminAccount(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
 
-public record AccountCounts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive);
+public record AccountCounts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive, int DriversWithoutSponsor);
 
 public record AccountStatus(string Status);
 
