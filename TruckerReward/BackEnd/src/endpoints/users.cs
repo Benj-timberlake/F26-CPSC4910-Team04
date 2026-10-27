@@ -268,7 +268,11 @@ public static class UserEndpoints
                 .Where(application => application.ApplicantId == id && application.Status == "active")
                 .Join(db.Companies.AsNoTracking(), application => application.CompanyId, c => c.Id, (application, c) => c.Name)
                 .FirstOrDefaultAsync();
-            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, memberships, effectiveCompanyId, user.Points, pendingCompany,
+            var displayedPoints = user.UserType == AuthEndpoints.Driver && effectiveCompanyId is int currentCompanyId
+                ? await db.PointsHistory.Where(history => history.UserId == id && history.CompanyId == currentCompanyId)
+                    .SumAsync(history => (long?)history.PointsDelta) ?? 0L
+                : user.Points;
+            return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, memberships, effectiveCompanyId, displayedPoints, pendingCompany,
                 user.UserType == "sponsor" ? company?.MonthlyBudget : null));
         });
 
@@ -400,7 +404,7 @@ public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, str
 public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget);
 
 public record UserCompany(int Id, string Name, bool CurrentCompanyViewed);
 

@@ -24,8 +24,9 @@ public static class PointsEndpoints
         if (user is null)
             return Results.NotFound();
 
+        var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
         var rows = await db.PointsHistory.AsNoTracking()
-            .Where(h => h.UserId == id)
+            .Where(h => h.UserId == id && companyId != null && h.CompanyId == companyId)
             .OrderByDescending(h => h.Timestamp).ThenByDescending(h => h.Id)
             .Select(h => new
             {
@@ -42,7 +43,7 @@ public static class PointsEndpoints
         var now = clock.GetUtcNow().UtcDateTime;
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         return Results.Ok(new PointsSummary(
-            user.Points,
+            rows.Sum(r => (long)r.PointsDelta),
             rows.Where(r => r.PointsDelta > 0 && r.Timestamp >= monthStart).Sum(r => (long)r.PointsDelta),
             rows.Where(r => r.PointsDelta > 0).Sum(r => (long)r.PointsDelta),
             rows.Where(r => r.PointsDelta < 0 && r.Order).Sum(r => -(long)r.PointsDelta),
@@ -61,11 +62,12 @@ public static class PointsEndpoints
         if (!await CanManage(db, actor))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
+        int? companyId = null;
         var drivers = db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Driver &&
             CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.AccountId == u.Id));
         if (actor.UserType == AuthEndpoints.Sponsor)
         {
-            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, actor.Id);
+            companyId = await CompanyMembershipQueries.FirstCompanyId(db, actor.Id);
             drivers = drivers.Where(u => CompanyMembershipQueries.FirstPerUser(db)
                 .Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId));
         }
@@ -80,19 +82,20 @@ public static class PointsEndpoints
         var rows = drivers.Select(u => new
         {
             User = u,
-            Spent = db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta),
-            Earned = db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta > 0 &&
+            Points = companyId == null ? (long)u.Points : db.PointsHistory.Where(h => h.UserId == u.Id && h.CompanyId == companyId).Sum(h => (long)h.PointsDelta),
+            Spent = db.PointsHistory.Where(h => h.UserId == u.Id && (companyId == null || h.CompanyId == companyId) && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta),
+            Earned = db.PointsHistory.Where(h => h.UserId == u.Id && (companyId == null || h.CompanyId == companyId) && h.PointsDelta > 0 &&
                 (start == null || h.Timestamp >= start) && (end == null || h.Timestamp < end)).Sum(h => (long)h.PointsDelta)
         });
         rows = sort switch
         {
-            "points" => rows.OrderByDescending(r => r.User.Points).ThenBy(r => r.User.Username),
+            "points" => rows.OrderByDescending(r => r.Points).ThenBy(r => r.User.Username),
             "spent" => rows.OrderByDescending(r => r.Spent).ThenBy(r => r.User.Username),
             "earned" => rows.OrderByDescending(r => r.Earned).ThenBy(r => r.User.Username),
             _ => rows.OrderBy(r => r.User.LastName).ThenBy(r => r.User.FirstName).ThenBy(r => r.User.Username)
         };
         return Results.Ok(await rows
-            .Select(r => new PointsDriver(r.User.Id, r.User.Username, r.User.FirstName, r.User.LastName, r.User.Email, r.User.Points, r.Spent,
+            .Select(r => new PointsDriver(r.User.Id, r.User.Username, r.User.FirstName, r.User.LastName, r.User.Email, r.Points, r.Spent,
                 from == null && to == null ? null : r.Earned))
             .ToListAsync());
     }
@@ -191,7 +194,7 @@ public static class PointsEndpoints
         var drivers = db.Users.AsNoTracking()
             .Where(u => u.UserType == AuthEndpoints.Driver && u.Status == User.Active &&
                 CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.AccountId == u.Id && membership.CompanyId == company));
-        var history = db.PointsHistory.Where(h => start == null || h.Timestamp >= start);
+        var history = db.PointsHistory.Where(h => h.CompanyId == company && (start == null || h.Timestamp >= start));
         var totals = await (category switch
         {
             "spent" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName,
@@ -199,7 +202,7 @@ public static class PointsEndpoints
             "orders" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName,
                 history.Count(h => h.UserId == u.Id && h.Carts.Any()))),
             _ => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName, start == null
-                ? u.Points
+                ? history.Where(h => h.UserId == u.Id).Sum(h => (long)h.PointsDelta)
                 : history.Where(h => h.UserId == u.Id && h.PointsDelta > 0).Sum(h => (long)h.PointsDelta)))
         }).ToListAsync();
 
@@ -227,9 +230,9 @@ public record RemoveDriverRequest(string? Reason);
 public record ChangePointsRequest(int Points, string? Reason);
 
 // earned is null without a date range
-public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent, long? Earned = null);
+public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned = null);
 
 // by is null for orders
 public record PointsEntry(DateTime? At, int Points, string Reason, string? By);
 
-public record PointsSummary(int Balance, long EarnedThisMonth, long Earned, long Spent, long Deducted, List<PointsEntry> History);
+public record PointsSummary(long Balance, long EarnedThisMonth, long Earned, long Spent, long Deducted, List<PointsEntry> History);

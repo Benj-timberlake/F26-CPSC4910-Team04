@@ -303,6 +303,6 @@
         _ => $"through {to:MMM d}"
     };
 
-    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent, long? Earned);
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned);
     private sealed record Problem(string? Message);
 }

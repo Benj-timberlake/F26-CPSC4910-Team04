@@ -614,10 +614,10 @@
         }
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, List<CompanyMembership>? Companies, int? CompanyId, int Points, string? PendingCompanyName, decimal? MonthlyBudget);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, List<CompanyMembership>? Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget);
     private sealed record CompanyMembership(int Id, string Name, bool CurrentCompanyViewed);
     private sealed record CompanyOption(int Id, string Name, string? Description);
-    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points);
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, long Points);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
     private sealed record CancelApplicationRequest(string Reasoning);
 }
