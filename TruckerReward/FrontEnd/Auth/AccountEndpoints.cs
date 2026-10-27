@@ -13,6 +13,9 @@ public static class AccountEndpoints
 {
     public static void MapAccountEndpoints(this WebApplication app)
     {
+        // where password managers look for the change-password page
+        app.MapGet("/.well-known/change-password", () => Results.Redirect("/account/password"));
+
         app.MapPost("/account/login", async (
             [FromForm] string username,
             [FromForm] string password,
