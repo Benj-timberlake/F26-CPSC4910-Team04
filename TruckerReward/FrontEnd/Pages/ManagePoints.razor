@@ -35,7 +35,12 @@
                 <option value="name">Sort by name</option>
                 <option value="points">Highest balance first</option>
                 <option value="spent">Most points spent first</option>
+                <option value="earned">Most points earned first</option>
             </select>
+            <label for="from">From</label>
+            <input id="from" type="date" @bind="from" />
+            <label for="to">To</label>
+            <input id="to" type="date" @bind="to" />
             <button type="submit" class="tr-btn">Search</button>
         </form>
 
@@ -57,6 +62,10 @@
                             <th>Email</th>
                             <th>Points</th>
                             <th>Spent</th>
+                            @if (ranged)
+                            {
+                                <th>Earned @RangeLabel</th>
+                            }
                             <th></th>
                         </tr>
                     </thead>
@@ -68,6 +77,10 @@
                                 <td>@d.Email</td>
                                 <td class="balance">@d.Points.ToString("N0")</td>
                                 <td class="spent">@d.Spent.ToString("N0")</td>
+                                @if (ranged)
+                                {
+                                    <td class="earned">@d.Earned?.ToString("N0")</td>
+                                }
                                 <td>
                                     @if (removing == d.Id)
                                     {
@@ -117,6 +130,8 @@
 
     .search {
         display: flex;
+        flex-wrap: wrap;
+        align-items: center;
         gap: 8px;
         margin-bottom: 16px;
     }
@@ -145,6 +160,9 @@
     private List<Driver>? drivers;
     private string? search;
     private string sort = "name";
+    private DateOnly? from;
+    private DateOnly? to;
+    private bool ranged;
     private int? editing;
     private int? removing;
     private int? amount;
@@ -180,6 +198,8 @@
             var query = new List<string>();
             if (!string.IsNullOrWhiteSpace(search)) query.Add("search=" + Uri.EscapeDataString(search.Trim()));
             if (sort != "name") query.Add("sort=" + sort);
+            if (from is not null) query.Add($"from={from:yyyy-MM-dd}");
+            if (to is not null) query.Add($"to={to:yyyy-MM-dd}");
             var url = $"users/{id}/points/drivers" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
             var response = await client.GetAsync(url);
             // sponsors without a company get a 403
@@ -188,8 +208,14 @@
                 noCompany = true;
                 return;
             }
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message;
+                return;
+            }
             response.EnsureSuccessStatusCode();
             drivers = await response.Content.ReadFromJsonAsync<List<Driver>>() ?? [];
+            ranged = from is not null || to is not null;
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
@@ -217,7 +243,10 @@
             if (response.IsSuccessStatusCode)
             {
                 var updated = await response.Content.ReadFromJsonAsync<Driver>();
-                drivers = drivers!.Select(x => x.Id == d.Id && updated is not null ? updated : x).ToList();
+                if (ranged)
+                    await Load();
+                else
+                    drivers = drivers!.Select(x => x.Id == d.Id && updated is not null ? updated : x).ToList();
                 notice = $"{d.Username} now has {updated?.Points.ToString("N0")} points.";
                 editing = null;
             }
@@ -267,6 +296,13 @@
         busy = false;
     }
 
-    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent);
+    private string RangeLabel => (from, to) switch
+    {
+        ({ } f, { } t) => $"{f:MMM d} to {t:MMM d}",
+        ({ } f, null) => $"since {f:MMM d}",
+        _ => $"through {to:MMM d}"
+    };
+
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent, long? Earned);
     private sealed record Problem(string? Message);
 }
