@@ -34,9 +34,9 @@ public sealed class PointsNotificationTests : IAsyncDisposable
         var response = await client.PostAsync($"/users/{id}/cart/send-order", null);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        var saved = Assert.Single(await NotificationsFor(id));
-        Assert.Equal("350 points deducted", saved.Subject);
-        Assert.Equal("Your order was placed. Your balance is now 650 points.", saved.Body);
+        var saved = await NotificationsFor(id);
+        Assert.Equal(["350 points deducted", "Your order is pending"], saved.Select(n => n.Subject));
+        Assert.Equal("Your order was placed. Your balance is now 650 points.", saved[0].Body);
         Assert.Empty(app.Email.Sent);
     }
 
@@ -164,7 +164,7 @@ public sealed class PointsNotificationTests : IAsyncDisposable
 
         await client.PostAsync($"/users/{id}/cart/send-order", null);
 
-        Assert.Single(await app.Db().NotificationsHistories.ToListAsync());
+        Assert.All(await app.Db().NotificationsHistories.ToListAsync(), n => Assert.Equal(id, n.UserId));
     }
 
     private static User User(string name, string type, int companyId, int points = 0) => new()

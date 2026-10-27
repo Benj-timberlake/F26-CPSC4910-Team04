@@ -173,6 +173,7 @@ public static class CartEndpoints
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
             await notifications.PointsChanged(user, history.PointsDelta, "Your order was placed.");
+            await notifications.OrderPlaced(user, items);
             await notifications.DriverPurchased(user, items, -history.PointsDelta);
             return Results.NoContent();
         });
