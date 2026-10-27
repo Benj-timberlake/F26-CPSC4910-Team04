@@ -165,7 +165,7 @@ public static class PointsEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> Leaderboard(int id, string? period, int? companyId, AppDbContext db, TimeProvider clock)
+    private static async Task<IResult> Leaderboard(int id, string? period, string? category, int? companyId, AppDbContext db, TimeProvider clock)
     {
         var viewer = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (viewer is null)
@@ -180,6 +180,9 @@ public static class PointsEndpoints
         };
         if (period is not ("all" or "month" or "week"))
             return Results.BadRequest(new { message = "Period must be all, month or week." });
+        category = string.IsNullOrEmpty(category) ? "points" : category;
+        if (category is not ("points" or "spent" or "orders"))
+            return Results.BadRequest(new { message = "Category must be points, spent or orders." });
         var company = viewer.UserType == AuthEndpoints.Admin ? companyId : await CompanyMembershipQueries.FirstCompanyId(db, id);
         if (company is null)
             return Results.BadRequest(new { message = "Pick a sponsor to see its leaderboard." });
@@ -187,12 +190,16 @@ public static class PointsEndpoints
         var drivers = db.Users.AsNoTracking()
             .Where(u => u.UserType == AuthEndpoints.Driver && u.Status == User.Active &&
                 CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.AccountId == u.Id && membership.CompanyId == company));
-        var totals = await drivers.Select(u => new
+        var history = db.PointsHistory.Where(h => start == null || h.Timestamp >= start);
+        var totals = await (category switch
         {
-            u.Id, u.Username, u.FirstName, u.LastName,
-            Points = start == null
+            "spent" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName,
+                history.Where(h => h.UserId == u.Id && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta))),
+            "orders" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName,
+                history.Count(h => h.UserId == u.Id && h.Carts.Any()))),
+            _ => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName, start == null
                 ? u.Points
-                : db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta > 0 && h.Timestamp >= start).Sum(h => (long)h.PointsDelta)
+                : history.Where(h => h.UserId == u.Id && h.PointsDelta > 0).Sum(h => (long)h.PointsDelta)))
         }).ToListAsync();
 
         var ordered = totals.OrderByDescending(t => t.Points).ThenBy(t => t.Username).ToList();
@@ -200,6 +207,8 @@ public static class PointsEndpoints
         var rows = ordered.Select(t => new LeaderboardRow(ordered.FindIndex(o => o.Points == t.Points) + 1, t.Id, t.Username, t.FirstName, t.LastName, t.Points)).ToList();
         return Results.Ok(new Leaderboard(period, rows.FirstOrDefault(r => r.Id == id)?.Rank, rows));
     }
+
+    private sealed record Total(int Id, string Username, string FirstName, string LastName, long Points);
 
     // admins or sponsors with a company
     internal static async Task<bool> CanManage(AppDbContext db, User actor) =>

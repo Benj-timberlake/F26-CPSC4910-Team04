@@ -14,6 +14,11 @@
             <option value="month">This month</option>
             <option value="week">This week</option>
         </select>
+        <select aria-label="Category" @bind="category">
+            <option value="points">Points</option>
+            <option value="spent">Points spent</option>
+            <option value="orders">Orders</option>
+        </select>
         @if (admin)
         {
             <select aria-label="Sponsor" @bind="companyId">
@@ -57,7 +62,7 @@
         <ol class="top5">
             @foreach (var r in board.Rows.Take(5))
             {
-                <li>#@r.Rank @r.FirstName @r.LastName (@r.Username): @r.Points.ToString("N0")</li>
+                <li>#@r.Rank @r.FirstName @r.LastName (@r.Username): @r.Points.ToString("N0")@Unit</li>
             }
         </ol>
 
@@ -85,7 +90,7 @@
                     <tr>
                         <th>Rank</th>
                         <th>Driver</th>
-                        <th>@(period == "all" ? "Points" : "Points earned")</th>
+                        <th>@Heading</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -128,6 +133,9 @@
     private bool admin;
     private bool manager;
     private string period = "all";
+    private string category = "points";
+    // period and category of the loaded board
+    private (string Period, string Category) shown = ("all", "points");
     private int companyId;
     private List<Company> companies = [];
     private Board? board;
@@ -170,7 +178,8 @@
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.GetAsync($"users/{id}/leaderboard?period={period}" + (admin ? $"&companyId={companyId}" : ""));
+            var response = await client.GetAsync($"users/{id}/leaderboard?period={period}" +
+                (category != "points" ? $"&category={category}" : "") + (admin ? $"&companyId={companyId}" : ""));
             if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
             {
                 board = null;
@@ -179,6 +188,7 @@
             }
             response.EnsureSuccessStatusCode();
             board = await response.Content.ReadFromJsonAsync<Board>();
+            shown = (period, category);
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
@@ -186,12 +196,28 @@
         }
     }
 
-    private string AwardReason => period switch
+    private string When => shown.Period switch
     {
-        "week" => "Top driver this week",
-        "month" => "Top driver this month",
-        _ => "Top driver overall"
+        "week" => "this week",
+        "month" => "this month",
+        _ => "overall"
     };
+
+    private string AwardReason => shown.Category switch
+    {
+        "spent" => $"Most points spent {When}",
+        "orders" => $"Most orders {When}",
+        _ => $"Top driver {When}"
+    };
+
+    private string Heading => shown.Category switch
+    {
+        "spent" => "Points spent",
+        "orders" => "Orders",
+        _ => shown.Period == "all" ? "Points" : "Points earned"
+    };
+
+    private string Unit => shown.Category == "orders" ? " orders" : "";
 
     private async Task Award(Row top)
     {

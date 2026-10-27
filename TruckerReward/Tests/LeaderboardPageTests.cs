@@ -76,6 +76,24 @@ public sealed class LeaderboardPageTests : TestContext
     }
 
     [Fact]
+    public void AwardFollowsTheCategory()
+    {
+        backend.Routes["GET /users/5/leaderboard?period=all"] = (HttpStatusCode.OK, Board(null, 3));
+        backend.Routes["GET /users/5/leaderboard?period=month&category=orders"] = (HttpStatusCode.OK, Board(null, 3));
+        var page = Render("sponsor", 5);
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+
+        page.Find("select[aria-label=Period]").Change("month");
+        page.Find("select[aria-label=Category]").Change("orders");
+        page.Find("form").Submit();
+        page.WaitForAssertion(() => Assert.Contains("Orders", page.Find("thead").TextContent));
+        page.Find("button.award").Click();
+
+        Assert.Equal("Most orders this month", page.Find("input[aria-label='Award reason']").GetAttribute("value"));
+        Assert.EndsWith("999 orders", page.Find(".top5 li").TextContent);
+    }
+
+    [Fact]
     public void AdminPicksASponsorFirst()
     {
         backend.Routes["GET /companies"] = (HttpStatusCode.OK, """[{"id":2,"name":"Acme","description":null}]""");
