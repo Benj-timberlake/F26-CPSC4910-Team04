@@ -104,6 +104,22 @@ public sealed class AdminAccountsPageTests : TestContext
     }
 
     [Fact]
+    public void DeletingAsksFirstThenReloads()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["DELETE /admin/accounts/8?adminId=4"] = (HttpStatusCode.NoContent, "");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody button.delete"));
+
+        page.Find("tbody button.delete").Click();
+        Assert.DoesNotContain(backend.Requests, r => r.StartsWith("DELETE"));
+        page.Find("tbody button.delete").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("bob was deleted.", page.Find(".tr-alert-success").TextContent));
+        Assert.Equal(2, backend.Requests.Count(r => r == "GET /admin/accounts"));
+    }
+
+    [Fact]
     public void RefusalIsShown()
     {
         backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
