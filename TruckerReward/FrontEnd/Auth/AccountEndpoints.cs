@@ -65,11 +65,12 @@ return Results.LocalRedirect(SafeReturn(returnUrl));
             [FromForm] string userType,
             [FromForm] string? phoneNumber,
             [FromForm] string? address,
+            [FromForm] int? companyId,
             HttpContext http,
             IHttpClientFactory clients) =>
         {
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/register",
-                new { username, firstName, lastName, email, password, userType, phoneNumber, address });
+                new { username, firstName, lastName, email, password, userType, phoneNumber, address, companyId });
 
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/register?error=" + await ErrorParam(response, "Could not create the account."));

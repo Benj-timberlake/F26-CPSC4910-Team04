@@ -45,6 +45,27 @@ public sealed class AuthEndpointTests : IAsyncDisposable
         Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task DriversApplyToTheirSponsorWhenTheyRegister()
+    {
+        var client = await Start();
+        var acme = new Company { Name = "Acme" };
+        using (var db = Db())
+        {
+            db.Add(acme);
+            await db.SaveChangesAsync();
+        }
+
+        var bad = await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver", companyId = 999 });
+        var good = await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver", companyId = acme.Id });
+
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, good.StatusCode);
+        var application = await Db().Applications.SingleAsync();
+        Assert.Equal((acme.Id, "active"), (application.CompanyId, application.Status));
+        Assert.True(await Db().NotificationsHistories.AnyAsync(n => n.Body.Contains("We received your application to Acme")));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("Short7!")]

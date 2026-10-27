@@ -78,6 +78,20 @@ public sealed class AdminAccountsPageTests : TestContext
     }
 
     [Fact]
+    public void DriversWithoutASponsorAreOneClickAway()
+    {
+        backend.Routes["GET /admin/accounts/counts"] = (HttpStatusCode.OK, """{"activeDrivers":12,"activeSponsors":3,"activeAdmins":1,"inactive":2,"driversWithoutSponsor":4}""");
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["GET /admin/accounts?type=driver&noSponsor=true&status=active"] = (HttpStatusCode.OK, "[]");
+        var page = Render();
+        page.WaitForAssertion(() => Assert.Equal("4", page.Find("button.no-sponsor").TextContent));
+
+        page.Find("button.no-sponsor").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("No accounts match.", page.Markup));
+    }
+
+    [Fact]
     public void ShowsActiveCounts()
     {
         backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
