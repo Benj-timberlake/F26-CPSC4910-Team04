@@ -16,6 +16,7 @@ public static class CartEndpoints
                 .Where(item => item.User.UserType == "driver" && db.AccountsCompanies
                     .Any(membership => membership.AccountId == item.UserId && membership.CompanyId == companyId)
                     && !item.WasOrdered && !item.InCart && item.PointsHistory != null
+                    && item.PointsHistory.CompanyId == companyId
                     && item.PointsHistory.UserId == item.UserId && item.PointsHistory.RejectionReason == null).ToListAsync();
             var orderIds = items.Select(item => item.PointsHistoryId!.Value).Distinct().ToList();
             var reasons = await db.AuditHistories.AsNoTracking().Where(a => orderIds.Contains(a.PointsHistoryId))
@@ -35,7 +36,8 @@ public static class CartEndpoints
             var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
             if (sponsor is null) return Results.NotFound();
             if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
-            if (sponsor.CompanyId is null) return Results.NotFound();
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null) return Results.NotFound();
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             var driverId = await db.PointsHistory.Where(h => h.Id == orderId).Select(h => (int?)h.UserId).SingleOrDefaultAsync();
             if (driverId is null) return Results.NotFound();
@@ -44,7 +46,8 @@ public static class CartEndpoints
             // cart table from a subquery inside the same UPDATE statement.
             var eligible = await db.CartItems.Where(item => item.PointsHistoryId == orderId
                     && !item.InCart && !item.WasOrdered && item.User.UserType == "driver"
-                    && item.User.CompanyId == sponsor.CompanyId && item.PointsHistory != null
+                    && db.AccountsCompanies.Any(membership => membership.AccountId == item.UserId && membership.CompanyId == companyId)
+                    && item.PointsHistory != null && item.PointsHistory.CompanyId == companyId
                     && item.PointsHistory.UserId == item.UserId && item.PointsHistory.RejectionReason == null).Select(item => item.Id).ToListAsync();
             if (eligible.Count == 0) return Results.NotFound();
             var changed = await db.CartItems.Where(item => eligible.Contains(item.Id)
@@ -53,7 +56,7 @@ public static class CartEndpoints
             if (changed == 0) return Results.NotFound();
             var bought = await db.CartItems.AsNoTracking().Include(item => item.User).Where(item => eligible.Contains(item.Id)).ToListAsync();
             await transaction.CommitAsync();
-            await notifications.OrderSent(bought[0].User, bought);
+            await notifications.OrderSent(bought[0].User, bought, companyId.Value);
             return Results.NoContent();
         });
 
@@ -65,14 +68,16 @@ public static class CartEndpoints
             var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id);
             if (sponsor is null) return Results.NotFound();
             if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
-            if (sponsor.CompanyId is null) return Results.NotFound();
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null) return Results.NotFound();
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             var driverId = await db.PointsHistory.Where(h => h.Id == orderId).Select(h => (int?)h.UserId).SingleOrDefaultAsync();
             if (driverId is null) return Results.NotFound();
             await db.Users.Where(u => u.Id == driverId).ExecuteUpdateAsync(update => update.SetProperty(u => u.Points, u => u.Points));
-            var driver = await db.Users.SingleOrDefaultAsync(u => u.Id == driverId && u.UserType == "driver" && u.CompanyId == sponsor.CompanyId);
+            var driver = await db.Users.SingleOrDefaultAsync(u => u.Id == driverId && u.UserType == "driver"
+                && db.AccountsCompanies.Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId));
             if (driver is null) return Results.NotFound();
-            var history = await db.PointsHistory.SingleOrDefaultAsync(h => h.Id == orderId && h.UserId == driver.Id);
+            var history = await db.PointsHistory.SingleOrDefaultAsync(h => h.Id == orderId && h.UserId == driver.Id && h.CompanyId == companyId);
             var items = await db.CartItems.Where(i => i.PointsHistoryId == orderId).ToListAsync();
             if (history is null || items.Count == 0 || items.Any(i => i.UserId != driver.Id || i.InCart)) return Results.NotFound();
             if (history.RejectionReason != null || items.Any(i => i.WasOrdered))
@@ -82,12 +87,12 @@ public static class CartEndpoints
                 return Results.BadRequest(new { message = "The refund would exceed the maximum points balance." });
             driver.Points += (int)refund;
             history.RejectionReason = reason;
-            var credit = new PointsHistory { UserId = driver.Id, PointsDelta = (int)refund, Timestamp = clock.GetUtcNow().UtcDateTime };
+            var credit = new PointsHistory { UserId = driver.Id, CompanyId = history.CompanyId, PointsDelta = (int)refund, Timestamp = clock.GetUtcNow().UtcDateTime };
             db.PointsHistory.Add(credit);
             db.AuditHistories.Add(new AuditHistory { UserId = id, PointsHistory = credit, Resoning = reason });
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            await notifications.PointsChanged(driver, (int)refund, "Your sponsor rejected your order: " + reason);
+            await notifications.PointsChanged(driver, (int)refund, "Your sponsor rejected your order: " + reason, history.CompanyId);
             return Results.NoContent();
         });
 

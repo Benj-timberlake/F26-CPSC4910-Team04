@@ -9,6 +9,8 @@ public partial class PointsHistory
 
     public int UserId { get; set; }
 
+    public int CompanyId { get; set; }
+
     public DateTime? Timestamp { get; set; }
 
     public int PointsDelta { get; set; }

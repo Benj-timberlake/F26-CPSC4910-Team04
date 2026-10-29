@@ -10,9 +10,11 @@ public static class CatalogEndpoints
             var driver = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id);
             if (driver is null) return Results.NotFound();
             if (driver.UserType != "driver") return Results.StatusCode(403);
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
             var items = await db.WishlistItems.AsNoTracking().Where(w => w.UserId == id
                 && db.CatalogItems.Any(c => c.ItemId == w.ItemId && db.Users.Any(s => s.Id == c.SponsorId
-                    && s.UserType == "sponsor" && s.CompanyId == driver.CompanyId && driver.CompanyId != null)))
+                    && s.UserType == "sponsor" && companyId != null && db.AccountsCompanies
+                        .Any(membership => membership.AccountId == s.Id && membership.CompanyId == companyId))))
                 .OrderBy(w => w.ItemId).Select(w => w.ItemId).ToListAsync();
             return Results.Ok(items);
         });
@@ -27,8 +29,10 @@ public static class CatalogEndpoints
                 await db.WishlistItems.Where(w => w.UserId == id && w.ItemId == request.ItemId).ExecuteDeleteAsync();
                 return Results.NoContent();
             }
-            if (driver.CompanyId == null || !await db.CatalogItems.AnyAsync(c => c.ItemId == request.ItemId
-                && db.Users.Any(s => s.Id == c.SponsorId && s.UserType == "sponsor" && s.CompanyId == driver.CompanyId)))
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId == null || !await db.CatalogItems.AnyAsync(c => c.ItemId == request.ItemId
+                && db.Users.Any(s => s.Id == c.SponsorId && s.UserType == "sponsor" && db.AccountsCompanies
+                    .Any(membership => membership.AccountId == s.Id && membership.CompanyId == companyId))))
                 return Results.NotFound();
             // Serialize saves for this driver so repeat requests cannot create duplicate favorites.
             await using var transaction = await db.Database.BeginTransactionAsync();
