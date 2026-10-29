@@ -85,7 +85,9 @@ public sealed class CatalogEndpointTests
         var other = NewUser("driver");
         other.Username = "other";
         other.Email = "other@example.com";
-        driver.CompanyId = sponsor.CompanyId = other.CompanyId = company.Id;
+        driver.AccountsCompanies.Add(new AccountsCompany { CompanyId = company.Id });
+        sponsor.AccountsCompanies.Add(new AccountsCompany { CompanyId = company.Id });
+        other.AccountsCompanies.Add(new AccountsCompany { CompanyId = company.Id });
         db.Users.AddRange(driver, sponsor, other);
         await db.SaveChangesAsync();
         db.CatalogItems.Add(new CatalogItem { SponsorId = sponsor.Id, ItemId = "gps" });
@@ -99,7 +101,7 @@ public sealed class CatalogEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync(path, new UpdateWishlist("outside-catalog", true))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync($"/users/{sponsor.Id}/wishlist", new UpdateWishlist("gps", true))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/users/{sponsor.Id}/wishlist")).StatusCode);
-        driver.CompanyId = null;
+        db.AccountsCompanies.RemoveRange(driver.AccountsCompanies);
         await db.SaveChangesAsync();
         Assert.Empty((await client.GetFromJsonAsync<string[]>(path))!);
         Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsJsonAsync(path, new UpdateWishlist("gps", false))).StatusCode);
