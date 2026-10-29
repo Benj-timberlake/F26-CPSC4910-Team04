@@ -95,7 +95,7 @@ public sealed class AdminAccountsTests : IAsyncDisposable
 
         var counts = await client.GetFromJsonAsync<AccountCounts>("/admin/accounts/counts");
 
-        Assert.Equal(new AccountCounts(1, 1, 1, 1), counts);
+        Assert.Equal(new AccountCounts(1, 1, 1, 1, 1), counts);
     }
 
     [Fact]
@@ -109,7 +109,9 @@ public sealed class AdminAccountsTests : IAsyncDisposable
             db.Add(company);
             await db.SaveChangesAsync();
             acme = company.Id;
-            await db.Users.Where(u => u.Username == "bob" || u.Username == "sue").ExecuteUpdateAsync(u => u.SetProperty(x => x.CompanyId, acme));
+            var ids = await db.Users.Where(u => u.Username == "bob" || u.Username == "sue").Select(u => u.Id).ToListAsync();
+            db.AccountsCompanies.AddRange(ids.Select(id => new AccountsCompany { AccountId = id, CompanyId = acme }));
+            await db.SaveChangesAsync();
         }
 
         Assert.Equal(["bob", "sue"], (await List($"?companyId={acme}")).Select(a => a.Username).Order());
@@ -125,7 +127,9 @@ public sealed class AdminAccountsTests : IAsyncDisposable
             var company = new Company { Name = "Acme" };
             db.Add(company);
             await db.SaveChangesAsync();
-            await db.Users.Where(u => u.Username == "bob").ExecuteUpdateAsync(u => u.SetProperty(x => x.CompanyId, company.Id));
+            var bobId = await db.Users.Where(u => u.Username == "bob").Select(u => u.Id).SingleAsync();
+            db.AccountsCompanies.Add(new AccountsCompany { AccountId = bobId, CompanyId = company.Id });
+            await db.SaveChangesAsync();
         }
 
         Assert.Equal(["amy", "sue"], (await List("?noSponsor=true")).Select(a => a.Username).Order());
@@ -159,7 +163,9 @@ public sealed class AdminAccountsTests : IAsyncDisposable
         Assert.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
         using var check = app.Db();
         var saved = await check.Users.SingleAsync(u => u.Id == bob);
-        Assert.Equal(("Robert", "rob@example.com", "555", "1 Main St", (int?)acme), (saved.FirstName, saved.Email, saved.PhoneNumber, saved.Address, saved.CompanyId));
+        Assert.Equal(("Robert", "rob@example.com", "555", "1 Main St", (int?)acme),
+            (saved.FirstName, saved.Email, saved.PhoneNumber, saved.Address,
+                await check.AccountsCompanies.Where(membership => membership.AccountId == bob).Select(membership => (int?)membership.CompanyId).FirstOrDefaultAsync()));
         Assert.Equal("bob@example.com", Assert.Single(app.Email.Sent).To);
     }
 
@@ -224,9 +230,10 @@ public sealed class AdminAccountsTests : IAsyncDisposable
     [Theory]
     [InlineData("sue", "driver", "kim", "kim@example.com", 403)]
     [InlineData("ann", "boss", "kim", "kim@example.com", 400)]
-    [InlineData("ann", "driver", "bob", "kim@example.com", 409)]
-    [InlineData("ann", "driver", "kim", "bob@example.com", 409)]
-    [InlineData("ann", "driver", "kim", "nope", 400)]
+    [InlineData("ann", "sponsor", "bob", "kim@example.com", 409)]
+    [InlineData("ann", "sponsor", "kim", "bob@example.com", 409)]
+    [InlineData("ann", "sponsor", "kim", "nope", 400)]
+    [InlineData("ann", "driver", "kim", "kim@example.com", 400)]
     public async Task AdminCreatesAreChecked(string actor, string type, string username, string email, int status)
     {
         await Start();
@@ -238,6 +245,53 @@ public sealed class AdminAccountsTests : IAsyncDisposable
 
         Assert.Equal(status, (int)response.StatusCode);
         Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
+    public async Task AdminDeletesAnAccountWithNoHistory()
+    {
+        await Start();
+        var (bob, ann) = (await Id("bob"), await Id("ann"));
+        using (var db = app.Db())
+        {
+            var acme = new Company { Name = "Acme" };
+            db.Add(acme);
+            await db.SaveChangesAsync();
+            db.AccountsCompanies.Add(new AccountsCompany { AccountId = bob, CompanyId = acme.Id });
+            db.Applications.Add(new Application { ApplicantId = bob, CompanyId = acme.Id, Status = "approved", ApplicationTimestamp = t0 });
+            db.NotificationsHistories.Add(new NotificationsHistory { UserId = bob, Subject = "hi", Body = "hi", Timestamp = t0 });
+            db.CartItems.Add(new CartItem { UserId = bob, Name = "Mug", Price = 1m, InCart = true });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.DeleteAsync($"/admin/accounts/{bob}?adminId={ann}");
+
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, response.StatusCode);
+        using var after = app.Db();
+        Assert.False(await after.Users.AnyAsync(u => u.Id == bob));
+        Assert.False(await after.AccountsHistories.AnyAsync(h => h.UserId == bob));
+        Assert.Equal(2, await after.LoginAttempts.CountAsync(a => a.Username == "bob" && a.UserId == null));
+    }
+
+    [Theory]
+    [InlineData("sue", "bob", 403)]
+    [InlineData("ann", "ann", 400)]
+    [InlineData("ann", "nobody", 404)]
+    [InlineData("ann", "amy", 409)]
+    public async Task AdminDeletesAreChecked(string actor, string target, int status)
+    {
+        await Start();
+        using (var db = app.Db())
+        {
+            db.PointsHistory.Add(new PointsHistory { UserId = await Id("amy"), PointsDelta = 5, Timestamp = t0 });
+            await db.SaveChangesAsync();
+        }
+        var targetId = target == "nobody" ? 999 : await Id(target);
+
+        var response = await client.DeleteAsync($"/admin/accounts/{targetId}?adminId={await Id(actor)}");
+
+        Assert.Equal(status, (int)response.StatusCode);
+        Assert.Equal(4, await app.Db().Users.CountAsync());
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();

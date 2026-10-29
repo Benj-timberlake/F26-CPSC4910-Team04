@@ -20,6 +20,19 @@
                 <option value="sponsor">Sponsor</option>
             </select>
 
+            @if (userType == "driver" && companies.Count > 0)
+            {
+                <label for="companyId">Sponsor</label>
+                <select id="companyId" name="companyId" required>
+                    <option value="">Pick the sponsor you drive for</option>
+                    @foreach (var c in companies)
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+                <p class="help">Your sponsor reviews your application before you can earn points.</p>
+            }
+
             <label for="username">Username</label>
             <input id="username" name="username" required autocomplete="username" />
 
@@ -33,7 +46,7 @@
             <input id="email" name="email" type="email" required autocomplete="email" />
 
             <label for="password">Password</label>
-            <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" />
+            <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" passwordrules="minlength: 8; required: lower; required: upper; required: digit; required: special;" />
             <p class="help">@policy</p>
 
             <label for="phoneNumber">Phone</label>
@@ -53,10 +66,22 @@
     private string userType = "driver";
     private string? error;
     private string? policy;
+    private List<Company> companies = [];
 
     protected override async Task OnInitializedAsync()
     {
         error = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["error"];
         policy = await PasswordPolicyText.Load(HttpClientFactory);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            companies = await client.GetFromJsonAsync<List<Company>>("companies") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            // drivers can still apply from their dashboard
+        }
     }
+
+    private sealed record Company(int Id, string Name);
 }

@@ -34,9 +34,9 @@ public sealed class PointsNotificationTests : IAsyncDisposable
         var response = await client.PostAsync($"/users/{id}/cart/send-order", null);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        var saved = Assert.Single(await NotificationsFor(id));
-        Assert.Equal("350 points deducted", saved.Subject);
-        Assert.Equal("Your order was placed. Your balance is now 650 points.", saved.Body);
+        var saved = await NotificationsFor(id);
+        Assert.Equal(["350 points deducted", "Your order is pending"], saved.Select(n => n.Subject));
+        Assert.Equal("Your order was placed. Your balance is now 650 points.", saved[0].Body);
         Assert.Empty(app.Email.Sent);
     }
 
@@ -89,8 +89,10 @@ public sealed class PointsNotificationTests : IAsyncDisposable
         using (var db = app.Db())
         {
             var bob = await db.Users.SingleAsync(u => u.Username == "bob");
+            var acmeId = await db.Companies.Where(company => company.Name == "Acme")
+                .Select(company => company.Id).SingleAsync();
             await new Notifications(db, app.Email, app.Clock, NullLogger<Notifications>.Instance)
-                .PointsChanged(bob, -125, "Points were deducted.");
+                .PointsChanged(bob, -125, "Points were deducted.", acmeId);
         }
 
         var saved = await app.Db().NotificationsHistories.Include(n => n.User).ToListAsync();
@@ -109,7 +111,7 @@ public sealed class PointsNotificationTests : IAsyncDisposable
             db.Add(acme);
             await db.SaveChangesAsync();
             db.Users.Add(User("sue", "sponsor", acme.Id));
-            (await db.Users.SingleAsync(u => u.Id == id)).CompanyId = acme.Id;
+            db.AccountsCompanies.Add(new AccountsCompany { AccountId = id, CompanyId = acme.Id });
             await db.SaveChangesAsync();
         }
         await client.PostAsJsonAsync($"/users/{id}/cart", new { name = "Mug", price = 3.50m, description = "A mug" });
@@ -133,7 +135,7 @@ public sealed class PointsNotificationTests : IAsyncDisposable
             db.Add(acme);
             await db.SaveChangesAsync();
             db.Users.Add(User("sue", "sponsor", acme.Id));
-            (await db.Users.SingleAsync(u => u.Id == id)).CompanyId = acme.Id;
+            db.AccountsCompanies.Add(new AccountsCompany { AccountId = id, CompanyId = acme.Id });
             await db.SaveChangesAsync();
         }
         await client.PostAsJsonAsync($"/users/{id}/cart", new { name = "Mug", price = 3.50m, description = "A mug" });
@@ -164,13 +166,14 @@ public sealed class PointsNotificationTests : IAsyncDisposable
 
         await client.PostAsync($"/users/{id}/cart/send-order", null);
 
-        Assert.Single(await app.Db().NotificationsHistories.ToListAsync());
+        Assert.All(await app.Db().NotificationsHistories.ToListAsync(), n => Assert.Equal(id, n.UserId));
     }
 
     private static User User(string name, string type, int companyId, int points = 0) => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId, Points = points
+        UserType = type, PhoneNumber = "", Address = "", Password = "x", Points = points,
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     public ValueTask DisposeAsync() => app.DisposeAsync();

@@ -22,4 +22,6 @@ public partial class PointsHistory
     public virtual ICollection<CartItem> Carts { get; set; } = new List<CartItem>();
 
     public virtual User User { get; set; } = null!;
+
+    public virtual Company Company { get; set; } = null!;
 }

@@ -24,8 +24,9 @@ public static class PointsEndpoints
         if (user is null)
             return Results.NotFound();
 
+        var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
         var rows = await db.PointsHistory.AsNoTracking()
-            .Where(h => h.UserId == id)
+            .Where(h => h.UserId == id && companyId != null && h.CompanyId == companyId)
             .OrderByDescending(h => h.Timestamp).ThenByDescending(h => h.Id)
             .Select(h => new
             {
@@ -42,7 +43,7 @@ public static class PointsEndpoints
         var now = clock.GetUtcNow().UtcDateTime;
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         return Results.Ok(new PointsSummary(
-            user.Points,
+            rows.Sum(r => (long)r.PointsDelta),
             rows.Where(r => r.PointsDelta > 0 && r.Timestamp >= monthStart).Sum(r => (long)r.PointsDelta),
             rows.Where(r => r.PointsDelta > 0).Sum(r => (long)r.PointsDelta),
             rows.Where(r => r.PointsDelta < 0 && r.Order).Sum(r => -(long)r.PointsDelta),
@@ -50,36 +51,52 @@ public static class PointsEndpoints
             entries));
     }
 
-    // sort is name, points or spent
-    private static async Task<IResult> Drivers(int id, string? search, string? sort, AppDbContext db)
+    // sort is name, points, spent or earned
+    private static async Task<IResult> Drivers(int id, string? search, string? sort, DateOnly? from, DateOnly? to, AppDbContext db)
     {
+        if (from > to)
+            return Results.BadRequest(new { message = "The start date has to be on or before the end date." });
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
             return Results.NotFound();
-        if (!CanManage(actor))
+        if (!await CanManage(db, actor))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        var drivers = db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Driver && u.CompanyId != null);
+        int? companyId = null;
+        var drivers = db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Driver &&
+            CompanyMembershipQueries.FirstPerUser(db).Any(membership => membership.AccountId == u.Id));
         if (actor.UserType == AuthEndpoints.Sponsor)
-            drivers = drivers.Where(u => u.CompanyId == actor.CompanyId);
+        {
+            companyId = await CompanyMembershipQueries.FirstCompanyId(db, actor.Id);
+            drivers = drivers.Where(u => db.AccountsCompanies
+                .Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId));
+        }
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
             drivers = drivers.Where(u => u.Username.ToLower().Contains(term) || (u.FirstName + " " + u.LastName).ToLower().Contains(term));
         }
+        DateTime? start = from?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        // to is inclusive
+        DateTime? end = to?.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var rows = drivers.Select(u => new
         {
             User = u,
-            Spent = db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta)
+            Points = companyId == null ? (long)u.Points : db.PointsHistory.Where(h => h.UserId == u.Id && h.CompanyId == companyId).Sum(h => (long)h.PointsDelta),
+            Spent = db.PointsHistory.Where(h => h.UserId == u.Id && (companyId == null || h.CompanyId == companyId) && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta),
+            Earned = db.PointsHistory.Where(h => h.UserId == u.Id && (companyId == null || h.CompanyId == companyId) && h.PointsDelta > 0 &&
+                (start == null || h.Timestamp >= start) && (end == null || h.Timestamp < end)).Sum(h => (long)h.PointsDelta)
         });
         rows = sort switch
         {
-            "points" => rows.OrderByDescending(r => r.User.Points).ThenBy(r => r.User.Username),
+            "points" => rows.OrderByDescending(r => r.Points).ThenBy(r => r.User.Username),
             "spent" => rows.OrderByDescending(r => r.Spent).ThenBy(r => r.User.Username),
+            "earned" => rows.OrderByDescending(r => r.Earned).ThenBy(r => r.User.Username),
             _ => rows.OrderBy(r => r.User.LastName).ThenBy(r => r.User.FirstName).ThenBy(r => r.User.Username)
         };
         return Results.Ok(await rows
-            .Select(r => new PointsDriver(r.User.Id, r.User.Username, r.User.FirstName, r.User.LastName, r.User.Email, r.User.Points, r.Spent))
+            .Select(r => new PointsDriver(r.User.Id, r.User.Username, r.User.FirstName, r.User.LastName, r.User.Email, r.Points, r.Spent,
+                from == null && to == null ? null : r.Earned))
             .ToListAsync());
     }
 
@@ -100,23 +117,48 @@ public static class PointsEndpoints
         await db.Users.Where(u => u.Id == driverId)
             .ExecuteUpdateAsync(update => update.SetProperty(u => u.Points, u => u.Points));
         var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == driverId && u.UserType == AuthEndpoints.Driver);
-        if (driver?.CompanyId is null)
+        List<int> driverCompanyIds = driver is null ? [] : await db.AccountsCompanies.Where(membership => membership.AccountId == driverId)
+            .Select(membership => membership.CompanyId).ToListAsync();
+        var actorCompanyId = actor.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, id) : null;
+        if (driver is null || driverCompanyIds.Count == 0)
             return Results.NotFound(new { message = "That driver isn't with a sponsor." });
-        if (!CanManage(actor) || (actor.UserType == AuthEndpoints.Sponsor && actor.CompanyId != driver.CompanyId))
+        var sponsorHasDriver = actorCompanyId is int sponsorCompany &&
+            driverCompanyIds.Contains(sponsorCompany);
+        if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && !sponsorHasDriver))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
+        int historyCompanyId;
+        if (actor.UserType == AuthEndpoints.Sponsor)
+        {
+            historyCompanyId = actorCompanyId!.Value;
+        }
+        else if (req.CompanyId is int selectedCompanyId)
+        {
+            if (!driverCompanyIds.Contains(selectedCompanyId))
+                return Results.BadRequest(new { message = "Choose a company this driver belongs to." });
+            historyCompanyId = selectedCompanyId;
+        }
+        else if (driverCompanyIds.Count == 1)
+        {
+            historyCompanyId = driverCompanyIds[0];
+        }
+        else
+        {
+            return Results.BadRequest(new { message = "Choose which company this points change is for." });
+        }
         var balance = (long)driver.Points + req.Points;
         if (balance is > int.MaxValue or < int.MinValue)
             return Results.BadRequest(new { message = "That would put the balance out of range." });
 
         driver.Points = (int)balance;
-        var history = new PointsHistory { UserId = driverId, PointsDelta = req.Points, Timestamp = clock.GetUtcNow().UtcDateTime };
+        var history = new PointsHistory { UserId = driverId, CompanyId = historyCompanyId, PointsDelta = req.Points, Timestamp = clock.GetUtcNow().UtcDateTime };
         db.PointsHistory.Add(history);
         db.AuditHistories.Add(new AuditHistory { UserId = actor.Id, PointsHistory = history, Resoning = reason });
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
-        await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.')}.");
-        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
-        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, driver.Points, spent));
+        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
+        var displayedPoints = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId).SumAsync(h => (long)h.PointsDelta);
+        await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.') }.", historyCompanyId, actor.Username);
+        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent));
     }
 
     // cancels the accepted application to allow reapplying
@@ -127,14 +169,32 @@ public static class PointsEndpoints
             return Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." });
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == driverId && u.UserType == AuthEndpoints.Driver);
-        if (actor is null || driver?.CompanyId is not { } company)
+        var driverCompanyId = driver is null ? null : await CompanyMembershipQueries.FirstCompanyId(db, driverId);
+        var actorCompanyId = actor?.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, id) : null;
+        if (actor is null || driver is null || driverCompanyId is null)
             return Results.NotFound(new { message = "That driver isn't with a sponsor." });
-        if (!CanManage(actor) || (actor.UserType == AuthEndpoints.Sponsor && actor.CompanyId != company))
+        var company = actor.UserType == AuthEndpoints.Sponsor ? actorCompanyId : driverCompanyId;
+        if (!await CanManage(db, actor) || company is null)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var companyToRemove = company.Value;
+        var belongsToCompany = await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == companyToRemove);
+        if (!belongsToCompany)
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-        driver.CompanyId = null;
+        var wasCurrent = await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == driverId && membership.CompanyId == companyToRemove && membership.CurrentCompanyViewed);
+
+        await db.AccountsCompanies.Where(membership => membership.AccountId == driverId && membership.CompanyId == companyToRemove)
+            .ExecuteDeleteAsync();
+        if (wasCurrent)
+        {
+            var nextCompany = await db.AccountsCompanies.Where(membership => membership.AccountId == driverId)
+                .OrderBy(membership => membership.CompanyId).Select(membership => (int?)membership.CompanyId).FirstOrDefaultAsync();
+            if (nextCompany is int next)
+                await db.AccountsCompanies.Where(membership => membership.AccountId == driverId && membership.CompanyId == next)
+                    .ExecuteUpdateAsync(update => update.SetProperty(membership => membership.CurrentCompanyViewed, true));
+        }
         var now = clock.GetUtcNow().UtcDateTime;
-        foreach (var application in await db.Applications.Where(a => a.ApplicantId == driverId && a.CompanyId == company && a.Status == "approved").ToListAsync())
+        foreach (var application in await db.Applications.Where(a => a.ApplicantId == driverId && a.CompanyId == companyToRemove && a.Status == "approved").ToListAsync())
         {
             application.Status = "canceled";
             application.ReviewerId = actor.Id;
@@ -142,11 +202,11 @@ public static class PointsEndpoints
             application.ResponseTimestamp = now;
         }
         await db.SaveChangesAsync();
-        await notifications.DriverRemoved(driver, company, reason);
+        await notifications.DriverRemoved(driver, companyToRemove, reason);
         return Results.NoContent();
     }
 
-    private static async Task<IResult> Leaderboard(int id, string? period, int? companyId, AppDbContext db, TimeProvider clock)
+    private static async Task<IResult> Leaderboard(int id, string? period, string? category, int? companyId, AppDbContext db, TimeProvider clock)
     {
         var viewer = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (viewer is null)
@@ -161,18 +221,26 @@ public static class PointsEndpoints
         };
         if (period is not ("all" or "month" or "week"))
             return Results.BadRequest(new { message = "Period must be all, month or week." });
-        var company = viewer.UserType == AuthEndpoints.Admin ? companyId : viewer.CompanyId;
+        category = string.IsNullOrEmpty(category) ? "points" : category;
+        if (category is not ("points" or "spent" or "orders"))
+            return Results.BadRequest(new { message = "Category must be points, spent or orders." });
+        var company = viewer.UserType == AuthEndpoints.Admin ? companyId : await CompanyMembershipQueries.FirstCompanyId(db, id);
         if (company is null)
             return Results.BadRequest(new { message = "Pick a sponsor to see its leaderboard." });
 
         var drivers = db.Users.AsNoTracking()
-            .Where(u => u.UserType == AuthEndpoints.Driver && u.CompanyId == company && u.Status == User.Active);
-        var totals = await drivers.Select(u => new
+            .Where(u => u.UserType == AuthEndpoints.Driver && u.Status == User.Active &&
+                db.AccountsCompanies.Any(membership => membership.AccountId == u.Id && membership.CompanyId == company));
+        var history = db.PointsHistory.Where(h => h.CompanyId == company && (start == null || h.Timestamp >= start));
+        var totals = await (category switch
         {
-            u.Id, u.Username, u.FirstName, u.LastName,
-            Points = start == null
-                ? u.Points
-                : db.PointsHistory.Where(h => h.UserId == u.Id && h.PointsDelta > 0 && h.Timestamp >= start).Sum(h => (long)h.PointsDelta)
+            "spent" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName,
+                history.Where(h => h.UserId == u.Id && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta))),
+            "orders" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName,
+                history.Count(h => h.UserId == u.Id && h.Carts.Any()))),
+            _ => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName, start == null
+                ? history.Where(h => h.UserId == u.Id).Sum(h => (long)h.PointsDelta)
+                : history.Where(h => h.UserId == u.Id && h.PointsDelta > 0).Sum(h => (long)h.PointsDelta)))
         }).ToListAsync();
 
         var ordered = totals.OrderByDescending(t => t.Points).ThenBy(t => t.Username).ToList();
@@ -181,9 +249,12 @@ public static class PointsEndpoints
         return Results.Ok(new Leaderboard(period, rows.FirstOrDefault(r => r.Id == id)?.Rank, rows));
     }
 
+    private sealed record Total(int Id, string Username, string FirstName, string LastName, long Points);
+
     // admins or sponsors with a company
-    internal static bool CanManage(User actor) =>
-        actor.UserType == AuthEndpoints.Admin || (actor.UserType == AuthEndpoints.Sponsor && actor.CompanyId is not null);
+    internal static async Task<bool> CanManage(AppDbContext db, User actor) =>
+        actor.UserType == AuthEndpoints.Admin || (actor.UserType == AuthEndpoints.Sponsor &&
+            await CompanyMembershipQueries.FirstCompanyId(db, actor.Id) is not null);
 }
 
 public record LeaderboardRow(int Rank, int Id, string Username, string FirstName, string LastName, long Points);
@@ -193,11 +264,12 @@ public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Row
 
 public record RemoveDriverRequest(string? Reason);
 
-public record ChangePointsRequest(int Points, string? Reason);
+public record ChangePointsRequest(int Points, string? Reason, int? CompanyId = null);
 
-public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, int Points, long Spent);
+// earned is null without a date range
+public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned = null);
 
 // by is null for orders
 public record PointsEntry(DateTime? At, int Points, string Reason, string? By);
 
-public record PointsSummary(int Balance, long EarnedThisMonth, long Earned, long Spent, long Deducted, List<PointsEntry> History);
+public record PointsSummary(long Balance, long EarnedThisMonth, long Earned, long Spent, long Deducted, List<PointsEntry> History);

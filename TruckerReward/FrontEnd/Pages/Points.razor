@@ -118,5 +118,5 @@
     }
 
     private sealed record Entry(DateTime? At, int Points, string Reason, string? By);
-    private sealed record Summary(int Balance, long EarnedThisMonth, long Earned, long Spent, long Deducted, List<Entry> History);
+    private sealed record Summary(long Balance, long EarnedThisMonth, long Earned, long Spent, long Deducted, List<Entry> History);
 }

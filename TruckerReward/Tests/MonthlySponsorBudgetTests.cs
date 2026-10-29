@@ -53,6 +53,7 @@ public sealed class MonthlySponsorBudgetTests
     {
         Username = name, FirstName = name, LastName = "Test",
         Email = name + "@example.com", PhoneNumber = "", UserType = type,
-        CompanyId = companyId, Points = 25, BudgetResetMonth = new DateTime(2026, 10, 1)
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : [],
+        Points = 25, BudgetResetMonth = new DateTime(2026, 10, 1)
     };
 }

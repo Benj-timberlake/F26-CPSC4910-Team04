@@ -16,6 +16,10 @@
             <div><dt>Active sponsors</dt><dd class="sponsors">@counts.ActiveSponsors</dd></div>
             <div><dt>Active admins</dt><dd>@counts.ActiveAdmins</dd></div>
             <div><dt>Deactivated</dt><dd>@counts.Inactive</dd></div>
+            <div>
+                <dt>Drivers without a sponsor</dt>
+                <dd><button type="button" class="link no-sponsor" @onclick="ShowUnsponsored">@counts.DriversWithoutSponsor</button></dd>
+            </div>
         </dl>
     }
 
@@ -67,7 +71,7 @@
             @if (creating.UserType != "admin")
             {
                 <select aria-label="New account sponsor" @bind="creating.CompanyId">
-                    <option value="0">No sponsor</option>
+                    <option value="0">@(creating.UserType == "driver" ? "Pick a sponsor" : "No sponsor")</option>
                     @foreach (var c in companies)
                     {
                         <option value="@c.Id">@c.Name</option>
@@ -130,6 +134,15 @@
                                         @(a.Status == "active" ? "Deactivate" : "Reactivate")
                                     </button>
                                     <button type="button" class="tr-btn-outline edit" disabled="@busy" @onclick="() => StartEdit(a)">Edit</button>
+                                    @if (deleting == a.Id)
+                                    {
+                                        <button type="button" class="tr-btn delete" disabled="@busy" @onclick="() => Delete(a)">Delete @a.Username for good</button>
+                                        <button type="button" class="tr-btn-outline" @onclick="() => deleting = null">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="tr-btn-outline delete" disabled="@busy" @onclick="() => deleting = a.Id">Delete</button>
+                                    }
                                     @if (a.UserType != "admin" && a.Status == "active")
                                     {
                                         <form class="view-as" method="post" action="account/view-as/@a.Id">
@@ -222,6 +235,16 @@
         margin-bottom: 16px;
     }
 
+    button.link {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
     tr.inactive td {
         color: #6b7280;
     }
@@ -244,6 +267,7 @@
     private string? error;
     private string? notice;
     private Edit? editing;
+    private int? deleting;
     private NewAccount? creating;
 
     protected override async Task OnInitializedAsync()
@@ -258,6 +282,12 @@
         {
             // the sponsor filter just stays empty
         }
+        await Load();
+    }
+
+    private async Task ShowUnsponsored()
+    {
+        (type, companyId, status) = ("driver", -1, "active");
         await Load();
     }
 
@@ -306,6 +336,32 @@
         {
             error = "That didn't work. Reload and try again.";
         }
+        busy = false;
+    }
+
+    private async Task Delete(Account a)
+    {
+        busy = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.DeleteAsync($"admin/accounts/{a.Id}?adminId={id}");
+            if (response.IsSuccessStatusCode)
+            {
+                notice = $"{a.Username} was deleted.";
+                await Load();
+            }
+            else
+            {
+                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        deleting = null;
         busy = false;
     }
 
@@ -390,7 +446,7 @@
 
     private sealed record Account(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
     private sealed record Problem(string? Message);
-    private sealed record Counts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive);
+    private sealed record Counts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive, int DriversWithoutSponsor);
     private sealed record Company(int Id, string Name);
     private sealed record Details(string FirstName, string LastName, string Email, string PhoneNumber, string Address, int? CompanyId);
 

@@ -28,7 +28,6 @@ public partial class User
 
     public string LastName { get; set; } = null!;
 
-    public int? CompanyId { get; set; }
 
     // values in the users.status enum
     public const string Active = "active";
@@ -44,9 +43,9 @@ public partial class User
 
     public virtual ICollection<AuditHistory> AuditHistories { get; set; } = new List<AuditHistory>();
 
-    public virtual ICollection<CartItem> Carts { get; set; } = new List<CartItem>();
+    public virtual ICollection<AccountsCompany> AccountsCompanies { get; set; } = new List<AccountsCompany>();
 
-    public virtual Company? Company { get; set; }
+    public virtual ICollection<CartItem> Carts { get; set; } = new List<CartItem>();
 
     public virtual ICollection<LoginAttempt> LoginAttempts { get; set; } = new List<LoginAttempt>();
 

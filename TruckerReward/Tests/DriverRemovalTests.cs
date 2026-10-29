@@ -34,7 +34,8 @@ public sealed class DriverRemovalTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId) => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId
+        UserType = type, PhoneNumber = "", Address = "", Password = "x",
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     private Task<HttpResponseMessage> Remove(string actor, string reason = "Left the company") =>
@@ -50,7 +51,7 @@ public sealed class DriverRemovalTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.NoContent, (await Remove(actor)).StatusCode);
 
         using var db = app.Db();
-        Assert.Null((await db.Users.SingleAsync(u => u.Id == ids["bob"])).CompanyId);
+        Assert.False(await db.AccountsCompanies.AnyAsync(membership => membership.AccountId == ids["bob"]));
         var application = await db.Applications.SingleAsync();
         Assert.Equal(("canceled", (int?)ids[actor], "Left the company"), (application.Status, application.ReviewerId, application.ReviewerReasoning));
         var notice = await db.NotificationsHistories.SingleAsync(n => n.UserId == ids["bob"]);
@@ -67,7 +68,7 @@ public sealed class DriverRemovalTests : IAsyncDisposable
         await Start();
 
         Assert.Equal(status, (int)(await Remove(actor, reason)).StatusCode);
-        Assert.Equal(acme, (await app.Db().Users.SingleAsync(u => u.Id == ids["bob"])).CompanyId);
+        Assert.Equal(acme, await CompanyMembershipQueries.FirstCompanyId(app.Db(), ids["bob"]));
     }
 
     [Fact]

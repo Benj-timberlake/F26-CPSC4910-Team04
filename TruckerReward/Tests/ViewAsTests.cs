@@ -34,7 +34,8 @@ public sealed class ViewAsTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId, string status = "active") => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId, Status = status
+        UserType = type, PhoneNumber = "", Address = "", Password = "x", Status = status,
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     private Task<HttpResponseMessage> View(string viewer, string user) =>

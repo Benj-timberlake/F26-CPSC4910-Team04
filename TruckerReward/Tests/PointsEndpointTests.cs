@@ -37,7 +37,8 @@ public sealed class PointsEndpointTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId, string? first = null, string? last = null, int points = 0) => new()
     {
         Username = name, FirstName = first ?? name, LastName = last ?? "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId, Points = points
+        UserType = type, PhoneNumber = "", Address = "", Password = "x", Points = points,
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     private Task<HttpResponseMessage> Change(int actor, int driver, int points, string? reason) =>
@@ -120,6 +121,30 @@ public sealed class PointsEndpointTests : IAsyncDisposable
         Assert.Equal("amy", Assert.Single(byLast!).Username);
         Assert.Equal(3, admin!.Count);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/users/{bob}/points/drivers")).StatusCode);
+    }
+
+    [Fact]
+    public async Task SponsorsSeePointsEarnedBetweenDates()
+    {
+        await Start();
+        using (var db = app.Db())
+        {
+            db.PointsHistory.AddRange(
+                new PointsHistory { UserId = bob, PointsDelta = 40, Timestamp = new DateTime(2026, 9, 1) },
+                new PointsHistory { UserId = bob, PointsDelta = -10, Timestamp = new DateTime(2026, 9, 3) },
+                new PointsHistory { UserId = amy, PointsDelta = 70, Timestamp = new DateTime(2026, 9, 10, 23, 59, 0) },
+                new PointsHistory { UserId = amy, PointsDelta = 500, Timestamp = new DateTime(2026, 9, 11) });
+            await db.SaveChangesAsync();
+        }
+
+        var range = (await client.GetFromJsonAsync<List<PointsDriver>>($"/users/{sue}/points/drivers?from=2026-09-01&to=2026-09-10&sort=earned"))!;
+        var since = (await client.GetFromJsonAsync<List<PointsDriver>>($"/users/{sue}/points/drivers?from=2026-09-05"))!;
+        var plain = (await client.GetFromJsonAsync<List<PointsDriver>>($"/users/{sue}/points/drivers"))!;
+
+        Assert.Equal(["amy 70", "bob 40"], range.Select(d => $"{d.Username} {d.Earned}"));
+        Assert.Equal(["bob 0", "amy 570"], since.Select(d => $"{d.Username} {d.Earned}"));
+        Assert.All(plain, d => Assert.Null(d.Earned));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"/users/{sue}/points/drivers?from=2026-09-10&to=2026-09-01")).StatusCode);
     }
 
     [Fact]

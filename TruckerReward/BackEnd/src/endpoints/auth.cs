@@ -28,6 +28,12 @@ public static class AuthEndpoints
                 return Results.Conflict(new { message = "That username is already taken." });
             if (await db.Users.AnyAsync(u => u.Email == email))
                 return Results.Conflict(new { message = "An account with that email already exists." });
+            // drivers apply to a sponsor as they sign up
+            var companyName = req.UserType == Driver && req.CompanyId is int companyId
+                ? await db.Companies.Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync()
+                : null;
+            if (req.UserType == Driver && req.CompanyId is not null && companyName is null)
+                return Results.BadRequest(new { message = "Pick a sponsor from the list." });
 
             var user = new User
             {
@@ -43,6 +49,12 @@ public static class AuthEndpoints
             db.Users.Add(user);
             await db.SaveChangesAsync();
             await notifications.AccountCreated(user);
+            if (companyName is not null)
+            {
+                db.Applications.Add(new Application { ApplicantId = user.Id, CompanyId = req.CompanyId!.Value });
+                await db.SaveChangesAsync();
+                await notifications.CompanyApplicationSubmitted(user, req.CompanyId.Value, companyName);
+            }
 
             return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
         });
@@ -126,7 +138,7 @@ public static class AuthEndpoints
     }
 }
 
-public record RegisterRequest(string Username, string FirstName, string LastName, string Email, string Password, string UserType, string? PhoneNumber, string? Address);
+public record RegisterRequest(string Username, string FirstName, string LastName, string Email, string Password, string UserType, string? PhoneNumber, string? Address, int? CompanyId = null);
 
 public record LoginRequest(string Username, string Password, string? IpAddress);
 

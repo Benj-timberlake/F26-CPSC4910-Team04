@@ -15,6 +15,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<AccountsHistory> AccountsHistories { get; set; }
 
+    public virtual DbSet<AccountsCompany> AccountsCompanies { get; set; }
+
     public virtual DbSet<AboutPage> AboutPages { get; set; }
 
     public virtual DbSet<Application> Applications { get; set; }
@@ -88,7 +90,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Address)
                 .HasMaxLength(255)
                 .HasColumnName("address");
-            entity.Property(e => e.CompanyId).HasColumnName("company_id");
             entity.Property(e => e.Email)
                 .HasMaxLength(255)
                 .HasColumnName("email");
@@ -121,6 +122,30 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_accounts_history_user");
+        });
+
+        modelBuilder.Entity<AccountsCompany>(entity =>
+        {
+            entity.HasKey(e => new { e.AccountId, e.CompanyId }).HasName("PRIMARY");
+
+            entity.ToTable("accounts_companies");
+
+            entity.HasIndex(e => e.CompanyId, "company_id");
+
+            entity.Property(e => e.AccountId).HasColumnName("account_id");
+            entity.Property(e => e.CompanyId).HasColumnName("company_id");
+            entity.Property(e => e.CurrentCompanyViewed)
+                .HasColumnName("current_company_viewed");
+
+            entity.HasOne(e => e.Account).WithMany(e => e.AccountsCompanies)
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("accounts_companies_ibfk_1");
+
+            entity.HasOne(e => e.Company).WithMany(e => e.AccountsCompanies)
+                .HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("accounts_companies_ibfk_2");
         });
 
         modelBuilder.Entity<Application>(entity =>
@@ -382,9 +407,14 @@ public partial class AppDbContext : DbContext
             entity.ToTable("points_history");
 
             entity.HasIndex(e => e.UserId, "user_id");
+            entity.HasIndex(e => e.CompanyId, "fk_points_history_company");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.PointsDelta).HasColumnName("points_delta");
+            entity.Property(e => e.RejectionReason)
+                .HasMaxLength(500)
+                .HasColumnName("rejection_reason");
+            entity.Property(e => e.CompanyId).HasColumnName("company_id");
             entity.Property(e => e.Timestamp)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .HasColumnType("timestamp")
@@ -395,6 +425,11 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("points_history_ibfk_1");
+
+            entity.HasOne(d => d.Company).WithMany(p => p.PointsHistories)
+                .HasForeignKey(d => d.CompanyId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_points_history_company");
         });
 
         modelBuilder.Entity<NotificationPreference>(entity =>
@@ -455,8 +490,6 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("users");
 
-            entity.HasIndex(e => e.CompanyId, "fk_users_company");
-
             entity.HasIndex(e => e.Email, "uq_users_email").IsUnique();
 
             entity.HasIndex(e => e.Username, "uq_users_username").IsUnique();
@@ -465,7 +498,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Address)
                 .HasMaxLength(255)
                 .HasColumnName("address");
-            entity.Property(e => e.CompanyId).HasColumnName("company_id");
             entity.Property(e => e.Email).HasColumnName("email");
             entity.Property(e => e.FirstName)
                 .HasMaxLength(100)
@@ -487,10 +519,6 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("enum('admin','sponsor','driver')")
                 .HasColumnName("user_type");
             entity.Property(e => e.Username).HasColumnName("username");
-
-            entity.HasOne(d => d.Company).WithMany(p => p.Users)
-                .HasForeignKey(d => d.CompanyId)
-                .HasConstraintName("fk_users_company");
 
             // These legacy navigations are not columns or relationships in the users mapping.
             // Ignore them to prevent EF from inferring a shadow ApplicationDriverId column.

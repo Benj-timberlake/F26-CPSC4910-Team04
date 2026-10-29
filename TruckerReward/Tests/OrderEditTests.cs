@@ -34,7 +34,8 @@ public sealed class OrderEditTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId, int points) => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId, Points = points
+        UserType = type, PhoneNumber = "", Address = "", Password = "x", Points = points,
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     [Fact]

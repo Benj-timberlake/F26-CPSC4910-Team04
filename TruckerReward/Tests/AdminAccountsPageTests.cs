@@ -78,6 +78,20 @@ public sealed class AdminAccountsPageTests : TestContext
     }
 
     [Fact]
+    public void DriversWithoutASponsorAreOneClickAway()
+    {
+        backend.Routes["GET /admin/accounts/counts"] = (HttpStatusCode.OK, """{"activeDrivers":12,"activeSponsors":3,"activeAdmins":1,"inactive":2,"driversWithoutSponsor":4}""");
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["GET /admin/accounts?type=driver&noSponsor=true&status=active"] = (HttpStatusCode.OK, "[]");
+        var page = Render();
+        page.WaitForAssertion(() => Assert.Equal("4", page.Find("button.no-sponsor").TextContent));
+
+        page.Find("button.no-sponsor").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("No accounts match.", page.Markup));
+    }
+
+    [Fact]
     public void ShowsActiveCounts()
     {
         backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
@@ -100,6 +114,22 @@ public sealed class AdminAccountsPageTests : TestContext
 
         page.WaitForAssertion(() => Assert.Equal("bob was deactivated.", page.Find(".tr-alert-success").TextContent));
         Assert.Equal("""{"adminId":4,"status":"inactive"}""", backend.Bodies["POST /admin/accounts/8/status"]);
+        Assert.Equal(2, backend.Requests.Count(r => r == "GET /admin/accounts"));
+    }
+
+    [Fact]
+    public void DeletingAsksFirstThenReloads()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["DELETE /admin/accounts/8?adminId=4"] = (HttpStatusCode.NoContent, "");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody button.delete"));
+
+        page.Find("tbody button.delete").Click();
+        Assert.DoesNotContain(backend.Requests, r => r.StartsWith("DELETE"));
+        page.Find("tbody button.delete").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("bob was deleted.", page.Find(".tr-alert-success").TextContent));
         Assert.Equal(2, backend.Requests.Count(r => r == "GET /admin/accounts"));
     }
 

@@ -41,7 +41,8 @@ public sealed class LeaderboardTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId, int points = 0, string status = "active") => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId, Points = points, Status = status
+        UserType = type, PhoneNumber = "", Address = "", Password = "x", Points = points, Status = status,
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     private async Task<Leaderboard> Board(int viewer, string query = "") =>
@@ -69,6 +70,27 @@ public sealed class LeaderboardTests : IAsyncDisposable
 
         Assert.Equal(expected, string.Join(",", board.Rows.Select(r => $"{r.Username} {r.Points}")));
         Assert.Null(board.YourRank);
+    }
+
+    [Fact]
+    public async Task CategoriesRankBySpendingOrOrders()
+    {
+        await Start();
+        using (var db = app.Db())
+        {
+            var orders = new[] { History(bob, -200, 15), History(bob, -100, 16), History(amy, -250, 2) };
+            db.PointsHistory.AddRange(orders);
+            await db.SaveChangesAsync();
+            db.CartItems.AddRange(orders.Select(o => new CartItem { UserId = o.UserId, Name = "Mug", Price = 1m, PointsHistoryId = o.Id }));
+            await db.SaveChangesAsync();
+        }
+
+        var spent = await Board(sue, "?category=spent");
+        var weekOrders = await Board(sue, "?period=week&category=orders");
+
+        Assert.Equal("bob 300,amy 250,cal 0", string.Join(",", spent.Rows.Select(r => $"{r.Username} {r.Points}")));
+        Assert.Equal("bob 2,amy 0,cal 0", string.Join(",", weekOrders.Rows.Select(r => $"{r.Username} {r.Points}")));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"/users/{sue}/leaderboard?category=miles")).StatusCode);
     }
 
     [Fact]

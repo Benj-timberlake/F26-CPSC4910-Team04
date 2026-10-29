@@ -10,9 +10,11 @@ public static class CartEndpoints
             var sponsor = await db.Users.AsNoTracking().SingleOrDefaultAsync(user => user.Id == id);
             if (sponsor is null) return Results.NotFound();
             if (sponsor.UserType != "sponsor") return Results.StatusCode(403);
-            if (sponsor.CompanyId is null) return Results.Ok(Array.Empty<SponsorOrderDetails>());
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null) return Results.Ok(Array.Empty<SponsorOrderDetails>());
             var items = await db.CartItems.AsNoTracking().Include(item => item.User).Include(item => item.PointsHistory)
-                .Where(item => item.User.UserType == "driver" && item.User.CompanyId == sponsor.CompanyId
+                .Where(item => item.User.UserType == "driver" && db.AccountsCompanies
+                    .Any(membership => membership.AccountId == item.UserId && membership.CompanyId == companyId)
                     && !item.WasOrdered && !item.InCart && item.PointsHistory != null
                     && item.PointsHistory.UserId == item.UserId && item.PointsHistory.RejectionReason == null).ToListAsync();
             var orderIds = items.Select(item => item.PointsHistoryId!.Value).Distinct().ToList();
@@ -130,8 +132,8 @@ public static class CartEndpoints
             db.PointsHistory.Remove(history);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was refunded.");
-            await notifications.DriverRefunded(user, items, -history.PointsDelta);
+            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was refunded.", history.CompanyId);
+            await notifications.DriverRefunded(user, items, -history.PointsDelta, history.CompanyId);
             return Results.NoContent();
         });
 
@@ -159,8 +161,8 @@ public static class CartEndpoints
             db.PointsHistory.Remove(history);
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was moved back to your cart.");
-            await notifications.DriverEditingOrder(user, items);
+            await notifications.PointsChanged(user, -history.PointsDelta, "Your order was moved back to your cart.", history.CompanyId);
+            await notifications.DriverEditingOrder(user, items, history.CompanyId);
             return Results.NoContent();
         });
 
@@ -177,6 +179,9 @@ public static class CartEndpoints
             var user = await db.Users.SingleOrDefaultAsync(user => user.Id == id);
             if (user is null)
                 return Results.NotFound();
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null)
+                return Results.BadRequest(new { message = "Join a company before placing an order." });
 
             var items = await db.CartItems
                 .Where(item => item.UserId == id && item.InCart && !item.WasOrdered).ToListAsync();
@@ -194,7 +199,7 @@ public static class CartEndpoints
             user.Points -= (int)totalPoints;
             var history = new PointsHistory
             {
-                UserId = id, PointsDelta = -(int)totalPoints,
+                UserId = id, CompanyId = companyId.Value, PointsDelta = -(int)totalPoints,
                 Timestamp = clock.GetUtcNow().UtcDateTime
             };
             db.PointsHistory.Add(history);
@@ -209,8 +214,9 @@ public static class CartEndpoints
             }
             await db.SaveChangesAsync();
             await transaction.CommitAsync();
-            await notifications.PointsChanged(user, history.PointsDelta, "Your order was placed.");
-            await notifications.DriverPurchased(user, items, -history.PointsDelta);
+            await notifications.PointsChanged(user, history.PointsDelta, "Your order was placed.", history.CompanyId);
+            await notifications.OrderPlaced(user, items, history.CompanyId);
+            await notifications.DriverPurchased(user, items, -history.PointsDelta, history.CompanyId);
             return Results.NoContent();
         });
 

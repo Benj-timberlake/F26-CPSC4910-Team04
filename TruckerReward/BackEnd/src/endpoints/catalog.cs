@@ -50,10 +50,12 @@ public static class CatalogEndpoints
                     .OrderBy(item => item.Id).Select(item => item.ItemId).Distinct().ToListAsync());
             if (user.UserType != "driver")
                 return Results.Json(new { message = "Only drivers can browse this catalog." }, statusCode: 403);
-            if (user.CompanyId is null) return Results.Ok(Array.Empty<string>());
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null) return Results.Ok(Array.Empty<string>());
             var itemIds = await db.CatalogItems.AsNoTracking()
                 .Where(item => db.Users.Any(sponsor => sponsor.Id == item.SponsorId
-                    && sponsor.UserType == "sponsor" && sponsor.CompanyId == user.CompanyId))
+                    && sponsor.UserType == "sponsor" && db.AccountsCompanies
+                        .Any(membership => membership.AccountId == sponsor.Id && membership.CompanyId == companyId)))
                 .OrderBy(item => item.Id).Select(item => item.ItemId).Distinct().ToListAsync();
             return Results.Ok(itemIds);
         });

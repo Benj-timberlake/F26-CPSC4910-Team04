@@ -12,27 +12,27 @@ public static class AuditEndpoints
 
     public static void MapAuditEndpoints(this WebApplication app)
     {
-        app.MapGet("/users/{id:int}/audit", async (int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
+        app.MapGet("/users/{id:int}/audit", async (int id, string? category, string? by, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
         {
-            var (error, rows) = await Query(db, id, category, from, to, companyId, driverId);
+            var (error, rows) = await Query(db, id, category, by, from, to, companyId, driverId);
             return error ?? Results.Ok(rows);
         });
 
-        app.MapGet("/users/{id:int}/audit.csv", async (int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
+        app.MapGet("/users/{id:int}/audit.csv", async (int id, string? category, string? by, DateOnly? from, DateOnly? to, int? companyId, int? driverId, AppDbContext db) =>
         {
-            var (error, rows) = await Query(db, id, category, from, to, companyId, driverId);
+            var (error, rows) = await Query(db, id, category, by, from, to, companyId, driverId);
             return error ?? Results.File(System.Text.Encoding.UTF8.GetBytes(Csv(rows!)), "text/csv", "audit-log.csv");
         });
     }
 
-    private static async Task<(IResult? Error, List<AuditEntry>? Rows)> Query(AppDbContext db, int id, string? category, DateOnly? from, DateOnly? to, int? companyId, int? driverId)
+    private static async Task<(IResult? Error, List<AuditEntry>? Rows)> Query(AppDbContext db, int id, string? category, string? by, DateOnly? from, DateOnly? to, int? companyId, int? driverId)
     {
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
             return (Results.NotFound(), null);
         if (category is not (null or "" or Logins or Passwords or Points or Views))
             return (Results.BadRequest(new { message = "Category must be logins, passwords, points or views." }), null);
-        if (!PointsEndpoints.CanManage(actor))
+        if (!await PointsEndpoints.CanManage(db, actor))
             return (Results.StatusCode(StatusCodes.Status403Forbidden), null);
 
         var ids = Scope(db, actor, companyId, driverId);
@@ -48,6 +48,8 @@ public static class AuditEndpoints
             rows.AddRange(await PointRows(db, ids, start, end));
         if (all || category == Views)
             rows.AddRange(await ViewRows(db, ids, start, end));
+        if (!string.IsNullOrWhiteSpace(by))
+            rows = rows.Where(row => row.By?.Contains(by.Trim(), StringComparison.OrdinalIgnoreCase) == true).ToList();
         return (null, rows.OrderByDescending(r => r.At).Take(MaxRows).ToList());
     }
 
@@ -71,8 +73,11 @@ public static class AuditEndpoints
     private static IQueryable<int>? Scope(AppDbContext db, User actor, int? companyId, int? driverId)
     {
         IQueryable<User>? scope = actor.UserType == AuthEndpoints.Sponsor
-            ? db.Users.Where(u => u.UserType == AuthEndpoints.Driver && u.CompanyId == actor.CompanyId)
-            : companyId is null ? null : db.Users.Where(u => u.CompanyId == companyId);
+            ? db.Users.Where(u => u.UserType == AuthEndpoints.Driver && db.AccountsCompanies
+                .Any(membership => membership.AccountId == u.Id && membership.CompanyId == db.AccountsCompanies
+                    .Where(actorMembership => actorMembership.AccountId == actor.Id).Select(actorMembership => actorMembership.CompanyId).FirstOrDefault()))
+            : companyId is null ? null : db.Users.Where(u => db.AccountsCompanies
+                .Any(membership => membership.AccountId == u.Id && membership.CompanyId == companyId));
         if (driverId is not null)
             scope = (scope ?? db.Users).Where(u => u.Id == driverId);
         return scope?.Select(u => u.Id);

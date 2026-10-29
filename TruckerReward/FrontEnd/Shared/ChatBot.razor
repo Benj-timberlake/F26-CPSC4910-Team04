@@ -1,0 +1,112 @@
+
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="trucker-chat">
+    @if (isOpen)
+    {
+        <div class="chat-window">
+            <div class="chat-header">
+                🚚 TruckerBot
+                <button @onclick="ToggleChat">✕</button>
+            </div>
+
+            <div class="chat-messages">
+                @foreach (var message in messages)
+                {
+                    <div class="chat-message @(message.IsBot ? "bot" : "user")">
+                        @message.Text
+                    </div>
+                }
+            </div>
+
+            <div class="chat-input">
+                <input @bind="userMessage"
+                       @bind:event="oninput"
+                       @onkeydown="HandleKeyDown"
+                       placeholder="Ask me something..." />
+
+                <button @onclick="SendMessage">Send</button>
+            </div>
+        </div>
+    }
+
+    <button class="chat-toggle" @onclick="ToggleChat">
+        🚚 @(isOpen ? "Close" : "Chat with Your Best Friend")
+    </button>
+</div>
+
+@code {
+    private bool isOpen = false;
+    private string userMessage = "";
+
+    private List<ChatMessage> messages = new()
+    {
+        new ChatMessage
+        {
+            Text = "Welcome to TruckerReward! How can I help?",
+            IsBot = true
+        }
+    };
+
+    private void ToggleChat()
+    {
+        isOpen = !isOpen;
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            SendMessage();
+    }
+
+    private void SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(userMessage))
+            return;
+
+        string question = userMessage.Trim();
+
+        messages.Add(new ChatMessage
+        {
+            Text = question,
+            IsBot = false
+        });
+
+        messages.Add(new ChatMessage
+        {
+            Text = GetResponse(question),
+            IsBot = true
+        });
+
+        userMessage = "";
+    }
+
+    private string GetResponse(string question)
+    {
+        string text = question.ToLowerInvariant();
+
+        if (text.Contains("point"))
+            return "Check your dashboard to view your points balance.";
+        
+        if (text.Contains("friend"))
+            return "You're a silly little boyyyyy";
+
+        if (text.Contains("reward") || text.Contains("redeem"))
+            return "Visit the Products page to explore available rewards.";
+
+        if (text.Contains("sponsor"))
+            return "Sponsors participate in the TruckerReward program.";
+
+        if (text.Contains("hello") || text.Contains("hi"))
+            return "Hey there! How can I help you today dawggggg?";
+
+        return ("I can help with points, rewards, and sponsors. Could you rephrase your question dudeeee? " +
+            "Don't play with me you know what you're doing kid");
+    }
+
+    private class ChatMessage
+    {
+        public string Text { get; set; } = "";
+        public bool IsBot { get; set; }
+    }
+}

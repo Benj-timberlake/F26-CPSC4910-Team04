@@ -29,7 +29,5 @@ public partial class AccountsHistory
 
     public string? LastName { get; set; }
 
-    public int? CompanyId { get; set; }
-
     public virtual User User { get; set; } = null!;
 }

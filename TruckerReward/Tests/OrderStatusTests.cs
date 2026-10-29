@@ -34,7 +34,8 @@ public sealed class OrderStatusTests : IAsyncDisposable
     private static User User(string name, string type, int? companyId) => new()
     {
         Username = name, FirstName = name, LastName = "Test", Email = $"{name}@example.com",
-        UserType = type, PhoneNumber = "", Address = "", Password = "x", CompanyId = companyId
+        UserType = type, PhoneNumber = "", Address = "", Password = "x",
+        AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
     private async Task<string> Status() =>
@@ -51,6 +52,23 @@ public sealed class OrderStatusTests : IAsyncDisposable
         Assert.Equal(CartEndpoints.OrderOrdered, await Status());
         var notice = await app.Db().NotificationsHistories.SingleAsync(n => n.UserId == bob);
         Assert.Equal(("Your sponsor ordered your items", "Your sponsor placed the order for Mug x2, Hat."), (notice.Subject, notice.Body));
+    }
+
+    [Fact]
+    public async Task PlacingAnOrderAlertsThatItIsPending()
+    {
+        await Start();
+        using (var db = app.Db())
+        {
+            await db.Users.Where(u => u.Id == bob).ExecuteUpdateAsync(u => u.SetProperty(x => x.Points, 5000));
+            db.CartItems.Add(new CartItem { UserId = bob, Name = "Gloves", Price = 12m, Quantity = 3, InCart = true });
+            await db.SaveChangesAsync();
+        }
+
+        await client.PostAsync($"/users/{bob}/cart/send-order", null);
+
+        var notice = await app.Db().NotificationsHistories.SingleAsync(n => n.UserId == bob && n.Subject == "Your order is pending");
+        Assert.Equal("Your order for Gloves x3 is waiting on your sponsor.", notice.Body);
     }
 
     [Fact]
