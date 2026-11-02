@@ -1,6 +1,5 @@
 @page "/account/username"
 @attribute [Authorize]
-@inject NavigationManager Nav
 
 <PageTitle>Change username</PageTitle>
 
@@ -9,9 +8,9 @@
         <a class="close-button" href="account/profile" aria-label="Close and return to account" title="Close">×</a>
         <h1>Change username</h1>
 
-        @if (error is not null)
+        @if (Error is not null)
         {
-            <p role="alert" class="tr-alert-error">@error</p>
+            <p role="alert" class="tr-alert-error">@Error</p>
         }
         <form class="tr-form" method="post" action="account/change-username">
             <label for="username">New username</label>
@@ -41,12 +40,11 @@
     [CascadingParameter]
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
-    private string? error;
+    [SupplyParameterFromQuery] private string? Error { get; set; }
     private string? current;
 
     protected override async Task OnInitializedAsync()
     {
-        error = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["error"];
         current = (await AuthState).User.Identity?.Name;
     }
 }

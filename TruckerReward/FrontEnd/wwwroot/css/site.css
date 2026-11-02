@@ -199,6 +199,28 @@ a, .btn-link {
     margin-right: 6px;
 }
 
+.tr-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.tr-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tr-list li {
+    border-top: 1px solid #e5e7eb;
+    padding: 12px 0;
+}
+
+form.view-as {
+    display: inline;
+}
+
 #blazor-error-ui {
     background: lightyellow;
     bottom: 0;

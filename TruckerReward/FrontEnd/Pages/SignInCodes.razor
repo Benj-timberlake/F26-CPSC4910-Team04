@@ -1,7 +1,6 @@
 @page "/account/sign-in-codes"
 @attribute [Authorize]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 @inject NavigationManager Nav
 
 <PageTitle>Sign-in codes</PageTitle>
@@ -51,18 +50,12 @@
 </div>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
-    private string? id;
     private Account? account;
     private string? currentPassword;
-    private string? error;
-    private bool busy;
 
     protected override async Task OnInitializedAsync()
     {
-        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await SignedIn();
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
@@ -76,27 +69,11 @@
 
     private async Task Save()
     {
-        busy = true;
-        error = null;
-        try
-        {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PutAsJsonAsync($"users/{id}/sign-in-codes", new { enabled = !account!.EmailCodes, currentPassword });
-            if (response.IsSuccessStatusCode)
-            {
-                Nav.NavigateTo("profile?codes=" + (account.EmailCodes ? "off" : "on"));
-                return;
-            }
-            error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
-        {
-            error = "That didn't work. Reload and try again.";
-        }
-        currentPassword = null;
-        busy = false;
+        await Send(c => c.PutAsJsonAsync($"users/{id}/sign-in-codes", new { enabled = !account!.EmailCodes, currentPassword }),
+            _ => Nav.NavigateTo("profile?codes=" + (account!.EmailCodes ? "off" : "on")));
+        if (error is not null)
+            currentPassword = null;
     }
 
     private sealed record Account(string Email, bool EmailConfirmed, bool EmailCodes, bool HasPassword = true);
-    private sealed record Problem(string? Message);
 }
