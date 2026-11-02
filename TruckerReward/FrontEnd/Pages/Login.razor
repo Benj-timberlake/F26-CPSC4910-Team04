@@ -81,6 +81,8 @@
             "inactive" => "This account has been deactivated. Contact an administrator.",
             "backend" => "Something went wrong on our side. Try again in a moment.",
             "sso" => "Sign in with that provider didn't work. Try again or use a password.",
+            "code" => "That sign-in code expired or had too many wrong tries. Log in again for a new one.",
+            "codes" => "Too many codes asked for. Wait a few minutes and try again.",
             null when query["reset"] == "1" => "Your password has been reset. Log in with the new one.",
             null when query["signedOut"] == "everywhere" => "You were signed out on every device. Log in again here.",
             _ => null

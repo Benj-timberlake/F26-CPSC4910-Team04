@@ -74,7 +74,7 @@
                     <dt>Password</dt>
                     <dd>@(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))</dd>
                 </dl>
-                <p><a class="passkeys-link" href="account/passkeys">Face ID and passkeys</a></p>
+                <p><a class="passkeys-link" href="account/passkeys">Face ID and passkeys</a> &middot; <a class="codes-link" href="account/sign-in-codes">Sign-in codes: @(account.EmailCodes ? "on" : "off")</a></p>
                 <form method="post" action="account/logout-everywhere" class="logout-everywhere">
                     <button type="submit" class="tr-btn-outline">Sign out everywhere</button>
                     <span class="tr-muted">Ends every session, this one too. Others can take up to five minutes.</span>
@@ -186,6 +186,8 @@
             notice = "Your account information has been updated.";
         if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["email"] == "changed")
             notice = "Your email address has been changed.";
+        if (System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["codes"] is { } codes && codes is "on" or "off")
+            notice = $"Sign-in codes are {codes}.";
 
         var user = (await AuthState).User;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -228,7 +230,7 @@
         return rel == "" ? abs : $"{abs} ({rel})";
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, int? CompanyId, int Points, string? PendingCompanyName, bool EmailConfirmed = true);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, int? CompanyId, int Points, string? PendingCompanyName, bool EmailConfirmed = true, bool EmailCodes = false);
 
     private async Task ResendConfirmation()
     {

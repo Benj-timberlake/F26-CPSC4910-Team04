@@ -1,0 +1,98 @@
+@page "/account/sign-in-codes"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
+
+<PageTitle>Sign-in codes</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Sign-in codes</h1>
+        @if (account is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+        else
+        {
+            <p>
+                With codes on, signing in with your password also needs a code we email to @account.Email.
+                Face ID, passkeys, Google and Microsoft sign-ins don't ask for one.
+            </p>
+            <p><strong>Codes are @(account.EmailCodes ? "on" : "off").</strong></p>
+            @if (error is not null)
+            {
+                <p role="alert" class="tr-alert-error">@error</p>
+            }
+            @if (!account.EmailConfirmed && !account.EmailCodes)
+            {
+                <p class="tr-alert-warning">Confirm your email first, from your profile, so the codes reach you.</p>
+            }
+            else
+            {
+                <form class="tr-form" @onsubmit="Save">
+                    @* google/microsoft-only accounts have no password to confirm with *@
+                    @if (account.HasPassword)
+                    {
+                        <label for="current-password">Current password</label>
+                        <input id="current-password" type="password" autocomplete="current-password" required @bind="currentPassword" />
+                    }
+                    <button type="submit" class="tr-btn tr-btn-block" disabled="@busy">@(account.EmailCodes ? "Turn codes off" : "Turn codes on")</button>
+                </form>
+            }
+        }
+    </div>
+
+    <p class="tr-alt"><a href="profile">Back to your profile</a></p>
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string? id;
+    private Account? account;
+    private string? currentPassword;
+    private string? error;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            account = await client.GetFromJsonAsync<Account>($"users/{id}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load your account right now. Try again in a moment.";
+        }
+    }
+
+    private async Task Save()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PutAsJsonAsync($"users/{id}/sign-in-codes", new { enabled = !account!.EmailCodes, currentPassword });
+            if (response.IsSuccessStatusCode)
+            {
+                Nav.NavigateTo("profile?codes=" + (account.EmailCodes ? "off" : "on"));
+                return;
+            }
+            error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        currentPassword = null;
+        busy = false;
+    }
+
+    private sealed record Account(string Email, bool EmailConfirmed, bool EmailCodes, bool HasPassword = true);
+    private sealed record Problem(string? Message);
+}

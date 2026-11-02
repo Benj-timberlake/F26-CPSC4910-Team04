@@ -60,7 +60,7 @@ public static class AuthEndpoints
             return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
         });
 
-        app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
+        app.MapPost("/auth/login", async (LoginRequest req, AppDbContext db, Notifications notifications, IEmailSender email, TimeProvider clock) =>
         {
             var username = req.Username?.Trim() ?? "";
             var now = clock.GetUtcNow().UtcDateTime;
@@ -70,6 +70,9 @@ public static class AuthEndpoints
             var ok = Passwords.Verify(user, req.Password) && lockedUntil is null;
             // only someone with the right password learns the account is deactivated
             var inactive = ok && user!.Status == User.Inactive;
+            // with codes on, the attempt is logged once the code is checked
+            if (ok && !inactive && await SignInCodeEndpoints.Challenge(db, user!, email, clock) is { } challenge)
+                return challenge;
             await RecordAttempt(db, username, user?.Id, ok && !inactive, req.IpAddress, now);
 
             if (inactive)

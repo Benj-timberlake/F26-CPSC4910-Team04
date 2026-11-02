@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FrontEnd.Auth;
@@ -31,6 +32,36 @@ public static class AccountEndpoints
                 return Results.Redirect("/login?error=locked" + ReturnParam(returnUrl));
             if (response.StatusCode == HttpStatusCode.Forbidden)
                 return Results.Redirect("/login?error=inactive" + ReturnParam(returnUrl));
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                return Results.Redirect("/login?error=codes" + ReturnParam(returnUrl));
+            if (response.StatusCode == HttpStatusCode.Accepted)
+            {
+                var pending = await response.Content.ReadFromJsonAsync<PendingCode>();
+                PendingSignIn(http, pending!.Challenge, returnUrl);
+                return Results.Redirect("/login/code");
+            }
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/login?error=backend" + ReturnParam(returnUrl));
+
+            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
+            await TruckerSignIn.SignInAsync(http, user!);
+            AdminDance(http, user!);
+            return Results.LocalRedirect(SafeReturn(returnUrl));
+        }).DisableAntiforgery();
+
+        app.MapPost("/account/login/code", async ([FromForm] string code, HttpContext http, IHttpClientFactory clients) =>
+        {
+            if (PendingSignIn(http) is not var (challenge, returnUrl))
+                return Results.Redirect("/login?error=code");
+            using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/login/code", new { challenge, code, ipAddress = Ip(http) });
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+                return Results.Redirect("/login/code?error=wrong");
+            http.Response.Cookies.Delete(PendingCookie);
+            if (response.StatusCode == HttpStatusCode.Gone)
+                return Results.Redirect("/login?error=code" + ReturnParam(returnUrl));
+            if (response.StatusCode == HttpStatusCode.Locked)
+                return Results.Redirect("/login?error=locked" + ReturnParam(returnUrl));
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/login?error=backend" + ReturnParam(returnUrl));
 
@@ -208,6 +239,41 @@ public static class AccountEndpoints
         });
     }
 
+    private const string PendingCookie = "tr_code";
+
+    // the challenge between the password and code steps, encrypted so it can't be read or forged
+    private static void PendingSignIn(HttpContext http, string challenge, string? returnUrl)
+    {
+        var protector = Protector(http);
+        http.Response.Cookies.Append(PendingCookie, protector.Protect(challenge + "\n" + returnUrl, TimeSpan.FromMinutes(10)), new CookieOptions
+        {
+            Path = "/",
+            MaxAge = TimeSpan.FromMinutes(10),
+            HttpOnly = true,
+            Secure = http.Request.IsHttps,
+            SameSite = SameSiteMode.Lax
+        });
+    }
+
+    private static (string Challenge, string? ReturnUrl)? PendingSignIn(HttpContext http)
+    {
+        if (!http.Request.Cookies.TryGetValue(PendingCookie, out var value))
+            return null;
+        try
+        {
+            var parts = Protector(http).Unprotect(value).Split('\n', 2);
+            return (parts[0], parts.Length > 1 && parts[1] != "" ? parts[1] : null);
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return null;
+        }
+    }
+
+    private static ITimeLimitedDataProtector Protector(HttpContext http) =>
+        http.RequestServices.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector("sign-in-code").ToTimeLimitedDataProtector();
+
     private static string? Ip(HttpContext http) => http.Connection.RemoteIpAddress?.ToString();
 
     private static string SafeReturn(string? returnUrl) =>
@@ -228,4 +294,6 @@ public static class AccountEndpoints
 }
 
 // shape of the backend's login/register response
+public record PendingCode(string Challenge);
+
 public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, int SessionVersion = 0);
