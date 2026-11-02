@@ -39,21 +39,9 @@ public sealed class TestApp : IAsyncDisposable
         app.UseBackendApiKey();
         app.MapGet("/", () => Results.Ok());
         app.MapGet("/health", () => Results.Ok());
-        app.MapAuthEndpoints();
-        app.MapPasswordEndpoints();
-        app.MapEmailConfirmEndpoints();
-        app.MapSignInCodeEndpoints();
-        app.MapSessionEndpoints();
-        app.MapUserEndpoints();
+        app.MapApi();
         app.MapCartEndpoints();
         app.MapCatalogEndpoints();
-        app.MapAdminEndpoints();
-        app.MapNotificationEndpoints();
-        app.MapPointsEndpoints();
-        app.MapAuditEndpoints();
-        app.MapViewAsEndpoints();
-        app.MapPasskeyEndpoints();
-        app.MapSponsorTeamEndpoints();
         using (var scope = app.Services.CreateScope())
         {
             // the mysql enum column types aren't valid in sqlite

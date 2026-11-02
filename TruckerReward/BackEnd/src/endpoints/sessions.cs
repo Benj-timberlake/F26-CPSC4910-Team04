@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,10 +14,10 @@ public static class SessionEndpoints
             if (!await db.Users.AnyAsync(u => u.Id == id))
                 return Results.NotFound();
             var now = clock.GetUtcNow().UtcDateTime;
-            var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            var key = Tokens.New();
             db.UserSessions.Add(new UserSession
             {
-                UserId = id, KeyHash = Hash(key), CreatedAt = now, LastSeenAt = now,
+                UserId = id, KeyHash = Tokens.Hash(key), CreatedAt = now, LastSeenAt = now,
                 IpAddress = Clip(req.IpAddress, 45), UserAgent = Clip(req.UserAgent, 255)
             });
             await db.SaveChangesAsync();
@@ -30,7 +28,7 @@ public static class SessionEndpoints
         app.MapPost("/sessions/check", async (SessionKeyRequest req, AppDbContext db, TimeProvider clock) =>
         {
             var now = clock.GetUtcNow().UtcDateTime;
-            var hash = Hash(req.Key ?? "");
+            var hash = Tokens.Hash(req.Key ?? "");
             var touched = await db.UserSessions.Where(s => s.KeyHash == hash && s.RevokedAt == null)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(x => x.LastSeenAt, now)
@@ -40,7 +38,7 @@ public static class SessionEndpoints
 
         app.MapPost("/sessions/end", async (SessionKeyRequest req, AppDbContext db, TimeProvider clock) =>
         {
-            var hash = Hash(req.Key ?? "");
+            var hash = Tokens.Hash(req.Key ?? "");
             await db.UserSessions.Where(s => s.KeyHash == hash && s.RevokedAt == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, clock.GetUtcNow().UtcDateTime));
             return Results.NoContent();
@@ -49,7 +47,7 @@ public static class SessionEndpoints
         app.MapGet("/users/{id:int}/sessions", async (int id, string? current, AppDbContext db, TimeProvider clock) =>
         {
             var since = clock.GetUtcNow().UtcDateTime - ActiveWindow;
-            var currentHash = current is null ? null : Hash(current);
+            var currentHash = current is null ? null : Tokens.Hash(current);
             var sessions = await db.UserSessions.AsNoTracking()
                 .Where(s => s.UserId == id && s.RevokedAt == null && s.LastSeenAt > since)
                 .OrderByDescending(s => s.LastSeenAt).ThenByDescending(s => s.Id)
@@ -89,7 +87,7 @@ public static class SessionEndpoints
     {
         var changed = await db.Users.Where(u => u.Id == userId)
             .ExecuteUpdateAsync(u => u.SetProperty(x => x.SessionVersion, x => x.SessionVersion + 1));
-        var keep = keepKey is null ? null : Hash(keepKey);
+        var keep = keepKey is null ? null : Tokens.Hash(keepKey);
         await db.UserSessions.Where(s => s.UserId == userId && s.RevokedAt == null && s.KeyHash != keep)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
         return changed;
@@ -97,9 +95,6 @@ public static class SessionEndpoints
 
     private static string? Clip(string? value, int max) =>
         value is null ? null : value.Length > max ? value[..max] : value;
-
-    private static string Hash(string key) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
 }
 
 public record StartSessionRequest(string? IpAddress, string? UserAgent);

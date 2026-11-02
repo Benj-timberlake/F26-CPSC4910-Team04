@@ -34,22 +34,10 @@ if (app.Environment.IsDevelopment())
 
 app.MapGet("/", () => Results.Ok(new { message = "TruckerReward API", health = "/health" }));
 app.MapMarketEndpoints();
-app.MapAuthEndpoints();
-app.MapPasswordEndpoints();
-app.MapEmailConfirmEndpoints();
-app.MapSignInCodeEndpoints();
-app.MapSessionEndpoints();
-app.MapUserEndpoints();
+app.MapApi();
 app.MapCartEndpoints();
 app.MapCatalogEndpoints();
-app.MapAdminEndpoints();
 app.MapAboutEndpoints();
-app.MapNotificationEndpoints();
-app.MapPointsEndpoints();
-app.MapAuditEndpoints();
-app.MapViewAsEndpoints();
-app.MapPasskeyEndpoints();
-app.MapSponsorTeamEndpoints();
 
 // a real query, so this fails when the database is asleep or unreachable
 app.MapGet("/health", async (AppDbContext db, ILogger<Program> log) =>

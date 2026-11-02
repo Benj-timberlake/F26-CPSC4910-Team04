@@ -252,16 +252,9 @@ public static class AdminEndpoints
         try
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
-            await db.LoginAttempts.Where(a => a.UserId == id).ExecuteUpdateAsync(u => u.SetProperty(a => a.UserId, (int?)null));
-            await db.LockoutResets.Where(r => r.UserId == id).ExecuteUpdateAsync(u => u.SetProperty(r => r.UserId, (int?)null));
             await db.Applications.Where(a => a.ApplicantId == id).ExecuteDeleteAsync();
             await db.CartItems.Where(c => c.UserId == id).ExecuteDeleteAsync();
             await db.NotificationsHistories.Where(n => n.UserId == id).ExecuteDeleteAsync();
-            await db.NotificationPreferences.Where(n => n.UserId == id).ExecuteDeleteAsync();
-            await db.PasswordChanges.Where(c => c.UserId == id).ExecuteDeleteAsync();
-            await db.PasswordResets.Where(r => r.UserId == id).ExecuteDeleteAsync();
-            await db.PasskeyCredentials.Where(c => c.UserId == id).ExecuteDeleteAsync();
-            await db.Impersonations.Where(i => i.UserId == id || i.ViewerId == id).ExecuteDeleteAsync();
             await db.AccountsCompanies.Where(m => m.AccountId == id).ExecuteDeleteAsync();
             await db.AccountsHistories.Where(h => h.UserId == id).ExecuteDeleteAsync();
             await db.Users.Where(u => u.Id == id).ExecuteDeleteAsync();
@@ -274,7 +267,7 @@ public static class AdminEndpoints
         return Results.NoContent();
     }
 
-    private static Task<bool> IsAdmin(AppDbContext db, int id) =>
+    internal static Task<bool> IsAdmin(AppDbContext db, int id) =>
         db.Users.AnyAsync(u => u.Id == id && u.UserType == AuthEndpoints.Admin);
 
     private static string Trim(string? value) => value?.Trim() ?? "";
