@@ -144,5 +144,53 @@ public sealed class LockoutTests : IAsyncDisposable
         Assert.Empty((await client.GetFromJsonAsync<List<LockedAccount>>("/admin/locked-accounts"))!);
     }
 
+    [Fact]
+    public async Task AdminUnlockLetsTheRightPasswordInAndIsAudited()
+    {
+        var client = await Start();
+        await Fail(client, Lockout.MaxFailures);
+        var rootId = (await app.Db().Users.SingleAsync(u => u.Username == "root")).Id;
+
+        var unlocked = await client.PostAsJsonAsync("/admin/locked-accounts/bob/unlock", new { adminId = rootId });
+
+        Assert.Equal(HttpStatusCode.NoContent, unlocked.StatusCode);
+        Assert.Empty((await client.GetFromJsonAsync<List<LockedAccount>>("/admin/locked-accounts"))!);
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "Hunter22x!"));
+        var audit = await client.GetFromJsonAsync<List<AuditEntry>>($"/users/{rootId}/audit?category=logins");
+        var entry = Assert.Single(audit!, e => e.Detail == "Unlocked early");
+        Assert.Equal(("bob", "root"), (entry.Username, entry.By));
+    }
+
+    [Fact]
+    public async Task UnlockStillCountsNewFailures()
+    {
+        var client = await Start();
+        await Fail(client, Lockout.MaxFailures);
+        var rootId = (await app.Db().Users.SingleAsync(u => u.Username == "root")).Id;
+        await client.PostAsJsonAsync("/admin/locked-accounts/bob/unlock", new { adminId = rootId });
+
+        await Fail(client, Lockout.MaxFailures);
+
+        Assert.Equal(HttpStatusCode.Locked, await Login(client, "Hunter22x!"));
+    }
+
+    [Theory]
+    [InlineData(true, "bob", HttpStatusCode.Forbidden)]
+    [InlineData(false, "bob", HttpStatusCode.Conflict)]
+    [InlineData(false, "nobody", HttpStatusCode.Conflict)]
+    public async Task UnlockNeedsAnAdminAndALock(bool asDriver, string username, HttpStatusCode expected)
+    {
+        var client = await Start();
+        using var db = app.Db();
+        var actor = await db.Users.SingleAsync(u => u.Username == (asDriver ? "bob" : "root"));
+        if (asDriver)
+            await Fail(client, Lockout.MaxFailures);
+
+        var response = await client.PostAsJsonAsync($"/admin/locked-accounts/{username}/unlock", new { adminId = actor.Id });
+
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Empty(await app.Db().LockoutResets.ToListAsync());
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }

@@ -9,6 +9,8 @@ public static class AdminEndpoints
         app.MapGet("/admin/locked-accounts", async (AppDbContext db, TimeProvider clock) =>
             Results.Ok(await Lockout.All(db, clock.GetUtcNow().UtcDateTime)));
 
+        app.MapPost("/admin/locked-accounts/{username}/unlock", Unlock);
+
         app.MapGet("/admin/login-attempts", async (bool failedOnly, int? limit, AppDbContext db) =>
         {
             var query = db.LoginAttempts.AsNoTracking();
@@ -204,6 +206,19 @@ public static class AdminEndpoints
     }
 
     // accounts with history get deactivated instead
+    private static async Task<IResult> Unlock(string username, UnlockRequest req, AppDbContext db, TimeProvider clock)
+    {
+        if (!await IsAdmin(db, req.AdminId))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var now = clock.GetUtcNow().UtcDateTime;
+        if (await Lockout.LockedUntil(db, username, now) is null)
+            return Results.Conflict(new { message = $"{username} isn't locked." });
+        var userId = await db.Users.Where(u => u.Username == username).Select(u => (int?)u.Id).FirstOrDefaultAsync();
+        db.LockoutResets.Add(new LockoutReset { Username = username, UserId = userId, AdminId = req.AdminId, ResetAt = now });
+        await db.SaveChangesAsync();
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> DeleteAccount(int id, int adminId, AppDbContext db)
     {
         if (!await IsAdmin(db, adminId))
@@ -214,13 +229,14 @@ public static class AdminEndpoints
         if (account is null)
             return Results.NotFound();
         if (await db.PointsHistory.AnyAsync(h => h.UserId == id) || await db.AuditHistories.AnyAsync(a => a.UserId == id) ||
-            await db.Applications.AnyAsync(a => a.ReviewerId == id))
+            await db.Applications.AnyAsync(a => a.ReviewerId == id) || await db.LockoutResets.AnyAsync(r => r.AdminId == id))
             return Results.Conflict(new { message = $"{account.Username} has history on record, so deactivate the account instead." });
 
         try
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
             await db.LoginAttempts.Where(a => a.UserId == id).ExecuteUpdateAsync(u => u.SetProperty(a => a.UserId, (int?)null));
+            await db.LockoutResets.Where(r => r.UserId == id).ExecuteUpdateAsync(u => u.SetProperty(r => r.UserId, (int?)null));
             await db.Applications.Where(a => a.ApplicantId == id).ExecuteDeleteAsync();
             await db.CartItems.Where(c => c.UserId == id).ExecuteDeleteAsync();
             await db.NotificationsHistories.Where(n => n.UserId == id).ExecuteDeleteAsync();
@@ -278,5 +294,7 @@ public record CreateAccountRequest(int AdminId, string? UserType, string? Userna
 public record EditAccountRequest(int AdminId, string? FirstName, string? LastName, string? Email, string? PhoneNumber, string? Address, int? CompanyId);
 
 public record ChangeAccountStatusRequest(int AdminId, string? Status);
+
+public record UnlockRequest(int AdminId);
 
 public record PasswordChangeEntry(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress);

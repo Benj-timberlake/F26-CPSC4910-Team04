@@ -12,8 +12,12 @@ public static class Lockout
     // ends Duration after it started no matter how many more come in.
     public static async Task<DateTime?> LockedUntil(AppDbContext db, string username, DateTime now)
     {
+        // an admin unlock wipes the slate, keeping failures in the same second
+        var reset = await db.LockoutResets.AsNoTracking()
+            .Where(r => r.Username == username)
+            .MaxAsync(r => (DateTime?)r.ResetAt) ?? DateTime.MinValue;
         var attempts = await db.LoginAttempts.AsNoTracking()
-            .Where(a => a.Username == username && a.AttemptedAt > now - Duration - Duration)
+            .Where(a => a.Username == username && a.AttemptedAt > now - Duration - Duration && a.AttemptedAt >= reset)
             .OrderBy(a => a.AttemptedAt).ThenBy(a => a.Id)
             .Select(a => new { a.Succeeded, a.AttemptedAt })
             .ToListAsync();
