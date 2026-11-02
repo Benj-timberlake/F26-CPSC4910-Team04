@@ -89,12 +89,14 @@ public static class AdminEndpoints
                 : Results.NotFound());
 
         // the frontend drops any cookie with an older version on its next check
-        app.MapPost("/users/{id:int}/sessions/revoke", async (int id, RevokeSessionsRequest req, AppDbContext db) =>
+        app.MapPost("/users/{id:int}/sessions/revoke", async (int id, RevokeSessionsRequest req, AppDbContext db, TimeProvider clock) =>
         {
             if (req.ActorId != id && !await IsAdmin(db, req.ActorId))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             var changed = await db.Users.Where(u => u.Id == id)
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.SessionVersion, x => x.SessionVersion + 1));
+            await db.UserSessions.Where(s => s.UserId == id && s.RevokedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, clock.GetUtcNow().UtcDateTime));
             return changed == 0 ? Results.NotFound() : Results.NoContent();
         });
 

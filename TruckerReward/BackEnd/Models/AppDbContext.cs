@@ -43,6 +43,8 @@ public partial class AppDbContext : DbContext
 
     public DbSet<SignInCode> SignInCodes { get; set; }
 
+    public DbSet<UserSession> UserSessions { get; set; }
+
     public DbSet<LockoutReset> LockoutResets { get; set; }
 
     public DbSet<SavedReason> SavedReasons { get; set; }
@@ -522,6 +524,25 @@ public partial class AppDbContext : DbContext
             entity.HasOne<Company>().WithMany().HasForeignKey(e => e.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_saved_reasons_company");
+        });
+
+        modelBuilder.Entity<UserSession>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("user_sessions");
+            entity.HasIndex(e => e.KeyHash, "uq_user_sessions_key").IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.LastSeenAt }, "ix_user_sessions_user");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.KeyHash).HasMaxLength(64).HasColumnName("key_hash");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.LastSeenAt).HasColumnType("datetime").HasColumnName("last_seen_at");
+            entity.Property(e => e.IpAddress).HasMaxLength(45).HasColumnName("ip_address");
+            entity.Property(e => e.UserAgent).HasMaxLength(255).HasColumnName("user_agent");
+            entity.Property(e => e.RevokedAt).HasColumnType("datetime").HasColumnName("revoked_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_user_sessions_user");
         });
 
         modelBuilder.Entity<SignInCode>(entity =>
