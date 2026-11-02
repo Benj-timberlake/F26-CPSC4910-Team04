@@ -36,6 +36,8 @@ public sealed class PasswordManagerTests : TestContext
     [Fact]
     public void NewPasswordsCarryTheRulesForGeneratedPasswords()
     {
+        Services.AddSingleton(new FrontEnd.CdlStorage(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()));
+        this.AddTestAuthorization();
         UseBackend();
 
         var register = RenderComponent<Register>();

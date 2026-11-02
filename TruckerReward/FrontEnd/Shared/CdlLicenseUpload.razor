@@ -1,11 +1,52 @@
+@using System.Security.Claims
+@inject CdlStorage Storage
+@inject AuthenticationStateProvider Authentication
+@inject ILogger<CdlLicenseUpload> Log
+
 <section class="cdl-upload" aria-labelledby="@(Id + "-label")">
     <label id="@(Id + "-label")" for="@Id">Provide CDL license</label>
-    <p id="@(Id + "-help")" class="cdl-help">Select a PDF or image of your commercial driver's license. Files are not uploaded or saved yet.</p>
-    @* Intentionally omit name and upload handlers: file selection stays in the browser. *@
-    <input id="@Id" type="file" accept=".pdf,image/*" aria-describedby="@(Id + "-help")" />
+    <p id="@(Id + "-help")" class="cdl-help">PDF, JPEG, or PNG, up to 10 MB. @(Signup ? "Your license will be uploaded when you create your account." : "Selecting a file uploads it securely and replaces your previous license.")</p>
+    @if (Signup)
+    {
+        <input id="@Id" name="cdlLicense" type="file" accept=".pdf,.jpg,.jpeg,.png" aria-describedby="@(Id + "-help")" />
+    }
+    else
+    {
+        <InputFile id="@Id" OnChange="Upload" accept=".pdf,.jpg,.jpeg,.png" disabled="@uploading" aria-describedby="@(Id + "-help")" />
+        <p role="status">@status</p>
+    }
 </section>
 
 @code {
     [Parameter, EditorRequired]
     public string Id { get; set; } = string.Empty;
+    [Parameter] public bool Signup { get; set; }
+    private bool uploading;
+    private string? status;
+
+    private async Task Upload(InputFileChangeEventArgs args)
+    {
+        uploading = true;
+        status = "Uploading license...";
+        try
+        {
+            var user = (await Authentication.GetAuthenticationStateAsync()).User;
+            if (!user.IsInRole("driver") || user.HasClaim(c => c.Type == "sponsor_view_id") ||
+                !int.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+                throw new InvalidDataException("Sign in as a driver to upload your CDL.");
+            if (args.File.Size > CdlStorage.MaxBytes)
+                throw new InvalidDataException("CDL files must be 10 MB or smaller.");
+            await using var source = args.File.OpenReadStream(CdlStorage.MaxBytes);
+            using var file = await CdlStorage.ReadAsync(source);
+            await Storage.UploadAsync(id, file);
+            status = "CDL license uploaded successfully.";
+        }
+        catch (InvalidDataException ex) { status = ex.Message; }
+        catch (Exception ex)
+        {
+            Log.LogError(ex, "CDL upload failed");
+            status = "Could not upload your license. Please select the file again to retry.";
+        }
+        finally { uploading = false; }
+    }
 }

@@ -13,7 +13,7 @@
             <p role="alert" class="tr-alert-error">@error</p>
         }
 
-        <form class="tr-form" method="post" action="account/register">
+        <form class="tr-form" method="post" action="account/register" enctype="multipart/form-data">
             <label for="userType">I am a</label>
             <select id="userType" name="userType" @bind="userType">
                 <option value="driver">Driver</option>
@@ -35,7 +35,7 @@
 
             @if (userType == "driver")
             {
-                <CdlLicenseUpload Id="signup-cdl-license" />
+                <CdlLicenseUpload Id="signup-cdl-license" Signup="true" />
             }
 
             <label for="username">Username</label>

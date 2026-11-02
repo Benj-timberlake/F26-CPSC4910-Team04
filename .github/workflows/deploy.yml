@@ -68,6 +68,8 @@ jobs:
           rm -rf bundle
           mkdir -p bundle/FrontEnd
           mkdir -p bundle/BackEnd
+          mkdir -p bundle/.platform/nginx/conf.d
+          cp infra/nginx/cdl-upload.conf bundle/.platform/nginx/conf.d/cdl-upload.conf
 
 
       # ---------------------------------------------------

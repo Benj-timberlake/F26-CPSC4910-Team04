@@ -81,9 +81,16 @@ public static class AccountEndpoints
             [FromForm] string? phoneNumber,
             [FromForm] string? address,
             [FromForm] int? companyId,
+            IFormFile? cdlLicense,
             HttpContext http,
+            [FromServices] CdlStorage cdlStorage,
             IHttpClientFactory clients) =>
         {
+            using var license = userType == "driver" && cdlLicense is not null
+                ? await ReadLicense(cdlLicense, http.RequestAborted) : null;
+            if (userType == "driver" && cdlLicense is not null && license is null)
+                return Results.Redirect("/register?error=" + Uri.EscapeDataString("Choose a PDF, JPEG, or PNG CDL license, up to 10 MB."));
+
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/register",
                 new { username, firstName, lastName, email, password, userType, phoneNumber, address, companyId });
 
@@ -92,6 +99,15 @@ public static class AccountEndpoints
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await TruckerSignIn.SignInAsync(http, user!);
+            if (license is not null && user!.UserType == "driver")
+            {
+                try { await cdlStorage.UploadAsync(user.Id, license, http.RequestAborted); }
+                catch (Exception ex)
+                {
+                    http.RequestServices.GetRequiredService<ILogger<CdlStorage>>().LogError(ex, "Signup CDL upload failed for driver {DriverId}", user.Id);
+                    return Results.LocalRedirect("/dashboard?cdlUpload=failed");
+                }
+            }
             return Results.LocalRedirect("/dashboard");
         }).DisableAntiforgery();
 
@@ -284,6 +300,17 @@ public static class AccountEndpoints
     private static ITimeLimitedDataProtector Protector(HttpContext http) =>
         http.RequestServices.GetRequiredService<IDataProtectionProvider>()
             .CreateProtector("sign-in-code").ToTimeLimitedDataProtector();
+
+    private static async Task<MemoryStream?> ReadLicense(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length > CdlStorage.MaxBytes) return null;
+        try
+        {
+            await using var source = file.OpenReadStream();
+            return await CdlStorage.ReadAsync(source, cancellationToken);
+        }
+        catch (InvalidDataException) { return null; }
+    }
 
     private static string? Ip(HttpContext http) => http.Connection.RemoteIpAddress?.ToString();
 

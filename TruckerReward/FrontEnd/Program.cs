@@ -8,6 +8,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.AddTruckerAuthentication();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<CdlStorage>();
 
 void ConfigureBackendClient(HttpClient client)
 {

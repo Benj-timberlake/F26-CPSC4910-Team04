@@ -22,6 +22,11 @@
     else
     {
         <h1>My TruckerReward Dashboard</h1>
+        @if (account.UserType == "driver" && System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["cdlUpload"] == "failed")
+        {
+            <p role="alert" class="tr-alert-error">Your account was created, but your CDL upload failed. Please retry below.</p>
+            <CdlLicenseUpload Id="retry-cdl-license" />
+        }
         @if (account.UserType == "sponsor")
         {
             <p><a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a> <button type="button" class="tr-btn" @onclick="OpenMonthlyPoints">Montly Points</button></p>
