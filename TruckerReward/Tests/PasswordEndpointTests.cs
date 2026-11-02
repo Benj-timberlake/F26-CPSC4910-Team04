@@ -169,6 +169,45 @@ public sealed class PasswordEndpointTests : IAsyncDisposable
         Assert.Equal(PasswordChange.Changed, list[1].ChangeType);
     }
 
+    [Fact]
+    public async Task AdminSendsAResetLinkThatWorksAndIsLoggedWithTheirName()
+    {
+        var (client, id) = await StartWithBob();
+        var rootId = (await app.Db().Users.SingleAsync(u => u.Username == "root")).Id;
+
+        var sent = await client.PostAsJsonAsync($"/admin/accounts/{id}/reset-link", new { adminId = rootId });
+
+        Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
+        var token = TokenFrom(Assert.Single(app.Email.Sent, m => m.To == "bob@example.com").Body);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/auth/reset", new { token, newPassword = "NewPass99!" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await Login(client, "NewPass99!"));
+        var changes = await client.GetFromJsonAsync<List<PasswordChangeEntry>>("/admin/password-changes");
+        var request = Assert.Single(changes!, c => c.ChangeType == PasswordChange.ResetRequested);
+        Assert.Equal("root", request.RequestedBy);
+        var audit = await client.GetFromJsonAsync<List<AuditEntry>>($"/users/{rootId}/audit?category=passwords");
+        Assert.Contains(audit!, e => e.Username == "bob" && e.By == "root");
+    }
+
+    [Theory]
+    [InlineData(false, "active", HttpStatusCode.Forbidden)]
+    [InlineData(true, "inactive", HttpStatusCode.Conflict)]
+    public async Task OnlyAdminsSendResetLinksToActiveAccounts(bool asAdmin, string status, HttpStatusCode expected)
+    {
+        var (client, id) = await StartWithBob();
+        using (var db = app.Db())
+        {
+            (await db.Users.SingleAsync(u => u.Id == id)).Status = status;
+            await db.SaveChangesAsync();
+        }
+        var actor = (await app.Db().Users.SingleAsync(u => u.Username == (asAdmin ? "root" : "bob"))).Id;
+
+        var response = await client.PostAsJsonAsync($"/admin/accounts/{id}/reset-link", new { adminId = actor });
+
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Empty(app.Email.Sent);
+        Assert.Empty(await app.Db().PasswordResets.ToListAsync());
+    }
+
     private static string TokenFrom(string body) =>
         body.Split("token=")[1].Split('\n')[0].Trim();
 
