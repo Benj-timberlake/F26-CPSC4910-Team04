@@ -115,6 +115,30 @@ public sealed class ManagePointsPageTests : TestContext
     }
 
     [Fact]
+    public void PickingASavedReasonFillsItAndNewOnesCanBeSaved()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        backend.Routes["GET /users/5/points/reasons"] = (HttpStatusCode.OK, """[{"id":3,"reason":"Safe driving week"}]""");
+        backend.Routes["POST /users/5/points/bulk"] = (HttpStatusCode.OK, """{"message":"Gave 50 points to 2 drivers."}""");
+        backend.Routes["POST /users/5/points/reasons"] = (HttpStatusCode.OK, """{"id":4,"reason":"Top week"}""");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+        page.Find("thead input[type=checkbox]").Change(true);
+        page.FindAll("button").Single(b => b.TextContent == "Award selected").Click();
+
+        page.Find("#bulk-saved").Change("3");
+        Assert.Equal("Safe driving week", page.Find("#bulk-reason").GetAttribute("value"));
+        Assert.Empty(page.FindAll(".save-reason"));
+
+        page.Find("#bulk-amount").Change("50");
+        page.Find("#bulk-reason").Change("Top week");
+        page.Find(".save-reason input").Change(true);
+        page.FindAll("button").Single(b => b.TextContent == "Award").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("""{"reason":"Top week"}""", backend.Bodies["POST /users/5/points/reasons"]));
+    }
+
+    [Fact]
     public void AdminsDontGetCheckboxes()
     {
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);

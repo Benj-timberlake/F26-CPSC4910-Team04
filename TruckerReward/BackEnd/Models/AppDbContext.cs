@@ -41,6 +41,8 @@ public partial class AppDbContext : DbContext
 
     public DbSet<LockoutReset> LockoutResets { get; set; }
 
+    public DbSet<SavedReason> SavedReasons { get; set; }
+
     public virtual DbSet<PasswordChange> PasswordChanges { get; set; }
 
     public virtual DbSet<PasswordReset> PasswordResets { get; set; }
@@ -503,6 +505,19 @@ public partial class AppDbContext : DbContext
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.AdminId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_lockout_resets_admin");
+        });
+
+        modelBuilder.Entity<SavedReason>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("saved_reasons");
+            entity.HasIndex(e => new { e.CompanyId, e.Reason }, "uq_saved_reasons_company_reason").IsUnique();
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CompanyId).HasColumnName("company_id");
+            entity.Property(e => e.Reason).HasMaxLength(500).HasColumnName("reason");
+            entity.HasOne<Company>().WithMany().HasForeignKey(e => e.CompanyId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_saved_reasons_company");
         });
 
         modelBuilder.Entity<User>(entity =>
