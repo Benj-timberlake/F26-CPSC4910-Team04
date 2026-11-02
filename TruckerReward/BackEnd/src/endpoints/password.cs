@@ -45,6 +45,26 @@ public static class PasswordEndpoints
             return reply;
         });
 
+        app.MapPost("/admin/accounts/{id:int}/reset-link", async (int id, AdminResetRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config) =>
+        {
+            var admin = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == req.AdminId && u.UserType == AuthEndpoints.Admin);
+            if (admin is null)
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+            if (user is null)
+                return Results.NotFound();
+            if (user.Status != User.Active)
+                return Results.Conflict(new { message = $"{user.Username} is deactivated, so reactivate the account first." });
+
+            var now = clock.GetUtcNow().UtcDateTime;
+            var link = ResetLink(db, user, now + ResetLinkLifetime, config);
+            db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = PasswordChange.ResetRequested, ChangedAt = now, RequestedBy = admin.Id });
+            await db.SaveChangesAsync();
+
+            await notifications.ResetLinkSent(user, link);
+            return Results.Ok(new { message = $"A reset link was emailed to {user.Email}." });
+        });
+
         app.MapPost("/auth/reset", async (ResetPasswordRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             var now = clock.GetUtcNow().UtcDateTime;
@@ -85,5 +105,7 @@ public static class PasswordEndpoints
 public record ChangePasswordRequest(string? CurrentPassword, string NewPassword, string? IpAddress);
 
 public record ForgotPasswordRequest(string Email, string? IpAddress);
+
+public record AdminResetRequest(int AdminId);
 
 public record ResetPasswordRequest(string Token, string NewPassword, string? IpAddress);

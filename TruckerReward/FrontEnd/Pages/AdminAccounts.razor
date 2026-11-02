@@ -134,6 +134,10 @@
                                         @(a.Status == "active" ? "Deactivate" : "Reactivate")
                                     </button>
                                     <button type="button" class="tr-btn-outline edit" disabled="@busy" @onclick="() => StartEdit(a)">Edit</button>
+                                    @if (a.Status == "active")
+                                    {
+                                        <button type="button" class="tr-btn-outline reset-link" disabled="@busy" @onclick="() => SendResetLink(a)">Send reset link</button>
+                                    }
                                     @if (deleting == a.Id)
                                     {
                                         <button type="button" class="tr-btn delete" disabled="@busy" @onclick="() => Delete(a)">Delete @a.Username for good</button>
@@ -331,6 +335,27 @@
             {
                 error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
             }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private async Task SendResetLink(Account a)
+    {
+        busy = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"admin/accounts/{a.Id}/reset-link", new { adminId = int.Parse(id!) });
+            var message = (await response.Content.ReadFromJsonAsync<Problem>())?.Message;
+            if (response.IsSuccessStatusCode)
+                notice = message ?? $"A reset link was emailed to {a.Username}.";
+            else
+                error = message ?? "That didn't work.";
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {

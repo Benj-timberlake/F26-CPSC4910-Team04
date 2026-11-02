@@ -46,9 +46,11 @@ CREATE TABLE IF NOT EXISTS password_changes (
     change_type ENUM('changed','reset_requested','reset_completed') NOT NULL,
     ip_address VARCHAR(45) NULL,
     changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    requested_by INT NULL,
     PRIMARY KEY (id),
     KEY ix_password_changes_user (user_id),
-    CONSTRAINT fk_password_changes_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    CONSTRAINT fk_password_changes_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_password_changes_requested_by FOREIGN KEY (requested_by) REFERENCES users (id) ON DELETE SET NULL
 );
 
 -- forgot-password links. only a hash of the token is stored, each one is single use and expires

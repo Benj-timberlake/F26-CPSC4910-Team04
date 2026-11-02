@@ -366,10 +366,14 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(45)
                 .HasColumnName("ip_address");
             entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.RequestedBy).HasColumnName("requested_by");
 
             entity.HasOne(d => d.User).WithMany(p => p.PasswordChanges)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_password_changes_user");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.RequestedBy)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_password_changes_requested_by");
         });
 
         modelBuilder.Entity<PasswordReset>(entity =>

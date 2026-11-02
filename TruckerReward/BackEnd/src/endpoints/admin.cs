@@ -25,7 +25,8 @@ public static class AdminEndpoints
                 .OrderByDescending(c => c.ChangedAt).ThenByDescending(c => c.Id)
                 .Take(Limit(limit))
                 .Join(db.Users, c => c.UserId, u => u.Id,
-                    (c, u) => new PasswordChangeEntry(c.ChangedAt, u.Id, u.Username, c.ChangeType, c.IpAddress))
+                    (c, u) => new PasswordChangeEntry(c.ChangedAt, u.Id, u.Username, c.ChangeType, c.IpAddress,
+                        db.Users.Where(a => a.Id == c.RequestedBy).Select(a => a.Username).FirstOrDefault()))
                 .ToListAsync()));
 
         app.MapGet("/admin/accounts/counts", async (AppDbContext db) =>
@@ -279,4 +280,4 @@ public record EditAccountRequest(int AdminId, string? FirstName, string? LastNam
 
 public record ChangeAccountStatusRequest(int AdminId, string? Status);
 
-public record PasswordChangeEntry(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress);
+public record PasswordChangeEntry(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress, string? RequestedBy = null);

@@ -20,5 +20,8 @@ public partial class PasswordChange
 
     public DateTime ChangedAt { get; set; }
 
+    // the admin who sent the reset link, if one did
+    public int? RequestedBy { get; set; }
+
     public virtual User User { get; set; } = null!;
 }
