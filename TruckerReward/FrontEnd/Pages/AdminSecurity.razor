@@ -1,5 +1,6 @@
 @page "/admin/security"
 @attribute [Authorize(Roles = "admin")]
+@using System.Security.Claims
 @inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Security</PageTitle>
@@ -19,6 +20,10 @@
     {
         <section class="tr-card">
             <h2>Locked accounts</h2>
+            @if (unlockMessage is not null)
+            {
+                <p role="status" class="@(unlockFailed ? "tr-alert-error" : "tr-alert-success")">@unlockMessage</p>
+            }
             @if (locked.Count == 0)
             {
                 <p class="tr-muted">Nothing is locked right now. An account locks for three minutes after five wrong passwords in a row.</p>
@@ -27,11 +32,15 @@
             {
                 <div class="tr-table-wrap">
                     <table class="tr-table">
-                        <thead><tr><th>Username</th><th>Locked until</th></tr></thead>
+                        <thead><tr><th>Username</th><th>Locked until</th><th></th></tr></thead>
                         <tbody>
                             @foreach (var l in locked)
                             {
-                                <tr><td>@l.Username</td><td>@Time(l.LockedUntil)</td></tr>
+                                <tr>
+                                    <td>@l.Username</td>
+                                    <td>@Time(l.LockedUntil)</td>
+                                    <td><button type="button" class="tr-btn-outline unlock" disabled="@busy" @onclick="() => Unlock(l)">Unlock</button></td>
+                                </tr>
                             }
                         </tbody>
                     </table>
@@ -87,7 +96,7 @@
                                 <tr>
                                     <td>@Time(c.ChangedAt)</td>
                                     <td>@c.Username</td>
-                                    <td>@ChangeLabel(c.ChangeType)</td>
+                                    <td>@ChangeLabel(c.ChangeType)@(c.RequestedBy is null ? "" : $" by {c.RequestedBy}")</td>
                                     <td>@(c.IpAddress ?? "—")</td>
                                 </tr>
                             }
@@ -106,11 +115,17 @@
 </style>
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
     private bool failedOnly = true;
     private List<Locked>? locked;
     private List<Attempt>? attempts;
     private List<Change>? changes;
     private string? loadError;
+    private string? unlockMessage;
+    private bool unlockFailed;
+    private bool busy;
 
     protected override async Task OnInitializedAsync()
     {
@@ -124,6 +139,30 @@
         catch (HttpRequestException)
         {
             loadError = "Couldn't reach the backend. Try again in a moment.";
+        }
+    }
+
+    // only for someone whose identity was checked another way
+    private async Task Unlock(Locked l)
+    {
+        busy = true;
+        try
+        {
+            var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"admin/locked-accounts/{Uri.EscapeDataString(l.Username)}/unlock", new { adminId = int.Parse(id!) });
+            unlockFailed = !response.IsSuccessStatusCode;
+            unlockMessage = unlockFailed ? (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "Couldn't unlock that account." : $"{l.Username} can sign in again.";
+            locked = await client.GetFromJsonAsync<List<Locked>>("admin/locked-accounts");
+        }
+        catch (HttpRequestException)
+        {
+            unlockFailed = true;
+            unlockMessage = "Couldn't reach the backend. Try again in a moment.";
+        }
+        finally
+        {
+            busy = false;
         }
     }
 
@@ -145,5 +184,6 @@
 
     private sealed record Locked(string Username, DateTime LockedUntil);
     private sealed record Attempt(string Username, int? UserId, bool Succeeded, string? IpAddress, DateTime AttemptedAt);
-    private sealed record Change(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress);
+    private sealed record Change(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress, string? RequestedBy);
+    private sealed record Problem(string? Message);
 }

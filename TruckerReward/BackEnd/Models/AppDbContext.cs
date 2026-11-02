@@ -39,6 +39,8 @@ public partial class AppDbContext : DbContext
 
     public DbSet<PasskeyCredential> PasskeyCredentials { get; set; }
 
+    public DbSet<LockoutReset> LockoutResets { get; set; }
+
     public virtual DbSet<PasswordChange> PasswordChanges { get; set; }
 
     public virtual DbSet<PasswordReset> PasswordResets { get; set; }
@@ -366,10 +368,14 @@ public partial class AppDbContext : DbContext
                 .HasMaxLength(45)
                 .HasColumnName("ip_address");
             entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.RequestedBy).HasColumnName("requested_by");
 
             entity.HasOne(d => d.User).WithMany(p => p.PasswordChanges)
                 .HasForeignKey(d => d.UserId)
                 .HasConstraintName("fk_password_changes_user");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.RequestedBy)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_password_changes_requested_by");
         });
 
         modelBuilder.Entity<PasswordReset>(entity =>
@@ -479,6 +485,24 @@ public partial class AppDbContext : DbContext
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_passkey_credentials_user");
+        });
+
+        modelBuilder.Entity<LockoutReset>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("lockout_resets");
+            entity.HasIndex(e => e.Username, "ix_lockout_resets_username");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Username).HasMaxLength(255).HasColumnName("username");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.AdminId).HasColumnName("admin_id");
+            entity.Property(e => e.ResetAt).HasColumnType("datetime").HasColumnName("reset_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_lockout_resets_user");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.AdminId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_lockout_resets_admin");
         });
 
         modelBuilder.Entity<User>(entity =>
