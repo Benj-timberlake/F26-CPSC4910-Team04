@@ -6,6 +6,8 @@ public static class PointsEndpoints
 {
     public const int MaxChange = 1_000_000;
     public const int MaxReasonLength = 500;
+    public const int MaxBulkDrivers = 200;
+    public const int MaxSavedReasons = 50;
 
     public static void MapPointsEndpoints(this WebApplication app)
     {
@@ -14,6 +16,10 @@ public static class PointsEndpoints
         app.MapGet("/users/{id:int}/points/drivers", Drivers);
         app.MapPost("/users/{id:int}/points/drivers/{driverId:int}", Change);
         app.MapPost("/users/{id:int}/points/drivers/{driverId:int}/remove", Remove);
+        app.MapPost("/users/{id:int}/points/bulk", Bulk);
+        app.MapGet("/users/{id:int}/points/reasons", Reasons);
+        app.MapPost("/users/{id:int}/points/reasons", SaveReason);
+        app.MapDelete("/users/{id:int}/points/reasons/{reasonId:int}", ForgetReason);
         // period is all, month or week
         app.MapGet("/users/{id:int}/leaderboard", Leaderboard);
     }
@@ -113,28 +119,115 @@ public static class PointsEndpoints
             return Results.NotFound();
 
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        var (failure, driver, historyCompanyId) = await Apply(db, actor, driverId, req.Points, reason, req.CompanyId, clock);
+        if (failure is not null || driver is null)
+            return failure!;
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
+        var displayedPoints = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId).SumAsync(h => (long)h.PointsDelta);
+        await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.') }.", historyCompanyId, actor.Username);
+        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent));
+    }
+
+    // all or nothing, so a bad driver in the list changes no one
+    private static async Task<IResult> Bulk(int id, BulkPointsRequest req, AppDbContext db, Notifications notifications, TimeProvider clock)
+    {
+        var reason = req.Reason?.Trim() ?? "";
+        var driverIds = req.DriverIds?.Distinct().ToList() ?? [];
+        if (driverIds.Count is 0 or > MaxBulkDrivers)
+            return Results.BadRequest(new { message = $"Pick 1 to {MaxBulkDrivers} drivers." });
+        if (req.Points == 0 || Math.Abs((long)req.Points) > MaxChange)
+            return Results.BadRequest(new { message = $"Change points by 1 to {MaxChange:N0} either way." });
+        if (reason.Length is 0 or > MaxReasonLength)
+            return Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." });
+
+        var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+        if (actor is null)
+            return Results.NotFound();
+
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        var changed = new List<(User Driver, int CompanyId)>();
+        foreach (var driverId in driverIds)
+        {
+            var (failure, driver, companyId) = await Apply(db, actor, driverId, req.Points, reason, req.CompanyId, clock);
+            if (failure is not null || driver is null)
+                return failure!;
+            changed.Add((driver, companyId));
+        }
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        foreach (var (driver, companyId) in changed)
+            await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.')}.", companyId, actor.Username);
+        return Results.Ok(new { message = $"{(req.Points > 0 ? "Gave" : "Took")} {Math.Abs(req.Points):N0} points {(req.Points > 0 ? "to" : "from")} {changed.Count} {(changed.Count == 1 ? "driver" : "drivers")}." });
+    }
+
+    // admins have no company, so they get none
+    private static async Task<IResult> Reasons(int id, AppDbContext db)
+    {
+        var companyId = await SponsorCompany(db, id);
+        return Results.Ok(companyId is null ? [] : await db.SavedReasons.AsNoTracking()
+            .Where(r => r.CompanyId == companyId)
+            .OrderBy(r => r.Reason)
+            .Select(r => new SavedReasonEntry(r.Id, r.Reason))
+            .ToListAsync());
+    }
+
+    private static async Task<IResult> SaveReason(int id, SaveReasonRequest req, AppDbContext db)
+    {
+        var reason = req.Reason?.Trim() ?? "";
+        if (reason.Length is 0 or > MaxReasonLength)
+            return Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." });
+        if (await SponsorCompany(db, id) is not int companyId)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (await db.SavedReasons.FirstOrDefaultAsync(r => r.CompanyId == companyId && r.Reason == reason) is { } existing)
+            return Results.Ok(new SavedReasonEntry(existing.Id, existing.Reason));
+        if (await db.SavedReasons.CountAsync(r => r.CompanyId == companyId) >= MaxSavedReasons)
+            return Results.Conflict(new { message = $"You can save up to {MaxSavedReasons} reasons. Remove one first." });
+
+        var saved = new SavedReason { CompanyId = companyId, Reason = reason };
+        db.SavedReasons.Add(saved);
+        await db.SaveChangesAsync();
+        return Results.Ok(new SavedReasonEntry(saved.Id, saved.Reason));
+    }
+
+    private static async Task<IResult> ForgetReason(int id, int reasonId, AppDbContext db)
+    {
+        var companyId = await SponsorCompany(db, id);
+        var removed = await db.SavedReasons.Where(r => r.Id == reasonId && r.CompanyId == companyId).ExecuteDeleteAsync();
+        return removed == 0 ? Results.NotFound() : Results.NoContent();
+    }
+
+    private static async Task<int?> SponsorCompany(AppDbContext db, int id) =>
+        await db.Users.AnyAsync(u => u.Id == id && u.UserType == AuthEndpoints.Sponsor)
+            ? await CompanyMembershipQueries.FirstCompanyId(db, id)
+            : null;
+
+    // checks and stages one driver's change, the caller saves inside a serializable transaction
+    private static async Task<(IResult? Failure, User? Driver, int CompanyId)> Apply(AppDbContext db, User actor, int driverId, int points, string reason, int? companyId, TimeProvider clock)
+    {
         // same balance lock as checkout
         await db.Users.Where(u => u.Id == driverId)
             .ExecuteUpdateAsync(update => update.SetProperty(u => u.Points, u => u.Points));
         var driver = await db.Users.FirstOrDefaultAsync(u => u.Id == driverId && u.UserType == AuthEndpoints.Driver);
         List<int> driverCompanyIds = driver is null ? [] : await db.AccountsCompanies.Where(membership => membership.AccountId == driverId)
             .Select(membership => membership.CompanyId).ToListAsync();
-        var actorCompanyId = actor.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, id) : null;
+        var actorCompanyId = actor.UserType == AuthEndpoints.Sponsor ? await CompanyMembershipQueries.FirstCompanyId(db, actor.Id) : null;
         if (driver is null || driverCompanyIds.Count == 0)
-            return Results.NotFound(new { message = "That driver isn't with a sponsor." });
+            return (Results.NotFound(new { message = "That driver isn't with a sponsor." }), null, 0);
         var sponsorHasDriver = actorCompanyId is int sponsorCompany &&
             driverCompanyIds.Contains(sponsorCompany);
         if (!await CanManage(db, actor) || (actor.UserType == AuthEndpoints.Sponsor && !sponsorHasDriver))
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
+            return (Results.StatusCode(StatusCodes.Status403Forbidden), null, 0);
         int historyCompanyId;
         if (actor.UserType == AuthEndpoints.Sponsor)
         {
             historyCompanyId = actorCompanyId!.Value;
         }
-        else if (req.CompanyId is int selectedCompanyId)
+        else if (companyId is int selectedCompanyId)
         {
             if (!driverCompanyIds.Contains(selectedCompanyId))
-                return Results.BadRequest(new { message = "Choose a company this driver belongs to." });
+                return (Results.BadRequest(new { message = "Choose a company this driver belongs to." }), null, 0);
             historyCompanyId = selectedCompanyId;
         }
         else if (driverCompanyIds.Count == 1)
@@ -143,22 +236,17 @@ public static class PointsEndpoints
         }
         else
         {
-            return Results.BadRequest(new { message = "Choose which company this points change is for." });
+            return (Results.BadRequest(new { message = "Choose which company this points change is for." }), null, 0);
         }
-        var balance = (long)driver.Points + req.Points;
+        var balance = (long)driver.Points + points;
         if (balance is > int.MaxValue or < int.MinValue)
-            return Results.BadRequest(new { message = "That would put the balance out of range." });
+            return (Results.BadRequest(new { message = "That would put the balance out of range." }), null, 0);
 
         driver.Points = (int)balance;
-        var history = new PointsHistory { UserId = driverId, CompanyId = historyCompanyId, PointsDelta = req.Points, Timestamp = clock.GetUtcNow().UtcDateTime };
+        var history = new PointsHistory { UserId = driverId, CompanyId = historyCompanyId, PointsDelta = points, Timestamp = clock.GetUtcNow().UtcDateTime };
         db.PointsHistory.Add(history);
         db.AuditHistories.Add(new AuditHistory { UserId = actor.Id, PointsHistory = history, Resoning = reason });
-        await db.SaveChangesAsync();
-        await transaction.CommitAsync();
-        var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
-        var displayedPoints = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId).SumAsync(h => (long)h.PointsDelta);
-        await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.') }.", historyCompanyId, actor.Username);
-        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent));
+        return (null, driver, historyCompanyId);
     }
 
     // cancels the accepted application to allow reapplying
@@ -263,6 +351,12 @@ public record LeaderboardRow(int Rank, int Id, string Username, string FirstName
 public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Rows);
 
 public record RemoveDriverRequest(string? Reason);
+
+public record SaveReasonRequest(string? Reason);
+
+public record SavedReasonEntry(int Id, string Reason);
+
+public record BulkPointsRequest(List<int>? DriverIds, int Points, string? Reason, int? CompanyId = null);
 
 public record ChangePointsRequest(int Points, string? Reason, int? CompanyId = null);
 

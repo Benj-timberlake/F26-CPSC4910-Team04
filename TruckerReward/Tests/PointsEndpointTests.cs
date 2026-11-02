@@ -107,6 +107,86 @@ public sealed class PointsEndpointTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SponsorAwardsSeveralDriversAtOnce()
+    {
+        await Start();
+
+        var response = await client.PostAsJsonAsync($"/users/{sue}/points/bulk", new { driverIds = new[] { bob, amy }, points = 50, reason = "Top week" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var db = app.Db();
+        Assert.Equal([150, 50], await db.Users.Where(u => u.Id == bob || u.Id == amy).OrderBy(u => u.Id).Select(u => u.Points).ToListAsync());
+        var history = await db.PointsHistory.ToListAsync();
+        Assert.Equal(2, history.Count);
+        Assert.All(history, h => Assert.Equal((50, acme), (h.PointsDelta, h.CompanyId)));
+        Assert.All(await db.AuditHistories.ToListAsync(), a => Assert.Equal((sue, "Top week"), (a.UserId, a.Resoning)));
+        Assert.Equal(2, await db.NotificationsHistories.CountAsync(n => n.UserId == bob || n.UserId == amy));
+    }
+
+    [Fact]
+    public async Task BulkAwardWithAnotherSponsorsDriverChangesNoOne()
+    {
+        await Start();
+        var tom = (await app.Db().Users.SingleAsync(u => u.Username == "tom")).Id;
+
+        var response = await client.PostAsJsonAsync($"/users/{sue}/points/bulk", new { driverIds = new[] { bob, tom }, points = 50, reason = "Top week" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(100, (await app.Db().Users.SingleAsync(u => u.Id == bob)).Points);
+        Assert.Empty(await app.Db().PointsHistory.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(0, 50, "Top week")]
+    [InlineData(2, 0, "Top week")]
+    [InlineData(2, 50, " ")]
+    public async Task BadBulkAwardsAreRefused(int drivers, int points, string reason)
+    {
+        await Start();
+
+        var response = await client.PostAsJsonAsync($"/users/{sue}/points/bulk", new { driverIds = new[] { bob, amy }.Take(drivers), points, reason });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await app.Db().PointsHistory.ToListAsync());
+    }
+
+    [Fact]
+    public async Task SavedReasonsAreSharedWithinACompanyOnly()
+    {
+        await Start();
+        var tia = User("tia", "sponsor", acme);
+        using (var db = app.Db())
+        {
+            db.Users.Add(tia);
+            await db.SaveChangesAsync();
+        }
+
+        var saved = await client.PostAsJsonAsync($"/users/{sue}/points/reasons", new { reason = " Safe driving week " });
+        await client.PostAsJsonAsync($"/users/{sue}/points/reasons", new { reason = "Safe driving week" });
+
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var shared = await client.GetFromJsonAsync<List<SavedReasonEntry>>($"/users/{tia.Id}/points/reasons");
+        Assert.Equal("Safe driving week", Assert.Single(shared!).Reason);
+        Assert.Empty((await client.GetFromJsonAsync<List<SavedReasonEntry>>($"/users/{zed}/points/reasons"))!);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"/users/{zed}/points/reasons/{shared![0].Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/users/{tia.Id}/points/reasons/{shared[0].Id}")).StatusCode);
+        Assert.Empty(await app.Db().SavedReasons.ToListAsync());
+    }
+
+    [Fact]
+    public async Task OnlySponsorsSaveReasonsAndOnlySoMany()
+    {
+        await Start();
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/users/{ann}/points/reasons", new { reason = "x" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync($"/users/{bob}/points/reasons", new { reason = "x" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync($"/users/{sue}/points/reasons", new { reason = " " })).StatusCode);
+        for (var i = 0; i < PointsEndpoints.MaxSavedReasons; i++)
+            await client.PostAsJsonAsync($"/users/{sue}/points/reasons", new { reason = $"Reason {i}" });
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"/users/{sue}/points/reasons", new { reason = "One more" })).StatusCode);
+    }
+
+    [Fact]
     public async Task SponsorsSearchTheirOwnDrivers()
     {
         await Start();

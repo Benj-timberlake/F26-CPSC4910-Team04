@@ -54,10 +54,22 @@
         }
         else
         {
+            @if (CanBulk && selected.Count > 0)
+            {
+                <div class="bulk-bar" role="region" aria-label="Selected drivers">
+                    <span>@selected.Count selected</span>
+                    <button type="button" class="tr-btn" @onclick="StartBulk">Award selected</button>
+                    <button type="button" class="tr-btn-outline" @onclick="() => selected.Clear()">Clear</button>
+                </div>
+            }
             <div class="tr-table-wrap">
                 <table class="tr-table">
                     <thead>
                         <tr>
+                            @if (CanBulk)
+                            {
+                                <th><input type="checkbox" aria-label="Select all drivers" checked="@(selected.Count == drivers.Count)" @onchange="ToggleAll" /></th>
+                            }
                             <th>Driver</th>
                             <th>Email</th>
                             <th>Points</th>
@@ -73,6 +85,10 @@
                         @foreach (var d in drivers)
                         {
                             <tr>
+                                @if (CanBulk)
+                                {
+                                    <td><input type="checkbox" aria-label="Select @d.Username" checked="@selected.Contains(d.Id)" @onchange="() => Toggle(d.Id)" /></td>
+                                }
                                 <td>@d.FirstName @d.LastName (@d.Username)</td>
                                 <td>@d.Email</td>
                                 <td class="balance">@d.Points.ToString("N0")</td>
@@ -111,6 +127,26 @@
                 </table>
             </div>
         }
+    }
+    @if (bulkOpen)
+    {
+        <div class="modal-backdrop">
+            <section class="change-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-modal-title">
+                <h2 id="bulk-modal-title">Award @selected.Count @(selected.Count == 1 ? "driver" : "drivers")</h2>
+                <p class="tr-muted">@string.Join(", ", drivers!.Where(d => selected.Contains(d.Id)).Select(d => d.Username))</p>
+                <label for="bulk-amount">Points for each driver</label>
+                <input id="bulk-amount" type="number" placeholder="+100 or -50" @bind="amount" />
+                @ReasonField("bulk")
+                @if (error is not null)
+                {
+                    <p role="alert" class="tr-alert-error">@error</p>
+                }
+                <div class="modal-actions">
+                    <button type="button" class="tr-btn" disabled="@(busy || amount is null)" @onclick="SaveBulk">Award</button>
+                    <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => bulkOpen = false">Cancel</button>
+                </div>
+            </section>
+        </div>
     }
     @if (editingDriver is not null)
     {
@@ -172,8 +208,7 @@
                 {
                     <p role="alert" class="tr-alert-error">@error</p>
                 }
-                <label for="change-reason">Reason</label>
-                <input id="change-reason" type="text" maxlength="500" @bind="reason" />
+                @ReasonField("change")
                 <div class="modal-actions">
                     <button type="button" class="tr-btn" disabled="@(!CanSaveChange)" @onclick="Save">Save change</button>
                     <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="CloseEdit">Cancel</button>
@@ -211,6 +246,13 @@
         width: 120px;
     }
 
+    .saved-reasons { display: flex; gap: 8px; }
+    .change-modal .saved-reasons select { flex: 1; }
+    .change-modal .save-reason { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-weight: 400; }
+    .change-modal .save-reason input { width: auto; }
+
+    .bulk-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+
     .modal-backdrop { position: fixed; inset: 0; z-index: 1050; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0009; }
     .change-modal { width: min(560px, 100%); max-height: 90vh; overflow-y: auto; padding: 24px; border-radius: 12px; background: white; color: #222; box-shadow: 0 18px 60px #0005; }
     .change-modal h2 { margin-top: 0; }
@@ -246,6 +288,11 @@
     private int? selectedCompanyId;
     private bool companyChoicesLoading;
     private string? companyChoiceError;
+    private readonly HashSet<int> selected = [];
+    private List<SavedReason> savedReasons = [];
+    private int? pickedReasonId;
+    private bool saveReason;
+    private bool bulkOpen;
 
     protected override async Task OnInitializedAsync()
     {
@@ -254,6 +301,7 @@
         viewing = FrontEnd.Auth.ViewAs.IsViewing(user);
         admin = user.IsInRole("admin");
         await Load();
+        await LoadReasons();
     }
 
     private async Task Search()
@@ -288,6 +336,7 @@
             }
             response.EnsureSuccessStatusCode();
             drivers = await response.Content.ReadFromJsonAsync<List<Driver>>() ?? [];
+            selected.IntersectWith(drivers.Select(d => d.Id));
             ranged = from is not null || to is not null;
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
@@ -301,7 +350,7 @@
         editingDriver = d;
         removing = null;
         amount = null;
-        reason = null;
+        ResetReason();
         notice = null;
         error = null;
         editCompanies = null;
@@ -364,6 +413,7 @@
             if (response.IsSuccessStatusCode)
             {
                 var updated = await response.Content.ReadFromJsonAsync<Driver>();
+                await RememberReason();
                 if (ranged || admin)
                     await Load();
                 else
@@ -376,6 +426,150 @@
             else
             {
                 error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private RenderFragment ReasonField(string prefix) =>
+        @<div class="reason-field">
+            @if (savedReasons.Count > 0)
+            {
+                <label for="@(prefix)-saved">Saved reasons</label>
+                <div class="saved-reasons">
+                    <select id="@(prefix)-saved" value="@pickedReasonId" @onchange="PickReason">
+                        <option value="">Pick a saved reason</option>
+                        @foreach (var r in savedReasons)
+                        {
+                            <option value="@r.Id">@r.Reason</option>
+                        }
+                    </select>
+                    @if (pickedReasonId is not null && !viewing)
+                    {
+                        <button type="button" class="tr-btn-outline forget" disabled="@busy" @onclick="ForgetReason">Forget</button>
+                    }
+                </div>
+            }
+            <label for="@(prefix)-reason">Reason</label>
+            <input id="@(prefix)-reason" type="text" maxlength="500" @bind="reason" />
+            @if (!admin && !viewing && !savedReasons.Any(r => r.Reason == reason?.Trim()))
+            {
+                <label class="tr-check save-reason"><input type="checkbox" @bind="saveReason" /> Save this reason for next time</label>
+            }
+        </div>;
+
+    private async Task LoadReasons()
+    {
+        if (admin)
+            return;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            savedReasons = await client.GetFromJsonAsync<List<SavedReason>>($"users/{id}/points/reasons") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            // the form still works without them
+            savedReasons = [];
+        }
+    }
+
+    private void PickReason(ChangeEventArgs args)
+    {
+        pickedReasonId = int.TryParse(args.Value?.ToString(), out var value) ? value : null;
+        if (savedReasons.FirstOrDefault(r => r.Id == pickedReasonId) is { } picked)
+            reason = picked.Reason;
+    }
+
+    private async Task ForgetReason()
+    {
+        if (pickedReasonId is not int reasonId)
+            return;
+        using var client = HttpClientFactory.CreateClient("Backend");
+        var response = await client.DeleteAsync($"users/{id}/points/reasons/{reasonId}");
+        if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            savedReasons.RemoveAll(r => r.Id == reasonId);
+        pickedReasonId = null;
+    }
+
+    // after a successful change, so a typo'd reason that failed isn't kept
+    private async Task RememberReason()
+    {
+        var text = reason?.Trim();
+        if (!saveReason || string.IsNullOrEmpty(text) || savedReasons.Any(r => r.Reason == text))
+            return;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/points/reasons", new { reason = text });
+            if (response.IsSuccessStatusCode && await response.Content.ReadFromJsonAsync<SavedReason>() is { } saved)
+                savedReasons = savedReasons.Append(saved).OrderBy(r => r.Reason).ToList();
+        }
+        catch (HttpRequestException)
+        {
+            // the points change already went through
+        }
+    }
+
+    private void ResetReason()
+    {
+        reason = null;
+        pickedReasonId = null;
+        saveReason = false;
+    }
+
+    // admins pick a company per driver, so bulk awards are for sponsors
+    private bool CanBulk => !admin && !viewing;
+
+    private void Toggle(int driverId)
+    {
+        if (!selected.Remove(driverId))
+            selected.Add(driverId);
+    }
+
+    private void ToggleAll()
+    {
+        if (selected.Count == drivers!.Count)
+            selected.Clear();
+        else
+            selected.UnionWith(drivers.Select(d => d.Id));
+    }
+
+    private void StartBulk()
+    {
+        bulkOpen = true;
+        editingDriver = null;
+        removing = null;
+        amount = null;
+        ResetReason();
+        notice = null;
+        error = null;
+    }
+
+    private async Task SaveBulk()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/points/bulk", new { driverIds = selected.ToList(), points = amount ?? 0, reason });
+            var message = (await response.Content.ReadFromJsonAsync<Problem>())?.Message;
+            if (response.IsSuccessStatusCode)
+            {
+                notice = message;
+                await RememberReason();
+                bulkOpen = false;
+                selected.Clear();
+                await Load();
+            }
+            else
+            {
+                error = message ?? "That didn't work.";
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
@@ -430,4 +624,5 @@
     private sealed record DriverDetails(List<DriverCompany>? Companies);
     private sealed record DriverCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
     private sealed record Problem(string? Message);
+    private sealed record SavedReason(int Id, string Reason);
 }

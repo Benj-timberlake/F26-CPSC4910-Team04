@@ -41,7 +41,10 @@ public static class AuditEndpoints
         var all = string.IsNullOrEmpty(category);
         var rows = new List<AuditEntry>();
         if (all || category == Logins)
+        {
             rows.AddRange(await LoginRows(db, ids, start, end));
+            rows.AddRange(await UnlockRows(db, ids, start, end));
+        }
         if (all || category == Passwords)
             rows.AddRange(await PasswordRows(db, ids, start, end));
         if (all || category == Points)
@@ -95,6 +98,17 @@ public static class AuditEndpoints
             .ToListAsync();
     }
 
+    private static Task<List<AuditEntry>> UnlockRows(AppDbContext db, IQueryable<int>? ids, DateTime start, DateTime end)
+    {
+        var resets = db.LockoutResets.AsNoTracking().Where(r => r.ResetAt >= start && r.ResetAt < end);
+        if (ids is not null)
+            resets = resets.Where(r => r.UserId != null && ids.Contains(r.UserId.Value));
+        return resets
+            .OrderByDescending(r => r.ResetAt).Take(MaxRows)
+            .Join(db.Users, r => r.AdminId, u => u.Id, (r, admin) => new AuditEntry(r.ResetAt, Logins, r.UserId, r.Username, "Unlocked early", admin.Username))
+            .ToListAsync();
+    }
+
     private static async Task<IEnumerable<AuditEntry>> PasswordRows(AppDbContext db, IQueryable<int>? ids, DateTime start, DateTime end)
     {
         var changes = db.PasswordChanges.AsNoTracking().Where(c => c.ChangedAt >= start && c.ChangedAt < end);
@@ -102,10 +116,14 @@ public static class AuditEndpoints
             changes = changes.Where(c => ids.Contains(c.UserId));
         var rows = await changes
             .OrderByDescending(c => c.ChangedAt).Take(MaxRows)
-            .Join(db.Users, c => c.UserId, u => u.Id, (c, u) => new { c.ChangedAt, c.ChangeType, c.IpAddress, u.Id, u.Username })
+            .Join(db.Users, c => c.UserId, u => u.Id, (c, u) => new
+            {
+                c.ChangedAt, c.ChangeType, c.IpAddress, u.Id, u.Username,
+                By = db.Users.Where(a => a.Id == c.RequestedBy).Select(a => a.Username).FirstOrDefault()
+            })
             .ToListAsync();
         return rows.Select(c => new AuditEntry(c.ChangedAt, Passwords, c.Id, c.Username,
-            PasswordText(c.ChangeType) + (string.IsNullOrEmpty(c.IpAddress) ? "" : " from " + c.IpAddress), null));
+            PasswordText(c.ChangeType) + (string.IsNullOrEmpty(c.IpAddress) ? "" : " from " + c.IpAddress), c.By));
     }
 
     private static async Task<IEnumerable<AuditEntry>> PointRows(AppDbContext db, IQueryable<int>? ids, DateTime start, DateTime end)

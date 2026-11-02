@@ -48,9 +48,11 @@ CREATE TABLE IF NOT EXISTS password_changes (
     change_type ENUM('changed','reset_requested','reset_completed') NOT NULL,
     ip_address VARCHAR(45) NULL,
     changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    requested_by INT NULL,
     PRIMARY KEY (id),
     KEY ix_password_changes_user (user_id),
-    CONSTRAINT fk_password_changes_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    CONSTRAINT fk_password_changes_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_password_changes_requested_by FOREIGN KEY (requested_by) REFERENCES users (id) ON DELETE SET NULL
 );
 
 -- forgot-password links. only a hash of the token is stored, each one is single use and expires
@@ -101,4 +103,27 @@ CREATE TABLE IF NOT EXISTS passkey_credentials (
     PRIMARY KEY (id),
     UNIQUE KEY uq_passkey_credentials_credential (credential_id),
     CONSTRAINT fk_passkey_credentials_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- admins lifting a lockout early
+CREATE TABLE IF NOT EXISTS lockout_resets (
+    id INT NOT NULL AUTO_INCREMENT,
+    username VARCHAR(255) NOT NULL,
+    user_id INT NULL,
+    admin_id INT NOT NULL,
+    reset_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_lockout_resets_username (username),
+    CONSTRAINT fk_lockout_resets_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT fk_lockout_resets_admin FOREIGN KEY (admin_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- points reasons a sponsor company reuses
+CREATE TABLE IF NOT EXISTS saved_reasons (
+    id INT NOT NULL AUTO_INCREMENT,
+    company_id INT NOT NULL,
+    reason VARCHAR(500) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_saved_reasons_company_reason (company_id, reason),
+    CONSTRAINT fk_saved_reasons_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE CASCADE
 );
