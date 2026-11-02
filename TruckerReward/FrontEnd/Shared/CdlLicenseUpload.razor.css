@@ -1,0 +1,26 @@
+.cdl-upload {
+    margin: 16px 0;
+    padding: 16px;
+    border: 1px dashed #94a3b8;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.cdl-upload label {
+    display: block;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.cdl-help {
+    margin: 6px 0 12px;
+    font-size: 14px;
+    color: #475569;
+}
+
+.cdl-upload input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    font: inherit;
+}

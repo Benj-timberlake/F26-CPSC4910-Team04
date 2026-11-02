@@ -33,6 +33,11 @@
                 <p class="help">Your sponsor reviews your application before you can earn points.</p>
             }
 
+            @if (userType == "driver")
+            {
+                <CdlLicenseUpload Id="signup-cdl-license" />
+            }
+
             <label for="username">Username</label>
             <input id="username" name="username" required autocomplete="username" />
 

@@ -237,6 +237,7 @@
                                     @if (selectedCompanyId == company.Id)
                                     {
                                         <div class="selected-company-application">
+                                            <CdlLicenseUpload Id="application-cdl-license" />
                                             <label class="extra-info-label" for="application-extra-info">Extra Info <span>(optional)</span></label>
                                             <textarea id="application-extra-info" class="extra-info-input" @bind="applicantExtraInfo" rows="4" maxlength="4000"></textarea>
                                             @if (applicationError is not null)

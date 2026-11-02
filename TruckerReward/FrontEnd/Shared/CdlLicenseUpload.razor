@@ -1,0 +1,11 @@
+<section class="cdl-upload" aria-labelledby="@(Id + "-label")">
+    <label id="@(Id + "-label")" for="@Id">Provide CDL license</label>
+    <p id="@(Id + "-help")" class="cdl-help">Select a PDF or image of your commercial driver's license. Files are not uploaded or saved yet.</p>
+    @* Intentionally omit name and upload handlers: file selection stays in the browser. *@
+    <input id="@Id" type="file" accept=".pdf,image/*" aria-describedby="@(Id + "-help")" />
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Id { get; set; } = string.Empty;
+}
