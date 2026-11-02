@@ -38,7 +38,14 @@
                     <dt>Username</dt>
                     <dd>@account.Username</dd>
                     <dt>Email</dt>
-                    <dd>@account.Email</dd>
+                    <dd>
+                        @account.Email
+                        @if (!account.EmailConfirmed)
+                        {
+                            <span class="unconfirmed">Not confirmed</span>
+                            <button type="button" class="tr-btn-outline resend" disabled="@sending" @onclick="ResendConfirmation">Send the link again</button>
+                        }
+                    </dd>
                     <dt>Password</dt>
                     <dd>---------------</dd>
                     <dt>Name</dt>
@@ -140,6 +147,19 @@
         font-weight: 600;
     }
 
+    .unconfirmed {
+        margin-left: 8px;
+        color: #7a3e00;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .tr-kv dd .resend {
+        margin-left: 8px;
+        padding: 2px 8px;
+        font-size: 13px;
+    }
+
     details .tr-table {
         margin-top: 8px;
     }
@@ -154,6 +174,7 @@
     private SecuritySummary? activity;
     private string? loadError;
     private string? notice;
+    private bool sending;
 
     protected override async Task OnInitializedAsync()
     {
@@ -207,7 +228,25 @@
         return rel == "" ? abs : $"{abs} ({rel})";
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, int? CompanyId, int Points, string? PendingCompanyName);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, int? CompanyId, int Points, string? PendingCompanyName, bool EmailConfirmed = true);
+
+    private async Task ResendConfirmation()
+    {
+        sending = true;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsync($"users/{account!.Id}/email/confirmation", null);
+            notice = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            notice = "Couldn't reach the server. Try again in a moment.";
+        }
+        sending = false;
+    }
+
+    private sealed record Problem(string? Message);
     private sealed record LoginEvent(DateTime AttemptedAt, bool Succeeded, string? IpAddress);
     private sealed record SecuritySummary(DateTime? LastLoginAt, string? LastLoginIp, DateTime? PreviousLoginAt, int FailedSincePreviousLogin, List<LoginEvent> Recent, DateTime? PasswordChangedAt);
 }

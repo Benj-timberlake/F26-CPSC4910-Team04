@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
     status ENUM('active','inactive') NOT NULL DEFAULT 'active',
     -- bumped to sign a user out of every session
     session_version INT NOT NULL DEFAULT 0,
+    -- null until the user clicks the emailed link
+    email_confirmed_at DATETIME NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_username (username),
     UNIQUE KEY uq_users_email (email)
@@ -126,4 +128,17 @@ CREATE TABLE IF NOT EXISTS saved_reasons (
     PRIMARY KEY (id),
     UNIQUE KEY uq_saved_reasons_company_reason (company_id, reason),
     CONSTRAINT fk_saved_reasons_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE CASCADE
+);
+
+-- confirmation links. only a hash of the token is stored
+CREATE TABLE IF NOT EXISTS email_confirmations (
+    id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_email_confirmations_token (token_hash),
+    CONSTRAINT fk_email_confirmations_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );

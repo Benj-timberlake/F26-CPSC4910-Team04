@@ -170,7 +170,7 @@ public static class AdminEndpoints
         return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
     }
 
-    private static async Task<IResult> EditAccount(int id, EditAccountRequest req, AppDbContext db, IEmailSender email)
+    private static async Task<IResult> EditAccount(int id, EditAccountRequest req, AppDbContext db, IEmailSender email, TimeProvider clock, IConfiguration config)
     {
         if (!await IsAdmin(db, req.AdminId))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
@@ -190,9 +190,12 @@ public static class AdminEndpoints
             return Results.BadRequest(new { message = companyProblem });
 
         var oldAddress = account.Email;
+        var emailChanged = !string.Equals(oldAddress, address, StringComparison.OrdinalIgnoreCase);
         account.FirstName = firstName;
         account.LastName = lastName;
         account.Email = address;
+        if (emailChanged)
+            account.EmailConfirmedAt = null;
         account.PhoneNumber = phone;
         account.Address = street;
         await db.SaveChangesAsync();
@@ -210,9 +213,12 @@ public static class AdminEndpoints
             await UserEndpoints.AddCompanyMembership(db, account, driverCompanyId);
             await db.SaveChangesAsync();
         }
-        if (!string.Equals(oldAddress, address, StringComparison.OrdinalIgnoreCase))
+        if (emailChanged)
+        {
             await email.SendAsync(oldAddress, "Your TruckerReward email was changed",
                 $"Hi {account.Username},\n\nAn administrator changed your account email from {oldAddress} to {address}. If that's wrong, contact an administrator.");
+            await EmailConfirmEndpoints.Send(db, account, email, clock, config);
+        }
         return Results.NoContent();
     }
 

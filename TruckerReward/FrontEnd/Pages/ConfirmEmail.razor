@@ -1,0 +1,58 @@
+@page "/confirm-email"
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Confirm your email</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Confirm your email</h1>
+
+        @if (string.IsNullOrEmpty(token))
+        {
+            <p role="alert" class="tr-alert-error">This link is missing its token. Open the link from the email again, or send a new one from your profile.</p>
+        }
+        else if (message is not null)
+        {
+            <p role="status" class="@(confirmed ? "tr-alert-success" : "tr-alert-error")">@message</p>
+        }
+        else
+        {
+            @* a button, not on load, so mail scanners opening the link don't use it up *@
+            <p>Confirm this address so TruckerReward can email you alerts.</p>
+            <button type="button" class="tr-btn tr-btn-block" disabled="@busy" @onclick="Confirm">Confirm my email</button>
+        }
+    </div>
+
+    <p class="tr-alt"><a href="profile">Go to your profile</a></p>
+</div>
+
+@code {
+    private string? token;
+    private string? message;
+    private bool confirmed;
+    private bool busy;
+
+    protected override void OnInitialized() =>
+        token = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["token"];
+
+    private async Task Confirm()
+    {
+        busy = true;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync("auth/confirm-email", new { token });
+            confirmed = response.IsSuccessStatusCode;
+            message = (await response.Content.ReadFromJsonAsync<Problem>())?.Message
+                ?? (confirmed ? "Your email is confirmed." : "That didn't work. Try the link again.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            message = "Couldn't reach the server. Try again in a moment.";
+        }
+        busy = false;
+    }
+
+    private sealed record Problem(string? Message);
+}

@@ -14,7 +14,7 @@ public static class AuthEndpoints
         // the frontend shows this next to every new-password box
         app.MapGet("/auth/password-policy", () => Results.Ok(new { description = PasswordPolicy.Description }));
 
-        app.MapPost("/auth/register", async (RegisterRequest req, AppDbContext db, Notifications notifications) =>
+        app.MapPost("/auth/register", async (RegisterRequest req, AppDbContext db, Notifications notifications, IEmailSender mail, TimeProvider clock, IConfiguration config) =>
         {
             if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.FirstName) || string.IsNullOrWhiteSpace(req.LastName) || string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
                 return Results.BadRequest(new { message = "Username, first name, last name, email and password are required." });
@@ -48,6 +48,7 @@ public static class AuthEndpoints
             user.Password = Passwords.Hash(user, req.Password);
             db.Users.Add(user);
             await db.SaveChangesAsync();
+            await EmailConfirmEndpoints.Send(db, user, mail, clock, config);
             await notifications.AccountCreated(user);
             if (companyName is not null)
             {
@@ -105,7 +106,8 @@ public static class AuthEndpoints
                     LastName = name.Length > 1 ? name[1].Trim() : "",
                     Email = email,
                     PhoneNumber = "",
-                    Address = ""
+                    Address = "",
+                    EmailConfirmedAt = clock.GetUtcNow().UtcDateTime
                 };
                 db.Users.Add(user);
                 await db.SaveChangesAsync();
@@ -113,6 +115,8 @@ public static class AuthEndpoints
             }
             if (user.Status == User.Inactive)
                 return Deactivated();
+            // the provider has already checked the address
+            user.EmailConfirmedAt ??= clock.GetUtcNow().UtcDateTime;
             await RecordAttempt(db, user.Username, user.Id, true, req.IpAddress, clock.GetUtcNow().UtcDateTime);
             return Results.Ok(UserProfile.Of(user));
         });

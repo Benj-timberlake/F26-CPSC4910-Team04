@@ -259,7 +259,8 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             db.Entry(row).State = EntityState.Detached;
             log.LogError(ex, "could not save notification for user {Id}: {Subject}", user.Id, subject);
         }
-        if (emailed)
+        // alerts wait for a confirmed address, security mail doesn't
+        if (emailed && (category is null || user.EmailConfirmedAt is not null))
             await email.SendAsync(user.Email, subject, body);
     }
 

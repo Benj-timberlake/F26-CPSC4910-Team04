@@ -77,6 +77,8 @@ public static class PasswordEndpoints
 
             var user = await db.Users.FindAsync(reset.UserId);
             reset.UsedAt = now;
+            // the link reached their inbox, which is all a confirmation proves
+            user!.EmailConfirmedAt ??= now;
             await SetPassword(db, user!, req.NewPassword, PasswordChange.ResetCompleted, req.IpAddress, clock);
             await notifications.PasswordChanged(user!, byReset: true);
             return Results.NoContent();
