@@ -35,6 +35,9 @@ public partial class User
 
     public string Status { get; set; } = Active;
 
+    // bumped to sign out every session
+    public int SessionVersion { get; set; }
+
     public virtual ICollection<AccountsHistory> AccountsHistories { get; set; } = new List<AccountsHistory>();
 
     public virtual Application? ApplicationDriver { get; set; }

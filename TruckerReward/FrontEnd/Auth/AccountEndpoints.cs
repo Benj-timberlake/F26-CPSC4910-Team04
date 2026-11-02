@@ -181,6 +181,16 @@ public static class AccountEndpoints
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.Redirect("/");
         }).DisableAntiforgery();
+
+        app.MapPost("/account/logout-everywhere", async (HttpContext http, IHttpClientFactory clients) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/sessions/revoke", new { actorId = int.Parse(id!) });
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/profile");
+            await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return Results.Redirect("/login?signedOut=everywhere");
+        }).RequireAuthorization().DisableAntiforgery();
     }
 
     // the dashboard shows the admin image once when it sees this
@@ -218,4 +228,4 @@ public static class AccountEndpoints
 }
 
 // shape of the backend's login/register response
-public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address);
+public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, int SessionVersion = 0);

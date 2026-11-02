@@ -558,6 +558,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnType("enum('admin','sponsor','driver')")
                 .HasColumnName("user_type");
             entity.Property(e => e.Username).HasColumnName("username");
+            entity.Property(e => e.SessionVersion).HasColumnName("session_version");
 
             // These legacy navigations are not columns or relationships in the users mapping.
             // Ignore them to prevent EF from inferring a shadow ApplicationDriverId column.

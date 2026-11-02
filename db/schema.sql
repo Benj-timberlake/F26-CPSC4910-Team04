@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
     -- driver reward balance, only meaningful when user_type = 'driver'
     points INT NOT NULL DEFAULT 0,
     status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    -- bumped to sign a user out of every session
+    session_version INT NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_username (username),
     UNIQUE KEY uq_users_email (email)

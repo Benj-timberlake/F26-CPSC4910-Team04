@@ -124,6 +124,19 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SignOutEverywhereDropsOlderCookies()
+    {
+        var client = await Start();
+        var cookie = await SignIn(client);
+        backend.SessionVersion = 1;
+        clock.Advance(CookieRevalidation.Interval + TimeSpan.FromSeconds(1));
+
+        var (response, _) = await WhoAmI(client, cookie);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("/login", response.Headers.Location!.ToString());
+    }
+
+    [Fact]
     public async Task BackendOutageKeepsTheExistingCookie()
     {
         var client = await Start();
@@ -163,6 +176,7 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         public int Calls { get; private set; }
         public string? LastPath { get; private set; }
         public string AccountStatus { get; set; } = "active";
+        public int SessionVersion { get; set; }
 
         public void Respond(HttpStatusCode s, string b) { status = s; body = b; fail = false; }
         public void Fail() => fail = true;
@@ -173,7 +187,7 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
             LastPath = request.RequestUri!.PathAndQuery.TrimStart('/');
             if (fail) throw new HttpRequestException("backend down");
             if (LastPath.EndsWith("/status"))
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$"""{"status":"{{AccountStatus}}"}""", Encoding.UTF8, "application/json") });
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$"""{"status":"{{AccountStatus}}","sessionVersion":{{SessionVersion}}}""", Encoding.UTF8, "application/json") });
             return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
         }
     }

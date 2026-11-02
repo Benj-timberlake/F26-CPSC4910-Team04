@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
@@ -292,6 +293,22 @@ public sealed class AdminAccountsTests : IAsyncDisposable
 
         Assert.Equal(status, (int)response.StatusCode);
         Assert.Equal(4, await app.Db().Users.CountAsync());
+    }
+
+    [Theory]
+    [InlineData("bob", "bob", HttpStatusCode.NoContent)]
+    [InlineData("ann", "bob", HttpStatusCode.NoContent)]
+    [InlineData("sue", "bob", HttpStatusCode.Forbidden)]
+    public async Task SignOutEverywhereBumpsTheSessionVersion(string actor, string target, HttpStatusCode expected)
+    {
+        await Start();
+        var ids = await app.Db().Users.ToDictionaryAsync(u => u.Username, u => u.Id);
+
+        var response = await client.PostAsJsonAsync($"/users/{ids[target]}/sessions/revoke", new { actorId = ids[actor] });
+
+        Assert.Equal(expected, response.StatusCode);
+        var status = await client.GetFromJsonAsync<AccountStatus>($"/users/{ids[target]}/status");
+        Assert.Equal(expected == HttpStatusCode.NoContent ? 1 : 0, status!.SessionVersion);
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();

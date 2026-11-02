@@ -9,6 +9,7 @@ namespace FrontEnd.Auth;
 public static class TruckerSignIn
 {
     public const string SponsorViewClaim = "sponsor_view_id";
+    public const string SessionVersionClaim = "session_version";
 
     public static ClaimsPrincipal DriverPrincipal(UserProfile driver, string sponsorId)
     {
@@ -22,7 +23,8 @@ public static class TruckerSignIn
         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
         new Claim(ClaimTypes.Name, user.Username),
         new Claim(ClaimTypes.Email, user.Email),
-        new Claim(ClaimTypes.Role, user.UserType)
+        new Claim(ClaimTypes.Role, user.UserType),
+        new Claim(SessionVersionClaim, user.SessionVersion.ToString())
     ], CookieAuthenticationDefaults.AuthenticationScheme));
 
     public static Task SignInAsync(HttpContext http, UserProfile user, string? sponsorId = null)

@@ -84,9 +84,19 @@ public static class AdminEndpoints
         });
 
         app.MapGet("/users/{id:int}/status", async (int id, AppDbContext db) =>
-            await db.Users.AsNoTracking().Where(u => u.Id == id).Select(u => u.Status).FirstOrDefaultAsync() is { } status
-                ? Results.Ok(new AccountStatus(status))
+            await db.Users.AsNoTracking().Where(u => u.Id == id).Select(u => new AccountStatus(u.Status, u.SessionVersion)).FirstOrDefaultAsync() is { } status
+                ? Results.Ok(status)
                 : Results.NotFound());
+
+        // the frontend drops any cookie with an older version on its next check
+        app.MapPost("/users/{id:int}/sessions/revoke", async (int id, RevokeSessionsRequest req, AppDbContext db) =>
+        {
+            if (req.ActorId != id && !await IsAdmin(db, req.ActorId))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            var changed = await db.Users.Where(u => u.Id == id)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.SessionVersion, x => x.SessionVersion + 1));
+            return changed == 0 ? Results.NotFound() : Results.NoContent();
+        });
 
         app.MapPost("/admin/accounts/{id:int}/status", async (int id, ChangeAccountStatusRequest req, AppDbContext db, Notifications notifications) =>
         {
@@ -288,7 +298,9 @@ public record AdminAccount(int Id, string Username, string FirstName, string Las
 
 public record AccountCounts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive, int DriversWithoutSponsor);
 
-public record AccountStatus(string Status);
+public record AccountStatus(string Status, int SessionVersion = 0);
+
+public record RevokeSessionsRequest(int ActorId);
 
 public record CreateAccountRequest(int AdminId, string? UserType, string? Username, string? FirstName, string? LastName, string? Email, int? CompanyId);
 
