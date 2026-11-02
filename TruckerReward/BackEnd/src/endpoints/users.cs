@@ -239,7 +239,7 @@ public static class UserEndpoints
             return Results.Ok();
         });
 
-        app.MapGet("/users/{id:int}", async (int id, AppDbContext db) =>
+        app.MapGet("/users/{id:int}", async (int id, AppDbContext db, TimeProvider clock) =>
         {
             var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
             if (user is null)
@@ -247,7 +247,7 @@ public static class UserEndpoints
             var effectiveCompanyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
             var company = await db.Companies.AsNoTracking()
                 .Where(c => c.Id == effectiveCompanyId)
-                .Select(c => new { c.Name, c.MonthlyBudget })
+                .Select(c => new { c.Name, c.MonthlyBudget, c.MonthlyDriverPoints, c.DriverPointsMonth })
                 .FirstOrDefaultAsync();
             var companyNames = (await db.AccountsCompanies.AsNoTracking()
                 .Where(link => link.AccountId == id)
@@ -274,8 +274,19 @@ public static class UserEndpoints
                 ? await db.PointsHistory.Where(history => history.UserId == id && history.CompanyId == currentCompanyId)
                     .SumAsync(history => (long?)history.PointsDelta) ?? 0L
                 : user.Points;
+            DateTime? nextReward = null;
+            var monthlyDriverPoints = 0;
+            if (user.UserType == AuthEndpoints.Driver && user.Status == User.Active &&
+                company is { MonthlyDriverPoints: > 0, DriverPointsMonth: not null })
+            {
+                monthlyDriverPoints = company.MonthlyDriverPoints;
+                var scheduled = company.DriverPointsMonth.Value.AddMonths(1);
+                var currentMonth = MonthlySponsorBudgetService.CurrentMonth(clock.GetUtcNow());
+                nextReward = scheduled < currentMonth ? currentMonth : scheduled;
+            }
             return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, memberships, effectiveCompanyId, displayedPoints, pendingCompany,
-                user.UserType == "sponsor" ? company?.MonthlyBudget : null, user.EmailConfirmedAt is not null, user.EmailCodes, user.Password is not null));
+                user.UserType == "sponsor" ? company?.MonthlyBudget : null, user.EmailConfirmedAt is not null, user.EmailCodes, user.Password is not null,
+                monthlyDriverPoints, nextReward));
         });
 
         // this login, the one before it, failures in between, the last ten attempts and when the
@@ -408,7 +419,7 @@ public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, str
 public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, bool EmailConfirmed = true, bool EmailCodes = false, bool HasPassword = true);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, bool EmailConfirmed = true, bool EmailCodes = false, bool HasPassword = true, int MonthlyDriverPoints = 0, DateTime? NextMonthlyReward = null);
 
 public record UserCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
 

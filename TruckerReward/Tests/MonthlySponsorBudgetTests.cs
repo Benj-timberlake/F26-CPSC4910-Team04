@@ -24,6 +24,11 @@ public sealed class MonthlySponsorBudgetTests
         await db.SaveChangesAsync();
         var response = await client.PostAsJsonAsync($"/users/{sponsor.Id}/points/monthly", new { Points = 100 });
         response.EnsureSuccessStatusCode();
+        var details = await client.GetFromJsonAsync<UserDetails>($"/users/{driver.Id}");
+        Assert.Equal(100, details!.MonthlyDriverPoints);
+        Assert.Equal(new DateTime(2026, 10, 1), details.NextMonthlyReward);
+        var outsideDetails = await client.GetFromJsonAsync<UserDetails>($"/users/{outsider.Id}");
+        Assert.Null(outsideDetails!.NextMonthlyReward);
         await MonthlySponsorBudgetService.AwardDriverPoints(db, app.Clock.GetUtcNow());
         Assert.Empty(await db.PointsHistory.ToListAsync());
         var boundary = new DateTimeOffset(2026, 10, 1, 4, 0, 0, TimeSpan.Zero);
@@ -38,6 +43,9 @@ public sealed class MonthlySponsorBudgetTests
         var history = Assert.Single(await db.PointsHistory.ToListAsync());
         Assert.Equal(company.Id, history.CompanyId);
         Assert.Equal(100, history.PointsDelta);
+        app.Clock.Advance(boundary - app.Clock.GetUtcNow());
+        var nextDetails = await client.GetFromJsonAsync<UserDetails>($"/users/{driver.Id}");
+        Assert.Equal(new DateTime(2026, 11, 1), nextDetails!.NextMonthlyReward);
         Assert.Equal(System.Net.HttpStatusCode.Forbidden,
             (await client.PostAsJsonAsync($"/users/{driver.Id}/points/monthly", new { Points = 200 })).StatusCode);
         Assert.Equal(System.Net.HttpStatusCode.BadRequest,

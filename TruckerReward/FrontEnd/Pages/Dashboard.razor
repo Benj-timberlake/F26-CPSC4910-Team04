@@ -109,6 +109,15 @@
                     <h2>Points</h2>
                     <p class="balance">@FrontEnd.Shared.RewardPoints.Format(account.Points)</p>
                     <p class="hint">Earned for good driving. Spend them in your sponsor's <a href="products">product catalog</a>.</p>
+                    @if (account.NextMonthlyReward is DateTime nextReward)
+                    {
+                        <p class="hint">Next monthly reward: <strong>@nextReward.ToString("MMMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture)</strong> (Eastern time).</p>
+                        <p class="hint">You'll receive @FrontEnd.Shared.RewardPoints.Format(account.MonthlyDriverPoints) points from @account.CompanyName.</p>
+                    }
+                    else
+                    {
+                        <p class="hint">No monthly points reward is currently scheduled.</p>
+                    }
                 </section>
             }
 
@@ -696,7 +705,7 @@
         }
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, List<CompanyMembership>? Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, List<CompanyMembership>? Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, int MonthlyDriverPoints = 0, DateTime? NextMonthlyReward = null);
     private sealed record CompanyMembership(int Id, string Name, bool CurrentCompanyViewed);
     private sealed record CompanyOption(int Id, string Name, string? Description);
     private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, long Points);
