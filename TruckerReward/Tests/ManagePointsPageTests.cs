@@ -96,6 +96,35 @@ public sealed class ManagePointsPageTests : TestContext
     }
 
     [Fact]
+    public void SponsorAwardsTheCheckedDrivers()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        backend.Routes["POST /users/5/points/bulk"] = (HttpStatusCode.OK, """{"message":"Gave 50 points to 2 drivers."}""");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+
+        page.Find("thead input[type=checkbox]").Change(true);
+        page.FindAll("button").Single(b => b.TextContent == "Award selected").Click();
+        page.Find("#bulk-amount").Change("50");
+        page.Find("#bulk-reason").Change("Top week");
+        page.FindAll("button").Single(b => b.TextContent == "Award").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("Gave 50 points to 2 drivers.", page.Find(".tr-alert-success").TextContent));
+        Assert.Equal("""{"driverIds":[8,9],"points":50,"reason":"Top week"}""", backend.Bodies["POST /users/5/points/bulk"]);
+        Assert.Empty(page.FindAll(".bulk-bar"));
+    }
+
+    [Fact]
+    public void AdminsDontGetCheckboxes()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        var page = Render("admin");
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+
+        Assert.Empty(page.FindAll("input[type=checkbox]"));
+    }
+
+    [Fact]
     public void ServerMessageIsShown()
     {
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);

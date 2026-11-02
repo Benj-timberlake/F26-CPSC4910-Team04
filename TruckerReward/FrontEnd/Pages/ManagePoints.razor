@@ -54,10 +54,22 @@
         }
         else
         {
+            @if (CanBulk && selected.Count > 0)
+            {
+                <div class="bulk-bar" role="region" aria-label="Selected drivers">
+                    <span>@selected.Count selected</span>
+                    <button type="button" class="tr-btn" @onclick="StartBulk">Award selected</button>
+                    <button type="button" class="tr-btn-outline" @onclick="() => selected.Clear()">Clear</button>
+                </div>
+            }
             <div class="tr-table-wrap">
                 <table class="tr-table">
                     <thead>
                         <tr>
+                            @if (CanBulk)
+                            {
+                                <th><input type="checkbox" aria-label="Select all drivers" checked="@(selected.Count == drivers.Count)" @onchange="ToggleAll" /></th>
+                            }
                             <th>Driver</th>
                             <th>Email</th>
                             <th>Points</th>
@@ -73,6 +85,10 @@
                         @foreach (var d in drivers)
                         {
                             <tr>
+                                @if (CanBulk)
+                                {
+                                    <td><input type="checkbox" aria-label="Select @d.Username" checked="@selected.Contains(d.Id)" @onchange="() => Toggle(d.Id)" /></td>
+                                }
                                 <td>@d.FirstName @d.LastName (@d.Username)</td>
                                 <td>@d.Email</td>
                                 <td class="balance">@d.Points.ToString("N0")</td>
@@ -111,6 +127,27 @@
                 </table>
             </div>
         }
+    }
+    @if (bulkOpen)
+    {
+        <div class="modal-backdrop">
+            <section class="change-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-modal-title">
+                <h2 id="bulk-modal-title">Award @selected.Count @(selected.Count == 1 ? "driver" : "drivers")</h2>
+                <p class="tr-muted">@string.Join(", ", drivers!.Where(d => selected.Contains(d.Id)).Select(d => d.Username))</p>
+                <label for="bulk-amount">Points for each driver</label>
+                <input id="bulk-amount" type="number" placeholder="+100 or -50" @bind="amount" />
+                <label for="bulk-reason">Reason</label>
+                <input id="bulk-reason" type="text" maxlength="500" @bind="reason" />
+                @if (error is not null)
+                {
+                    <p role="alert" class="tr-alert-error">@error</p>
+                }
+                <div class="modal-actions">
+                    <button type="button" class="tr-btn" disabled="@(busy || amount is null)" @onclick="SaveBulk">Award</button>
+                    <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => bulkOpen = false">Cancel</button>
+                </div>
+            </section>
+        </div>
     }
     @if (editingDriver is not null)
     {
@@ -211,6 +248,8 @@
         width: 120px;
     }
 
+    .bulk-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+
     .modal-backdrop { position: fixed; inset: 0; z-index: 1050; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0009; }
     .change-modal { width: min(560px, 100%); max-height: 90vh; overflow-y: auto; padding: 24px; border-radius: 12px; background: white; color: #222; box-shadow: 0 18px 60px #0005; }
     .change-modal h2 { margin-top: 0; }
@@ -246,6 +285,8 @@
     private int? selectedCompanyId;
     private bool companyChoicesLoading;
     private string? companyChoiceError;
+    private readonly HashSet<int> selected = [];
+    private bool bulkOpen;
 
     protected override async Task OnInitializedAsync()
     {
@@ -288,6 +329,7 @@
             }
             response.EnsureSuccessStatusCode();
             drivers = await response.Content.ReadFromJsonAsync<List<Driver>>() ?? [];
+            selected.IntersectWith(drivers.Select(d => d.Id));
             ranged = from is not null || to is not null;
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
@@ -376,6 +418,62 @@
             else
             {
                 error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    // admins pick a company per driver, so bulk awards are for sponsors
+    private bool CanBulk => !admin && !viewing;
+
+    private void Toggle(int driverId)
+    {
+        if (!selected.Remove(driverId))
+            selected.Add(driverId);
+    }
+
+    private void ToggleAll()
+    {
+        if (selected.Count == drivers!.Count)
+            selected.Clear();
+        else
+            selected.UnionWith(drivers.Select(d => d.Id));
+    }
+
+    private void StartBulk()
+    {
+        bulkOpen = true;
+        editingDriver = null;
+        removing = null;
+        amount = null;
+        reason = null;
+        notice = null;
+        error = null;
+    }
+
+    private async Task SaveBulk()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/points/bulk", new { driverIds = selected.ToList(), points = amount ?? 0, reason });
+            var message = (await response.Content.ReadFromJsonAsync<Problem>())?.Message;
+            if (response.IsSuccessStatusCode)
+            {
+                notice = message;
+                bulkOpen = false;
+                selected.Clear();
+                await Load();
+            }
+            else
+            {
+                error = message ?? "That didn't work.";
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
