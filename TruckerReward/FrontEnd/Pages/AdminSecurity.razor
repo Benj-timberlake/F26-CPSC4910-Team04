@@ -1,7 +1,6 @@
 @page "/admin/security"
 @attribute [Authorize(Roles = "admin")]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Security</PageTitle>
 
@@ -115,9 +114,6 @@
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
     private bool failedOnly = true;
     private List<Locked>? locked;
     private List<Attempt>? attempts;
@@ -125,12 +121,10 @@
     private string? loadError;
     private string? unlockMessage;
     private bool unlockFailed;
-    private bool busy;
-    private string? id;
 
     protected override async Task OnInitializedAsync()
     {
-        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await SignedIn();
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
@@ -207,5 +201,4 @@
     private sealed record Locked(string Username, DateTime LockedUntil);
     private sealed record Attempt(string Username, int? UserId, bool Succeeded, string? IpAddress, DateTime AttemptedAt);
     private sealed record Change(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress, string? RequestedBy);
-    private sealed record Problem(string? Message);
 }

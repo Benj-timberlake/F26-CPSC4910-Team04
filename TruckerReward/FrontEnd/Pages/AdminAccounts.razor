@@ -1,8 +1,7 @@
 @page "/admin/accounts"
 @page "/admin/users"
 @attribute [Authorize(Roles = "admin")]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Accounts</PageTitle>
 
@@ -23,7 +22,7 @@
         </dl>
     }
 
-    <form class="filters" @onsubmit="Load">
+    <form class="filters tr-toolbar" @onsubmit="Load">
         <input type="search" aria-label="Search accounts" placeholder="Name, username or email" @bind="search" />
         <select aria-label="Account type" @bind="type">
             <option value="">All types</option>
@@ -58,7 +57,7 @@
     }
     else
     {
-        <form class="create-form" @onsubmit="Create">
+        <form class="create-form tr-toolbar" @onsubmit="Create">
             <select aria-label="New account type" @bind="creating.UserType">
                 <option value="driver">Driver</option>
                 <option value="sponsor">Sponsor</option>
@@ -83,14 +82,7 @@
         </form>
     }
 
-    @if (notice is not null)
-    {
-        <p role="status" class="tr-alert-success">@notice</p>
-    }
-    @if (error is not null)
-    {
-        <p role="alert" class="tr-alert-error">@error</p>
-    }
+    <Alerts Notice="@notice" Error="@error" />
 
     @if (accounts is null)
     {
@@ -191,13 +183,6 @@
 </div>
 
 <style>
-    .filters {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 16px;
-    }
-
     .filters input {
         flex: 1;
         min-width: 200px;
@@ -222,22 +207,14 @@
         font-weight: 700;
     }
 
-    form.view-as {
-        display: inline;
-    }
-
     .new-account {
         margin-bottom: 16px;
     }
 
-    .create-form, .edit-form {
+    .edit-form {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
-    }
-
-    .create-form {
-        margin-bottom: 16px;
     }
 
     button.link {
@@ -256,10 +233,6 @@
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
-    private string? id;
     private List<Account>? accounts;
     private string? search;
     private string type = "";
@@ -268,16 +241,13 @@
     private int companyId;
     private Counts? counts;
     private List<Company> companies = [];
-    private bool busy;
-    private string? error;
-    private string? notice;
     private Edit? editing;
     private int? deleting;
     private NewAccount? creating;
 
     protected override async Task OnInitializedAsync()
     {
-        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await SignedIn();
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
@@ -318,128 +288,47 @@
         }
     }
 
-    private async Task Toggle(Account a)
+    private Task Toggle(Account a)
     {
-        busy = true;
-        error = notice = null;
         var next = a.Status == "active" ? "inactive" : "active";
-        try
+        return Send(c => c.PostAsJsonAsync($"admin/accounts/{a.Id}/status", new { adminId = int.Parse(id!), status = next }), async _ =>
         {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"admin/accounts/{a.Id}/status", new { adminId = int.Parse(id!), status = next });
-            if (response.IsSuccessStatusCode)
-            {
-                notice = $"{a.Username} was {(next == "active" ? "reactivated" : "deactivated")}.";
-                await Load();
-            }
-            else
-            {
-                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
-        {
-            error = "That didn't work. Reload and try again.";
-        }
-        busy = false;
+            notice = $"{a.Username} was {(next == "active" ? "reactivated" : "deactivated")}.";
+            await Load();
+        });
     }
 
-    private async Task SendResetLink(Account a)
-    {
-        busy = true;
-        error = notice = null;
-        try
-        {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"admin/accounts/{a.Id}/reset-link", new { adminId = int.Parse(id!) });
-            var message = (await response.Content.ReadFromJsonAsync<Problem>())?.Message;
-            if (response.IsSuccessStatusCode)
-                notice = message ?? $"A reset link was emailed to {a.Username}.";
-            else
-                error = message ?? "That didn't work.";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
-        {
-            error = "That didn't work. Reload and try again.";
-        }
-        busy = false;
-    }
+    private Task SendResetLink(Account a) =>
+        Send(c => c.PostAsJsonAsync($"admin/accounts/{a.Id}/reset-link", new { adminId = int.Parse(id!) }),
+            async r => notice = await Message(r) ?? $"A reset link was emailed to {a.Username}.");
 
-    private async Task SignOutEverywhere(Account a)
-    {
-        busy = true;
-        error = notice = null;
-        try
-        {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"users/{a.Id}/sessions/revoke", new { actorId = int.Parse(id!) });
-            if (response.IsSuccessStatusCode)
-                notice = $"{a.Username} will be signed out everywhere within five minutes.";
-            else
-                error = "That didn't work.";
-        }
-        catch (HttpRequestException)
-        {
-            error = "That didn't work. Reload and try again.";
-        }
-        busy = false;
-    }
+    private Task SignOutEverywhere(Account a) =>
+        Send(c => c.PostAsJsonAsync($"users/{a.Id}/sessions/revoke", new { actorId = int.Parse(id!) }),
+            _ => notice = $"{a.Username} will be signed out everywhere within five minutes.", failed: "That didn't work.");
 
     private async Task Delete(Account a)
     {
-        busy = true;
-        error = notice = null;
-        try
+        await Send(c => c.DeleteAsync($"admin/accounts/{a.Id}?adminId={id}"), async _ =>
         {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.DeleteAsync($"admin/accounts/{a.Id}?adminId={id}");
-            if (response.IsSuccessStatusCode)
-            {
-                notice = $"{a.Username} was deleted.";
-                await Load();
-            }
-            else
-            {
-                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
-        {
-            error = "That didn't work. Reload and try again.";
-        }
+            notice = $"{a.Username} was deleted.";
+            await Load();
+        });
         deleting = null;
-        busy = false;
     }
 
-    private async Task Create()
+    private Task Create()
     {
         var c = creating!;
-        busy = true;
-        error = notice = null;
-        try
+        return Send(client => client.PostAsJsonAsync("admin/accounts", new
         {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync("admin/accounts", new
-            {
-                adminId = int.Parse(id!), userType = c.UserType, username = c.Username, firstName = c.FirstName, lastName = c.LastName,
-                email = c.Email, companyId = c.UserType == "admin" || c.CompanyId == 0 ? (int?)null : c.CompanyId
-            });
-            if (response.IsSuccessStatusCode)
-            {
-                notice = $"{c.Username.Trim()} was created and emailed a link to set a password.";
-                creating = null;
-                await Load();
-            }
-            else
-            {
-                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+            adminId = int.Parse(id!), userType = c.UserType, username = c.Username, firstName = c.FirstName, lastName = c.LastName,
+            email = c.Email, companyId = c.UserType == "admin" || c.CompanyId == 0 ? (int?)null : c.CompanyId
+        }), async _ =>
         {
-            error = "That didn't work. Reload and try again.";
-        }
-        busy = false;
+            notice = $"{c.Username.Trim()} was created and emailed a link to set a password.";
+            creating = null;
+            await Load();
+        });
     }
 
     private async Task StartEdit(Account a)
@@ -457,43 +346,25 @@
         }
     }
 
-    private async Task SaveEdit()
+    private Task SaveEdit()
     {
         var e = editing!;
-        busy = true;
-        error = notice = null;
-        try
+        return Send(c => c.PutAsJsonAsync($"admin/accounts/{e.Id}", new
         {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PutAsJsonAsync($"admin/accounts/{e.Id}", new
-            {
-                adminId = int.Parse(id!), firstName = e.FirstName, lastName = e.LastName, email = e.Email,
-                phoneNumber = e.PhoneNumber, address = e.Address, companyId = e.CompanyId == 0 ? (int?)null : e.CompanyId
-            });
-            if (response.IsSuccessStatusCode)
-            {
-                notice = $"{e.Username} was updated.";
-                editing = null;
-                await Load();
-            }
-            else
-            {
-                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+            adminId = int.Parse(id!), firstName = e.FirstName, lastName = e.LastName, email = e.Email,
+            phoneNumber = e.PhoneNumber, address = e.Address, companyId = e.CompanyId == 0 ? (int?)null : e.CompanyId
+        }), async _ =>
         {
-            error = "That didn't work. Reload and try again.";
-        }
-        busy = false;
+            notice = $"{e.Username} was updated.";
+            editing = null;
+            await Load();
+        });
     }
 
     private static string When(DateTime? utc) => utc is null ? "Unknown" : utc.Value.ToString("yyyy-MM-dd HH:mm") + " UTC";
 
     private sealed record Account(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
-    private sealed record Problem(string? Message);
     private sealed record Counts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive, int DriversWithoutSponsor);
-    private sealed record Company(int Id, string Name);
     private sealed record Details(string FirstName, string LastName, string Email, string PhoneNumber, string Address, int? CompanyId);
 
     private sealed class NewAccount

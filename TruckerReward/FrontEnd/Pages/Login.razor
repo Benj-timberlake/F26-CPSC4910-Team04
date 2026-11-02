@@ -1,7 +1,6 @@
 @page "/login"
 @using Microsoft.AspNetCore.Authentication
 @inject IAuthenticationSchemeProvider Schemes
-@inject NavigationManager Nav
 
 <PageTitle>Log in</PageTitle>
 
@@ -11,11 +10,11 @@
 
         @if (message is not null)
         {
-            <p role="alert" class="@(error is null ? "tr-alert-success" : "tr-alert-error")">@message</p>
+            <p role="alert" class="@(Error is null ? "tr-alert-success" : "tr-alert-error")">@message</p>
         }
 
         <form class="tr-form" method="post" action="account/login">
-            <input type="hidden" name="returnUrl" value="@returnUrl" />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
 
             <label for="username">Username</label>
             <input id="username" name="username" required autocomplete="username" autofocus />
@@ -28,7 +27,7 @@
         </form>
 
         <div class="passkey">
-            <button type="button" class="tr-btn-outline tr-btn-block" data-return-url="@returnUrl" onclick="truckerPasskeys.signIn(this.dataset.returnUrl, 'passkey-status')">Sign in with Face ID or a passkey</button>
+            <button type="button" class="tr-btn-outline tr-btn-block" data-return-url="@ReturnUrl" onclick="truckerPasskeys.signIn(this.dataset.returnUrl, 'passkey-status')">Sign in with Face ID or a passkey</button>
             <p id="passkey-status" role="alert" class="tr-alert-error" hidden></p>
         </div>
 
@@ -38,7 +37,7 @@
                 <p class="tr-subtitle">or continue with</p>
                 @foreach (var p in providers)
                 {
-                    <a class="tr-btn-outline tr-btn-block" href="account/external/@p.Name?returnUrl=@Uri.EscapeDataString(returnUrl ?? "")">@p.DisplayName</a>
+                    <a class="tr-btn-outline tr-btn-block" href="account/external/@p.Name?returnUrl=@Uri.EscapeDataString(ReturnUrl ?? "")">@p.DisplayName</a>
                 }
             </div>
         }
@@ -63,18 +62,17 @@
 </style>
 
 @code {
-    private string? error;
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] private string? Reset { get; set; }
+    [SupplyParameterFromQuery] private string? SignedOut { get; set; }
     private string? message;
-    private string? returnUrl;
     private List<AuthenticationScheme> providers = new();
 
     protected override async Task OnInitializedAsync()
     {
-        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
-        error = query["error"];
-        returnUrl = query["returnUrl"];
         // one message for a bad username or a bad password, saying which would confirm which usernames exist
-        message = error switch
+        message = Error switch
         {
             "1" => "Wrong username or password.",
             "locked" => "Too many failed attempts. Wait a few minutes and try again.",
@@ -83,8 +81,8 @@
             "sso" => "Sign in with that provider didn't work. Try again or use a password.",
             "code" => "That sign-in code expired or had too many wrong tries. Log in again for a new one.",
             "codes" => "Too many codes asked for. Wait a few minutes and try again.",
-            null when query["reset"] == "1" => "Your password has been reset. Log in with the new one.",
-            null when query["signedOut"] == "everywhere" => "You were signed out on every device. Log in again here.",
+            null when Reset == "1" => "Your password has been reset. Log in with the new one.",
+            null when SignedOut == "everywhere" => "You were signed out on every device. Log in again here.",
             _ => null
         };
 

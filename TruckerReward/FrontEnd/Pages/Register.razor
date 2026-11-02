@@ -1,5 +1,4 @@
 @page "/register"
-@inject NavigationManager Nav
 @inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Create account</PageTitle>
@@ -8,9 +7,9 @@
     <div class="tr-card">
         <h1>Create account</h1>
 
-        @if (!string.IsNullOrEmpty(error))
+        @if (!string.IsNullOrEmpty(Error))
         {
-            <p role="alert" class="tr-alert-error">@error</p>
+            <p role="alert" class="tr-alert-error">@Error</p>
         }
 
         <form class="tr-form" method="post" action="account/register" enctype="multipart/form-data">
@@ -69,13 +68,12 @@
 
 @code {
     private string userType = "driver";
-    private string? error;
+    [SupplyParameterFromQuery] private string? Error { get; set; }
     private string? policy;
     private List<Company> companies = [];
 
     protected override async Task OnInitializedAsync()
     {
-        error = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["error"];
         policy = await PasswordPolicyText.Load(HttpClientFactory);
         try
         {
@@ -87,6 +85,4 @@
             // drivers can still apply from their dashboard
         }
     }
-
-    private sealed record Company(int Id, string Name);
 }

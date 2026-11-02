@@ -1,7 +1,6 @@
 @page "/audit"
 @attribute [Authorize(Roles = "sponsor,admin")]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Audit log</PageTitle>
 
@@ -150,10 +149,6 @@
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
-    private string? id;
     private bool admin;
     private bool noCompany;
     private List<Company> companies = [];
@@ -166,13 +161,11 @@
     private string madeBy = "";
     private DateOnly? from;
     private DateOnly? to;
-    private string? error;
     private string applied = "";
 
     protected override async Task OnInitializedAsync()
     {
-        var user = (await AuthState).User;
-        id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await SignedIn();
         admin = user.IsInRole("admin");
         try
         {
@@ -237,7 +230,6 @@
         _ => category
     };
 
-    private sealed record Company(int Id, string Name);
     private sealed record AccountOption(int Id, string Name);
     private sealed record Row(DateTime At, string Category, int? UserId, string Username, string Detail, string? By);
 }
