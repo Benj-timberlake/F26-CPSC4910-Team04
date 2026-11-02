@@ -14,7 +14,7 @@ public sealed class PointsNotificationTests : IAsyncDisposable
     private async Task<(HttpClient client, int id)> StartWithBob(int points)
     {
         var client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.Register("bob", "Bob", "Driver");
         using var db = app.Db();
         var bob = await db.Users.SingleAsync();
         bob.Points = points;

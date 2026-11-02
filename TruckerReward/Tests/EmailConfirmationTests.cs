@@ -13,7 +13,7 @@ public sealed class EmailConfirmationTests : IAsyncDisposable
     private async Task<(HttpClient client, int id)> Register()
     {
         var client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.Register("bob", "Bob", "Driver");
         return (client, (await app.Db().Users.SingleAsync()).Id);
     }
 
@@ -65,7 +65,7 @@ public sealed class EmailConfirmationTests : IAsyncDisposable
         }
         app.Email.Sent.Clear();
 
-        await client.PostAsJsonAsync("/auth/register", new { username = "amy", firstName = "Amy", lastName = "Driver", email = "amy@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.Register("amy", "Amy", "Driver");
         await client.PostAsJsonAsync("/auth/forgot", new { email = "bob@example.com" });
 
         // amy's own confirmation and bob's reset link, but no new-account alert to unconfirmed bob
@@ -73,7 +73,7 @@ public sealed class EmailConfirmationTests : IAsyncDisposable
         Assert.Contains(await app.Db().NotificationsHistories.ToListAsync(), n => n.UserId == root && n.Subject == "New driver account: amy");
 
         await app.ConfirmEmails();
-        await client.PostAsJsonAsync("/auth/register", new { username = "cal", firstName = "Cal", lastName = "Driver", email = "cal@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.Register("cal", "Cal", "Driver");
         Assert.Contains(app.Email.Sent, m => m.To == "bob@example.com" && m.Subject == "New driver account: cal");
     }
 

@@ -1,7 +1,5 @@
 using System.Net;
-using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Pages;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -14,12 +12,8 @@ public sealed class SponsorsPageTests : TestContext
 
     private IRenderedComponent<Sponsors> Render()
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("sue");
-        auth.SetRoles("sponsor");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "5"));
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("sue", "sponsor", "5");
+        this.UseBackend(backend);
         return RenderComponent<Sponsors>();
     }
 

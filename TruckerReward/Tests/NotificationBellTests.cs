@@ -1,7 +1,5 @@
 using System.Net;
-using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,12 +13,9 @@ public sealed class NotificationBellTests : TestContext
 
     private IRenderedComponent<NotificationBell> Render(int unread)
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("bob");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        this.SignInAs("bob", null, "7");
         backend.Count = unread;
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.UseBackend(backend);
         return RenderComponent<NotificationBell>();
     }
 

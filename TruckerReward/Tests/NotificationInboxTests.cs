@@ -14,7 +14,7 @@ public sealed class NotificationInboxTests : IAsyncDisposable
     {
         var client = await app.Start();
         foreach (var name in new[] { "bob", "sue" })
-            await client.PostAsJsonAsync("/auth/register", new { username = name, firstName = name, lastName = "Driver", email = $"{name}@example.com", password = "Hunter22x!", userType = "driver" });
+            await client.Register(name, name, "Driver");
         using var db = app.Db();
         return (client, (await db.Users.SingleAsync(u => u.Username == "bob")).Id, (await db.Users.SingleAsync(u => u.Username == "sue")).Id);
     }

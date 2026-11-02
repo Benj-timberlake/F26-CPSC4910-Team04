@@ -16,7 +16,7 @@ public sealed class TestApp : IAsyncDisposable
     private WebApplication? app;
 
     public FakeEmail Email { get; } = new();
-    public FakeClock Clock { get; } = new(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero));
+    public FakeClock Clock { get; } = new();
 
     // jsonErrors stays off by default so failures surface in tests
     public async Task<HttpClient> Start(Action<WebApplicationBuilder>? configure = null, bool jsonErrors = false)
@@ -63,6 +63,19 @@ public sealed class TestApp : IAsyncDisposable
         Email.Sent.Clear();
     }
 
+    // bob the driver and root the admin, both confirmed
+    public async Task<HttpClient> StartWithBobAndRoot()
+    {
+        var client = await Start();
+        await client.Register("bob", "Bob", "Driver");
+        await client.Register("root", "Root", "Admin");
+        await ConfirmEmails();
+        using var db = Db();
+        (await db.Users.SingleAsync(u => u.Username == "root")).UserType = "admin";
+        await db.SaveChangesAsync();
+        return client;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (app is not null) await app.DisposeAsync();
@@ -84,6 +97,7 @@ public sealed class TestApp : IAsyncDisposable
     public sealed class FakeClock(DateTimeOffset now) : TimeProvider
     {
         private DateTimeOffset now = now;
+        public FakeClock() : this(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero)) { }
         public override DateTimeOffset GetUtcNow() => now;
         public void Advance(TimeSpan by) => now += by;
     }
