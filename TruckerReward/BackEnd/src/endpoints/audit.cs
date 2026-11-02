@@ -41,7 +41,10 @@ public static class AuditEndpoints
         var all = string.IsNullOrEmpty(category);
         var rows = new List<AuditEntry>();
         if (all || category == Logins)
+        {
             rows.AddRange(await LoginRows(db, ids, start, end));
+            rows.AddRange(await UnlockRows(db, ids, start, end));
+        }
         if (all || category == Passwords)
             rows.AddRange(await PasswordRows(db, ids, start, end));
         if (all || category == Points)
@@ -92,6 +95,17 @@ public static class AuditEndpoints
             .OrderByDescending(a => a.AttemptedAt).Take(MaxRows)
             .Select(a => new AuditEntry(a.AttemptedAt, Logins, a.UserId, a.Username,
                 (a.Succeeded ? "Signed in" : "Failed sign-in") + (a.IpAddress == "" ? "" : " from " + a.IpAddress), null))
+            .ToListAsync();
+    }
+
+    private static Task<List<AuditEntry>> UnlockRows(AppDbContext db, IQueryable<int>? ids, DateTime start, DateTime end)
+    {
+        var resets = db.LockoutResets.AsNoTracking().Where(r => r.ResetAt >= start && r.ResetAt < end);
+        if (ids is not null)
+            resets = resets.Where(r => r.UserId != null && ids.Contains(r.UserId.Value));
+        return resets
+            .OrderByDescending(r => r.ResetAt).Take(MaxRows)
+            .Join(db.Users, r => r.AdminId, u => u.Id, (r, admin) => new AuditEntry(r.ResetAt, Logins, r.UserId, r.Username, "Unlocked early", admin.Username))
             .ToListAsync();
     }
 
