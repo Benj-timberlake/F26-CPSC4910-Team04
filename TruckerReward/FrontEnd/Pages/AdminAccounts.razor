@@ -488,7 +488,7 @@
         busy = false;
     }
 
-    private static string When(DateTime? utc) => utc is null ? "Unknown" : utc.Value.ToString("yyyy-MM-dd HH:mm");
+    private static string When(DateTime? utc) => utc is null ? "Unknown" : utc.Value.ToString("yyyy-MM-dd HH:mm") + " UTC";
 
     private sealed record Account(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
     private sealed record Problem(string? Message);

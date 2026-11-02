@@ -93,10 +93,7 @@ public static class AdminEndpoints
         {
             if (req.ActorId != id && !await IsAdmin(db, req.ActorId))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
-            var changed = await db.Users.Where(u => u.Id == id)
-                .ExecuteUpdateAsync(u => u.SetProperty(x => x.SessionVersion, x => x.SessionVersion + 1));
-            await db.UserSessions.Where(s => s.UserId == id && s.RevokedAt == null)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, clock.GetUtcNow().UtcDateTime));
+            var changed = await SessionEndpoints.RevokeAll(db, id, clock.GetUtcNow().UtcDateTime);
             return changed == 0 ? Results.NotFound() : Results.NoContent();
         });
 
@@ -248,7 +245,8 @@ public static class AdminEndpoints
         if (account is null)
             return Results.NotFound();
         if (await db.PointsHistory.AnyAsync(h => h.UserId == id) || await db.AuditHistories.AnyAsync(a => a.UserId == id) ||
-            await db.Applications.AnyAsync(a => a.ReviewerId == id) || await db.LockoutResets.AnyAsync(r => r.AdminId == id))
+            await db.Applications.AnyAsync(a => a.ReviewerId == id) || await db.LockoutResets.AnyAsync(r => r.AdminId == id) ||
+            await db.Impersonations.AnyAsync(i => i.ViewerId == id))
             return Results.Conflict(new { message = $"{account.Username} has history on record, so deactivate the account instead." });
 
         try

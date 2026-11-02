@@ -9,7 +9,11 @@
 <div class="tr-page-narrow">
     <div class="tr-card">
         <h1>Sign-in codes</h1>
-        @if (account is null)
+        @if (account is null && error is not null)
+        {
+            <p role="alert" class="tr-alert-error">@error</p>
+        }
+        else if (account is null)
         {
             <p role="status"><em>Loading...</em></p>
         }

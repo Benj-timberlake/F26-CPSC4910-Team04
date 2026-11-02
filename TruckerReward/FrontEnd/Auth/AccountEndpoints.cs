@@ -167,10 +167,14 @@ public static class AccountEndpoints
             IHttpClientFactory clients) =>
         {
             var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var sessionKey = http.User.FindFirstValue(TruckerSignIn.SessionKeyClaim);
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/password",
-                new { currentPassword, newPassword = password, ipAddress = Ip(http) });
+                new { currentPassword, newPassword = password, ipAddress = Ip(http), sessionKey });
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/account/password?error=" + await ErrorParam(response, "Could not change the password."));
+            // other browsers are signed out now, this one gets a cookie with the new version
+            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
+            await TruckerSignIn.SignInAsync(http, user!);
             return Results.Redirect("/profile?password=changed");
         }).RequireAuthorization().AddEndpointFilter(ViewAs.NotWhileViewing).DisableAntiforgery();
 

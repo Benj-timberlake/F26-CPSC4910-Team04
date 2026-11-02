@@ -40,7 +40,7 @@ public sealed class NotificationsTests : IAsyncDisposable
     {
         var (client, id) = await StartWithBob();
         var response = await client.PostAsJsonAsync($"/users/{id}/password", new { currentPassword = "Hunter22x!", newPassword = "NewPass99!" });
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var mail = Assert.Single(app.Email.Sent);
         var saved = await app.Db().NotificationsHistories.SingleAsync();

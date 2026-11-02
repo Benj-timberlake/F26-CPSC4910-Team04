@@ -84,6 +84,17 @@ public static class SessionEndpoints
         return os is null ? browser : $"{browser} on {os}";
     }
 
+    // old cookies fail their next check. keepKey is the browser that asked, so it stays signed in
+    internal static async Task<int> RevokeAll(AppDbContext db, int userId, DateTime now, string? keepKey = null)
+    {
+        var changed = await db.Users.Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.SessionVersion, x => x.SessionVersion + 1));
+        var keep = keepKey is null ? null : Hash(keepKey);
+        await db.UserSessions.Where(s => s.UserId == userId && s.RevokedAt == null && s.KeyHash != keep)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
+        return changed;
+    }
+
     private static string? Clip(string? value, int max) =>
         value is null ? null : value.Length > max ? value[..max] : value;
 

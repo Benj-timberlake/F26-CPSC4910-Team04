@@ -40,9 +40,10 @@
     {
         <p role="alert" class="tr-alert-error">@error</p>
     }
-    else if (board is null)
+    @* a failed award keeps the board on screen *@
+    @if (board is null)
     {
-        @if (!admin || companyId != 0)
+        @if (error is null && (!admin || companyId != 0))
         {
             <p role="status"><em>Loading...</em></p>
         }

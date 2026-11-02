@@ -489,11 +489,18 @@
     {
         if (pickedReasonId is not int reasonId)
             return;
-        using var client = HttpClientFactory.CreateClient("Backend");
-        var response = await client.DeleteAsync($"users/{id}/points/reasons/{reasonId}");
-        if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            savedReasons.RemoveAll(r => r.Id == reasonId);
-        pickedReasonId = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.DeleteAsync($"users/{id}/points/reasons/{reasonId}");
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                savedReasons.RemoveAll(r => r.Id == reasonId);
+            pickedReasonId = null;
+        }
+        catch (HttpRequestException)
+        {
+            // it stays in the list to try again
+        }
     }
 
     // after a successful change, so a typo'd reason that failed isn't kept

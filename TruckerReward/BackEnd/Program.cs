@@ -52,7 +52,7 @@ app.MapPasskeyEndpoints();
 app.MapSponsorTeamEndpoints();
 
 // a real query, so this fails when the database is asleep or unreachable
-app.MapGet("/health", async (AppDbContext db) =>
+app.MapGet("/health", async (AppDbContext db, ILogger<Program> log) =>
 {
     try
     {
@@ -60,7 +60,9 @@ app.MapGet("/health", async (AppDbContext db) =>
     }
     catch (Exception ex)
     {
-        return Results.Problem(detail: ex.Message, statusCode: 503);
+        // the message can name the database host, so it stays in the log
+        log.LogError(ex, "health check failed");
+        return Results.Problem(detail: "The database is unreachable.", statusCode: 503);
     }
 });
 

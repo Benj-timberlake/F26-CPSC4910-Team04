@@ -46,10 +46,10 @@ public sealed class AuditExportTests : IAsyncDisposable
     [Fact]
     public async Task ForwardsTheFiltersForTheSignedInUser()
     {
-        backend.Routes["GET /users/5/audit.csv?category=points&from=2026-09-01"] = (HttpStatusCode.OK, "When (UTC)\r\n");
+        backend.Routes["GET /users/5/audit.csv?category=points&from=2026-09-01&by=sue"] = (HttpStatusCode.OK, "When (UTC)\r\n");
         var client = await Start();
 
-        var response = await Get(client, "sponsor", "/audit/export?category=points&from=2026-09-01&id=1&other=x");
+        var response = await Get(client, "sponsor", "/audit/export?category=points&from=2026-09-01&by=sue&id=1&other=x");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/csv", response.Content.Headers.ContentType!.MediaType);

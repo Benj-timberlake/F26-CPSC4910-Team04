@@ -122,6 +122,22 @@ public sealed class ViewAsCookieTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task PasswordChangeRefreshesTheCookieWithTheNewVersion()
+    {
+        backend.Routes["POST /users/4/password"] = (HttpStatusCode.OK,
+            """{"id":4,"userType":"admin","username":"ann","email":"ann@example.com","phoneNumber":"","address":"","sessionVersion":1}""");
+        var client = await Start();
+        var admin = Cookie(await client.GetAsync("/signin"))!;
+        var form = new FormUrlEncodedContent(new Dictionary<string, string> { ["currentPassword"] = "old", ["password"] = "NewPass99!" });
+
+        var response = await Send(client, HttpMethod.Post, "/account/change-password", admin, form);
+
+        Assert.Equal("/profile?password=changed", response.Headers.Location!.ToString());
+        Assert.NotNull(Cookie(response));
+        Assert.Contains("\"sessionKey\"", backend.Bodies["POST /users/4/password"]);
+    }
+
+    [Fact]
     public async Task RefusedViewKeepsTheAdminSignedIn()
     {
         backend.Routes["POST /users/4/view-as/5"] = (HttpStatusCode.Forbidden, "");

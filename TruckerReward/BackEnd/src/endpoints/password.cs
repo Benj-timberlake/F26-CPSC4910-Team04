@@ -21,9 +21,10 @@ public static class PasswordEndpoints
             if (PasswordPolicy.Check(req.NewPassword) is { } weak)
                 return Results.BadRequest(new { message = weak });
 
-            await SetPassword(db, user, req.NewPassword, PasswordChange.Changed, req.IpAddress, clock);
+            await SetPassword(db, user, req.NewPassword, PasswordChange.Changed, req.IpAddress, clock, req.SessionKey);
             await notifications.PasswordChanged(user, byReset: false);
-            return Results.NoContent();
+            // the version moved, so the caller refreshes its cookie from this
+            return Results.Ok(UserProfile.Of(await db.Users.AsNoTracking().SingleAsync(u => u.Id == id)));
         });
 
         app.MapPost("/auth/forgot", async (ForgotPasswordRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config) =>
@@ -93,18 +94,23 @@ public static class PasswordEndpoints
         return $"{config["FRONTEND_URL"]?.TrimEnd('/')}/reset-password?token={token}";
     }
 
-    private static async Task SetPassword(AppDbContext db, User user, string password, string changeType, string? ip, TimeProvider clock)
+    // signs out every other browser and voids any other reset links
+    private static async Task SetPassword(AppDbContext db, User user, string password, string changeType, string? ip, TimeProvider clock, string? keepSession = null)
     {
+        var now = clock.GetUtcNow().UtcDateTime;
         user.Password = Passwords.Hash(user, password);
-        db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = changeType, IpAddress = ip, ChangedAt = clock.GetUtcNow().UtcDateTime });
+        db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = changeType, IpAddress = ip, ChangedAt = now });
         await db.SaveChangesAsync();
+        await db.PasswordResets.Where(r => r.UserId == user.Id && r.UsedAt == null)
+            .ExecuteUpdateAsync(r => r.SetProperty(x => x.UsedAt, now));
+        await SessionEndpoints.RevokeAll(db, user.Id, now, keepSession);
     }
 
     private static string Hash(string token) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }
 
-public record ChangePasswordRequest(string? CurrentPassword, string NewPassword, string? IpAddress);
+public record ChangePasswordRequest(string? CurrentPassword, string NewPassword, string? IpAddress, string? SessionKey = null);
 
 public record ForgotPasswordRequest(string Email, string? IpAddress);
 
