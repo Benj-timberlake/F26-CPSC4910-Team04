@@ -167,7 +167,9 @@ public sealed class AdminAccountsTests : IAsyncDisposable
         Assert.Equal(("Robert", "rob@example.com", "555", "1 Main St", (int?)acme),
             (saved.FirstName, saved.Email, saved.PhoneNumber, saved.Address,
                 await check.AccountsCompanies.Where(membership => membership.AccountId == bob).Select(membership => (int?)membership.CompanyId).FirstOrDefaultAsync()));
-        Assert.Equal("bob@example.com", Assert.Single(app.Email.Sent).To);
+        // a notice to the old address, a confirmation link to the new one
+        Assert.Equal(["bob@example.com", "rob@example.com"], app.Email.Sent.Select(m => m.To));
+        Assert.Null(saved.EmailConfirmedAt);
     }
 
     [Theory]

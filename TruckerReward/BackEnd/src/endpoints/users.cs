@@ -275,7 +275,7 @@ public static class UserEndpoints
                     .SumAsync(history => (long?)history.PointsDelta) ?? 0L
                 : user.Points;
             return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, memberships, effectiveCompanyId, displayedPoints, pendingCompany,
-                user.UserType == "sponsor" ? company?.MonthlyBudget : null));
+                user.UserType == "sponsor" ? company?.MonthlyBudget : null, user.EmailConfirmedAt is not null));
         });
 
         // this login, the one before it, failures in between, the last ten attempts and when the
@@ -330,7 +330,7 @@ public static class UserEndpoints
             return Results.Ok(UserProfile.Of(user));
         });
 
-        app.MapPost("/users/{id:int}/email", async (int id, ChangeEmailRequest req, AppDbContext db, IEmailSender email) =>
+        app.MapPost("/users/{id:int}/email", async (int id, ChangeEmailRequest req, AppDbContext db, IEmailSender email, TimeProvider clock, IConfiguration config) =>
         {
             var user = await db.Users.FindAsync(id);
             if (user is null)
@@ -348,9 +348,11 @@ public static class UserEndpoints
 
             var oldAddress = user.Email;
             user.Email = address;
+            user.EmailConfirmedAt = null;
             await db.SaveChangesAsync();
             await email.SendAsync(oldAddress, "Your TruckerReward email was changed",
                 $"Hi {user.Username},\n\nYour account email was just changed from {oldAddress} to {address}. If that wasn't you, reset your password right away from the login page.");
+            await EmailConfirmEndpoints.Send(db, user, email, clock, config);
             return Results.Ok(UserProfile.Of(user));
         });
 
@@ -406,7 +408,7 @@ public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, str
 public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, bool EmailConfirmed = true);
 
 public record UserCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
 

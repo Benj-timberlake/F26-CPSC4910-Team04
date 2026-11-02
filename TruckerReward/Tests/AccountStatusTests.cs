@@ -17,6 +17,7 @@ public sealed class AccountStatusTests : IAsyncDisposable
         client = await app.Start();
         foreach (var name in new[] { "bob", "ann", "max" })
             await client.PostAsJsonAsync("/auth/register", new { username = name, firstName = name, lastName = "Test", email = $"{name}@example.com", password = "Hunter22x!", userType = "driver" });
+        await app.ConfirmEmails();
         using var db = app.Db();
         await db.Users.Where(u => u.Username != "bob").ExecuteUpdateAsync(u => u.SetProperty(x => x.UserType, AuthEndpoints.Admin));
         await db.NotificationsHistories.ExecuteDeleteAsync();

@@ -41,6 +41,7 @@ public sealed class TestApp : IAsyncDisposable
         app.MapGet("/health", () => Results.Ok());
         app.MapAuthEndpoints();
         app.MapPasswordEndpoints();
+        app.MapEmailConfirmEndpoints();
         app.MapUserEndpoints();
         app.MapCartEndpoints();
         app.MapCatalogEndpoints();
@@ -63,6 +64,14 @@ public sealed class TestApp : IAsyncDisposable
     }
 
     public AppDbContext Db() => app!.Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>();
+
+    // as if everyone signed up so far clicked their confirmation link
+    public async Task ConfirmEmails()
+    {
+        using var db = Db();
+        await db.Users.ExecuteUpdateAsync(u => u.SetProperty(x => x.EmailConfirmedAt, Clock.GetUtcNow().UtcDateTime));
+        Email.Sent.Clear();
+    }
 
     public async ValueTask DisposeAsync()
     {

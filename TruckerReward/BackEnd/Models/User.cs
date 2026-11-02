@@ -35,6 +35,9 @@ public partial class User
 
     public string Status { get; set; } = Active;
 
+    // null until the user clicks the link sent to their address
+    public DateTime? EmailConfirmedAt { get; set; }
+
     // bumped to sign out every session
     public int SessionVersion { get; set; }
 

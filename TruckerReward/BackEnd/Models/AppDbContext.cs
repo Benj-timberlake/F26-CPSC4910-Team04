@@ -39,6 +39,8 @@ public partial class AppDbContext : DbContext
 
     public DbSet<PasskeyCredential> PasskeyCredentials { get; set; }
 
+    public DbSet<EmailConfirmation> EmailConfirmations { get; set; }
+
     public DbSet<LockoutReset> LockoutResets { get; set; }
 
     public DbSet<SavedReason> SavedReasons { get; set; }
@@ -520,6 +522,22 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_saved_reasons_company");
         });
 
+        modelBuilder.Entity<EmailConfirmation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("email_confirmations");
+            entity.HasIndex(e => e.TokenHash, "uq_email_confirmations_token").IsUnique();
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Email).HasMaxLength(255).HasColumnName("email");
+            entity.Property(e => e.TokenHash).HasMaxLength(64).HasColumnName("token_hash");
+            entity.Property(e => e.ExpiresAt).HasColumnType("datetime").HasColumnName("expires_at");
+            entity.Property(e => e.UsedAt).HasColumnType("datetime").HasColumnName("used_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_email_confirmations_user");
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.Property(e => e.BudgetResetMonth)
@@ -559,6 +577,7 @@ public partial class AppDbContext : DbContext
                 .HasColumnName("user_type");
             entity.Property(e => e.Username).HasColumnName("username");
             entity.Property(e => e.SessionVersion).HasColumnName("session_version");
+            entity.Property(e => e.EmailConfirmedAt).HasColumnType("datetime").HasColumnName("email_confirmed_at");
 
             // These legacy navigations are not columns or relationships in the users mapping.
             // Ignore them to prevent EF from inferring a shadow ApplicationDriverId column.

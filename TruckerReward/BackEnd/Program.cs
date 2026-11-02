@@ -36,6 +36,7 @@ app.MapGet("/", () => Results.Ok(new { message = "TruckerReward API", health = "
 app.MapMarketEndpoints();
 app.MapAuthEndpoints();
 app.MapPasswordEndpoints();
+app.MapEmailConfirmEndpoints();
 app.MapUserEndpoints();
 app.MapCartEndpoints();
 app.MapCatalogEndpoints();

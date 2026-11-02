@@ -14,6 +14,7 @@ public sealed class LockoutTests : IAsyncDisposable
         var client = await app.Start();
         await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
         await client.PostAsJsonAsync("/auth/register", new { username = "root", firstName = "Root", lastName = "Admin", email = "root@example.com", password = "Hunter22x!", userType = "driver" });
+        await app.ConfirmEmails();
         using var db = app.Db();
         (await db.Users.SingleAsync(u => u.Username == "root")).UserType = "admin";
         await db.SaveChangesAsync();

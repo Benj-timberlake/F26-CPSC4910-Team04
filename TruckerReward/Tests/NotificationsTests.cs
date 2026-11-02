@@ -13,6 +13,7 @@ public sealed class NotificationsTests : IAsyncDisposable
     {
         var client = await app.Start();
         await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        await app.ConfirmEmails();
         var id = (await app.Db().Users.SingleAsync(u => u.Username == "bob")).Id;
         return (client, id);
     }
@@ -64,6 +65,7 @@ public sealed class NotificationsTests : IAsyncDisposable
         var client = await app.Start();
         foreach (var name in new[] { "ann", "max" })
             await client.PostAsJsonAsync("/auth/register", new { username = name, firstName = name, lastName = "Admin", email = $"{name}@example.com", password = "Hunter22x!", userType = "driver" });
+        await app.ConfirmEmails();
         using (var db = app.Db())
         {
             await db.Users.ExecuteUpdateAsync(u => u.SetProperty(x => x.UserType, "admin"));
@@ -76,7 +78,7 @@ public sealed class NotificationsTests : IAsyncDisposable
         Assert.Equal(["ann", "max"], saved.Select(n => n.User.Username).Order());
         Assert.All(saved, n => Assert.Equal("New driver account: bob", n.Subject));
         Assert.All(saved, n => Assert.Contains("Bob Driver (bob, bob@example.com)", n.Body));
-        Assert.Empty(app.Email.Sent);
+        Assert.Equal("Confirm your TruckerReward email", Assert.Single(app.Email.Sent).Subject);
     }
 
     [Fact]
