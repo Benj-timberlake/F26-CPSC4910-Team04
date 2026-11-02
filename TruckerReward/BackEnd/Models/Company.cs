@@ -13,6 +13,10 @@ public partial class Company
 
     public decimal MonthlyBudget { get; set; }
 
+    public int MonthlyDriverPoints { get; set; }
+    public DateTime? DriverPointsMonth { get; set; }
+    public int? MonthlyPointsSponsorId { get; set; }
+
     public virtual ICollection<Application> Applications { get; set; } = new List<Application>();
 
     public virtual ICollection<AccountsCompany> AccountsCompanies { get; set; } = new List<AccountsCompany>();

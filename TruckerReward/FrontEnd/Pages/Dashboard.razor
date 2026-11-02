@@ -24,7 +24,7 @@
         <h1>My TruckerReward Dashboard</h1>
         @if (account.UserType == "sponsor")
         {
-            <p><a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a></p>
+            <p><a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a> <button type="button" class="tr-btn" @onclick="OpenMonthlyPoints">Montly Points</button></p>
         }
         else
         {
@@ -171,6 +171,30 @@
                     </div>
                 }
             </section>
+        }
+
+        @if (showMonthlyPointsModal && account.UserType == "sponsor")
+        {
+            <div class="company-backdrop" @onclick="() => showMonthlyPointsModal = false">
+                <section class="company-dialog" role="dialog" aria-modal="true" aria-labelledby="monthly-points-title" @onclick:stopPropagation="true">
+                    <button type="button" class="company-close-button" aria-label="Close" title="Close" @onclick="() => showMonthlyPointsModal = false">×</button>
+                    <h2 id="monthly-points-title">Montly Points</h2>
+                    <p>Available points: @FrontEnd.Shared.RewardPoints.Format(account.Points)</p>
+                    <p>Your balance resets to your company's monthly budget on the first of each month.</p>
+                    <p>Each active driver receives this amount on the first of each month (Eastern time), starting next month. Enter 0 to disable awards.</p>
+                    @if (monthlyPointsError is not null)
+                    {
+                        <p role="alert" class="tr-alert-error">@monthlyPointsError</p>
+                    }
+                    <form @onsubmit="SaveMonthlyPoints" @onsubmit:preventDefault="true">
+                        <label class="extra-info-label" for="monthly-points-input">Monthly points</label>
+                        <input id="monthly-points-input" class="extra-info-input" type="number" min="0" max="1000000" step="1" required @bind="monthlyPoints" />
+                        <div class="monthly-points-actions">
+                            <button type="submit" class="tr-btn" disabled="@savingMonthlyPoints">@(savingMonthlyPoints ? "Saving..." : "Confirm")</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
         }
 
         @if (showCompanyModal)
@@ -324,6 +348,7 @@
     }
 
     .company-close-button:hover { background: #e5e7eb; color: #444; }
+    .monthly-points-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
 
     .company-options {
         display: grid;
@@ -404,6 +429,10 @@
     private List<CompanyOption>? companies;
     private int? selectedCompanyId;
     private bool showCompanyModal;
+    private bool showMonthlyPointsModal;
+    private long? monthlyPoints;
+    private bool savingMonthlyPoints;
+    private string? monthlyPointsError;
     private string? companyLoadError;
     private string? applicantExtraInfo;
     private string? applicationError;
@@ -440,6 +469,55 @@
                 driverLoadError = "Couldn't load drivers right now. Try again in a moment.";
             }
         }
+    }
+
+    private async Task OpenMonthlyPoints()
+    {
+        monthlyPointsError = null;
+        try
+        {
+            var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var setting = await client.GetFromJsonAsync<MonthlyPointsSetting>($"users/{id}/points/monthly");
+            monthlyPoints = setting?.Points ?? 0;
+            showMonthlyPointsModal = true;
+        }
+        catch (HttpRequestException)
+        {
+            notice = "Couldn't load monthly points. Make sure you belong to a company and try again.";
+        }
+    }
+
+    private sealed record MonthlyPointsSetting(int Points);
+
+    private async Task SaveMonthlyPoints()
+    {
+        if (savingMonthlyPoints) return;
+        if (monthlyPoints is null or < 0 or > 1_000_000)
+        {
+            monthlyPointsError = "Enter 0 to 1,000,000 whole points.";
+            return;
+        }
+        savingMonthlyPoints = true;
+        monthlyPointsError = null;
+        try
+        {
+            var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{id}/points/monthly", new { Points = (int)monthlyPoints.Value });
+            if (!response.IsSuccessStatusCode)
+            {
+                monthlyPointsError = "Couldn't save monthly points. Make sure you belong to a company and try again.";
+                return;
+            }
+            showMonthlyPointsModal = false;
+            notice = monthlyPoints == 0 ? "Monthly driver points disabled." : $"Saved: each active driver will receive {monthlyPoints:N0} points on the first of each month (Eastern time), starting next month.";
+        }
+        catch (HttpRequestException)
+        {
+            monthlyPointsError = "Couldn't save monthly points. Please try again.";
+        }
+        finally { savingMonthlyPoints = false; }
     }
 
     private async Task ShowCompanyModal()

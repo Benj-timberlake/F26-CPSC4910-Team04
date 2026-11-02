@@ -264,6 +264,10 @@ public partial class AppDbContext : DbContext
 
             entity.ToTable("companies");
 
+            entity.Property(e => e.MonthlyDriverPoints).HasColumnName("monthly_driver_points").HasDefaultValue(0);
+            entity.Property(e => e.DriverPointsMonth).HasColumnName("driver_points_month").HasColumnType("date");
+            entity.Property(e => e.MonthlyPointsSponsorId).HasColumnName("monthly_points_sponsor_id");
+
             entity.Property(e => e.MonthlyBudget)
                 .HasColumnType("decimal(12,2)")
                 .HasDefaultValue(0m)

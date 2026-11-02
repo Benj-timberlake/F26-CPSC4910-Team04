@@ -12,6 +12,8 @@ public static class PointsEndpoints
     public static void MapPointsEndpoints(this WebApplication app)
     {
         app.MapGet("/users/{id:int}/points", Summary);
+        app.MapGet("/users/{id:int}/points/monthly", Monthly);
+        app.MapPost("/users/{id:int}/points/monthly", SaveMonthly);
         // id is the sponsor or admin who is looking
         app.MapGet("/users/{id:int}/points/drivers", Drivers);
         app.MapPost("/users/{id:int}/points/drivers/{driverId:int}", Change);
@@ -22,6 +24,29 @@ public static class PointsEndpoints
         app.MapDelete("/users/{id:int}/points/reasons/{reasonId:int}", ForgetReason);
         // period is all, month or week
         app.MapGet("/users/{id:int}/leaderboard", Leaderboard);
+    }
+
+    private static async Task<IResult> Monthly(int id, AppDbContext db)
+    {
+        if (await SponsorCompany(db, id) is not int companyId)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        return Results.Ok(new MonthlyPointsRequest(await db.Companies.Where(c => c.Id == companyId)
+            .Select(c => c.MonthlyDriverPoints).SingleAsync()));
+    }
+
+    private static async Task<IResult> SaveMonthly(int id, MonthlyPointsRequest request, AppDbContext db, TimeProvider clock)
+    {
+        if (request.Points < 0 || request.Points > MaxChange)
+            return Results.BadRequest(new { message = $"Enter 0 to {MaxChange:N0} whole points." });
+        if (await SponsorCompany(db, id) is not int companyId)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        // Settings take effect next month; saving never triggers an immediate award.
+        var month = MonthlySponsorBudgetService.CurrentMonth(clock.GetUtcNow());
+        await db.Companies.Where(c => c.Id == companyId).ExecuteUpdateAsync(s => s
+            .SetProperty(c => c.MonthlyDriverPoints, request.Points)
+            .SetProperty(c => c.MonthlyPointsSponsorId, id)
+            .SetProperty(c => c.DriverPointsMonth, month));
+        return Results.Ok(request);
     }
 
     private static async Task<IResult> Summary(int id, AppDbContext db, TimeProvider clock)
@@ -351,6 +376,7 @@ public record LeaderboardRow(int Rank, int Id, string Username, string FirstName
 public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Rows);
 
 public record RemoveDriverRequest(string? Reason);
+public record MonthlyPointsRequest(int Points);
 
 public record SaveReasonRequest(string? Reason);
 
