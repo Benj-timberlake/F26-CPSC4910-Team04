@@ -116,10 +116,14 @@ public static class AuditEndpoints
             changes = changes.Where(c => ids.Contains(c.UserId));
         var rows = await changes
             .OrderByDescending(c => c.ChangedAt).Take(MaxRows)
-            .Join(db.Users, c => c.UserId, u => u.Id, (c, u) => new { c.ChangedAt, c.ChangeType, c.IpAddress, u.Id, u.Username })
+            .Join(db.Users, c => c.UserId, u => u.Id, (c, u) => new
+            {
+                c.ChangedAt, c.ChangeType, c.IpAddress, u.Id, u.Username,
+                By = db.Users.Where(a => a.Id == c.RequestedBy).Select(a => a.Username).FirstOrDefault()
+            })
             .ToListAsync();
         return rows.Select(c => new AuditEntry(c.ChangedAt, Passwords, c.Id, c.Username,
-            PasswordText(c.ChangeType) + (string.IsNullOrEmpty(c.IpAddress) ? "" : " from " + c.IpAddress), null));
+            PasswordText(c.ChangeType) + (string.IsNullOrEmpty(c.IpAddress) ? "" : " from " + c.IpAddress), c.By));
     }
 
     private static async Task<IEnumerable<AuditEntry>> PointRows(AppDbContext db, IQueryable<int>? ids, DateTime start, DateTime end)

@@ -96,7 +96,7 @@
                                 <tr>
                                     <td>@Time(c.ChangedAt)</td>
                                     <td>@c.Username</td>
-                                    <td>@ChangeLabel(c.ChangeType)</td>
+                                    <td>@ChangeLabel(c.ChangeType)@(c.RequestedBy is null ? "" : $" by {c.RequestedBy}")</td>
                                     <td>@(c.IpAddress ?? "—")</td>
                                 </tr>
                             }
@@ -184,6 +184,6 @@
 
     private sealed record Locked(string Username, DateTime LockedUntil);
     private sealed record Attempt(string Username, int? UserId, bool Succeeded, string? IpAddress, DateTime AttemptedAt);
-    private sealed record Change(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress);
+    private sealed record Change(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress, string? RequestedBy);
     private sealed record Problem(string? Message);
 }
