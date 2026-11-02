@@ -145,7 +145,7 @@ public record LoginRequest(string Username, string Password, string? IpAddress);
 public record ExternalLoginRequest(string Provider, string Email, string? Name, string? IpAddress);
 
 // what login and register hand back, the frontend turns it into the cookie claims
-public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address)
+public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, int SessionVersion = 0)
 {
-    public static UserProfile Of(User u) => new(u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address ?? "");
+    public static UserProfile Of(User u) => new(u.Id, u.UserType, u.Username, u.Email, u.PhoneNumber, u.Address ?? "", u.SessionVersion);
 }

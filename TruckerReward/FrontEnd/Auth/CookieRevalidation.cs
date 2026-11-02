@@ -60,9 +60,18 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
                 return;
             }
             using var status = await backend.GetAsync($"users/{id}/status");
-            if (status.IsSuccessStatusCode && (await status.Content.ReadFromJsonAsync<AccountStatus>())?.Status == "inactive")
+            var account = status.IsSuccessStatusCode ? await status.Content.ReadFromJsonAsync<AccountStatus>() : null;
+            if (account?.Status == "inactive")
             {
                 log.LogInformation("user {Id} was deactivated, signing out", id);
+                await Reject(context);
+                return;
+            }
+            // cookies from before the column existed have no claim and count as version 0
+            var version = int.TryParse(context.Principal?.FindFirstValue(TruckerSignIn.SessionVersionClaim), out var v) ? v : 0;
+            if (account is not null && account.SessionVersion != version)
+            {
+                log.LogInformation("user {Id} was signed out everywhere, dropping this cookie", id);
                 await Reject(context);
                 return;
             }
@@ -76,7 +85,9 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
             // any other error: keep the cookie, try again next request
             if (!response.IsSuccessStatusCode)
                 return;
-            user = await response.Content.ReadFromJsonAsync<UserProfile>();
+            user = await response.Content.ReadFromJsonAsync<UserProfile>() is { } fresh
+                ? fresh with { SessionVersion = account?.SessionVersion ?? version }
+                : null;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -108,5 +119,5 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
         await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     }
 
-    private sealed record AccountStatus(string Status);
+    private sealed record AccountStatus(string Status, int SessionVersion);
 }

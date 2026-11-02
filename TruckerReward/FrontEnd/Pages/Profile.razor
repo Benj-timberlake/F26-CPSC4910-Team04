@@ -68,6 +68,10 @@
                     <dd>@(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))</dd>
                 </dl>
                 <p><a class="passkeys-link" href="account/passkeys">Face ID and passkeys</a></p>
+                <form method="post" action="account/logout-everywhere" class="logout-everywhere">
+                    <button type="submit" class="tr-btn-outline">Sign out everywhere</button>
+                    <span class="tr-muted">Ends every session, this one too. Others can take up to five minutes.</span>
+                </form>
 
                 @if (activity.Recent.Count > 0)
                 {
@@ -100,6 +104,14 @@
 </div>
 
 <style>
+    .logout-everywhere {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+        margin-bottom: 16px;
+    }
+
     .tr-kv dd a {
         margin-left: 8px;
     }

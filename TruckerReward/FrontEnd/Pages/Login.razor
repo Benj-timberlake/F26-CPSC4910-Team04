@@ -82,6 +82,7 @@
             "backend" => "Something went wrong on our side. Try again in a moment.",
             "sso" => "Sign in with that provider didn't work. Try again or use a password.",
             null when query["reset"] == "1" => "Your password has been reset. Log in with the new one.",
+            null when query["signedOut"] == "everywhere" => "You were signed out on every device. Log in again here.",
             _ => null
         };
 

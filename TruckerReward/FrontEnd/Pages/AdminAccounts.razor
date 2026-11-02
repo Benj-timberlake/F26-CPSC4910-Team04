@@ -134,6 +134,7 @@
                                         @(a.Status == "active" ? "Deactivate" : "Reactivate")
                                     </button>
                                     <button type="button" class="tr-btn-outline edit" disabled="@busy" @onclick="() => StartEdit(a)">Edit</button>
+                                    <button type="button" class="tr-btn-outline sign-out" disabled="@busy" @onclick="() => SignOutEverywhere(a)">Sign out</button>
                                     @if (deleting == a.Id)
                                     {
                                         <button type="button" class="tr-btn delete" disabled="@busy" @onclick="() => Delete(a)">Delete @a.Username for good</button>
@@ -333,6 +334,26 @@
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private async Task SignOutEverywhere(Account a)
+    {
+        busy = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"users/{a.Id}/sessions/revoke", new { actorId = int.Parse(id!) });
+            if (response.IsSuccessStatusCode)
+                notice = $"{a.Username} will be signed out everywhere within five minutes.";
+            else
+                error = "That didn't work.";
+        }
+        catch (HttpRequestException)
         {
             error = "That didn't work. Reload and try again.";
         }
