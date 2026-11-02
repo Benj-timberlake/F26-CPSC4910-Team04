@@ -41,6 +41,8 @@ public partial class AppDbContext : DbContext
 
     public DbSet<EmailConfirmation> EmailConfirmations { get; set; }
 
+    public DbSet<SignInCode> SignInCodes { get; set; }
+
     public DbSet<LockoutReset> LockoutResets { get; set; }
 
     public DbSet<SavedReason> SavedReasons { get; set; }
@@ -522,6 +524,25 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_saved_reasons_company");
         });
 
+        modelBuilder.Entity<SignInCode>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("sign_in_codes");
+            entity.HasIndex(e => e.ChallengeHash, "uq_sign_in_codes_challenge").IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt }, "ix_sign_in_codes_user");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.ChallengeHash).HasMaxLength(64).HasColumnName("challenge_hash");
+            entity.Property(e => e.CodeHash).HasMaxLength(64).HasColumnName("code_hash");
+            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
+            entity.Property(e => e.ExpiresAt).HasColumnType("datetime").HasColumnName("expires_at");
+            entity.Property(e => e.Attempts).HasColumnName("attempts");
+            entity.Property(e => e.UsedAt).HasColumnType("datetime").HasColumnName("used_at");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_sign_in_codes_user");
+        });
+
         modelBuilder.Entity<EmailConfirmation>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -578,6 +599,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Username).HasColumnName("username");
             entity.Property(e => e.SessionVersion).HasColumnName("session_version");
             entity.Property(e => e.EmailConfirmedAt).HasColumnType("datetime").HasColumnName("email_confirmed_at");
+            entity.Property(e => e.EmailCodes).HasColumnName("email_codes");
 
             // These legacy navigations are not columns or relationships in the users mapping.
             // Ignore them to prevent EF from inferring a shadow ApplicationDriverId column.

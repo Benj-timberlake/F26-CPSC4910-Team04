@@ -275,7 +275,7 @@ public static class UserEndpoints
                     .SumAsync(history => (long?)history.PointsDelta) ?? 0L
                 : user.Points;
             return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, memberships, effectiveCompanyId, displayedPoints, pendingCompany,
-                user.UserType == "sponsor" ? company?.MonthlyBudget : null, user.EmailConfirmedAt is not null));
+                user.UserType == "sponsor" ? company?.MonthlyBudget : null, user.EmailConfirmedAt is not null, user.EmailCodes, user.Password is not null));
         });
 
         // this login, the one before it, failures in between, the last ten attempts and when the
@@ -408,7 +408,7 @@ public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, str
 public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, bool EmailConfirmed = true);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, bool EmailConfirmed = true, bool EmailCodes = false, bool HasPassword = true);
 
 public record UserCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
 

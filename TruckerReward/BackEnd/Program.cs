@@ -37,6 +37,7 @@ app.MapMarketEndpoints();
 app.MapAuthEndpoints();
 app.MapPasswordEndpoints();
 app.MapEmailConfirmEndpoints();
+app.MapSignInCodeEndpoints();
 app.MapUserEndpoints();
 app.MapCartEndpoints();
 app.MapCatalogEndpoints();

@@ -38,6 +38,9 @@ public partial class User
     // null until the user clicks the link sent to their address
     public DateTime? EmailConfirmedAt { get; set; }
 
+    // sign in also needs a code emailed to the confirmed address
+    public bool EmailCodes { get; set; }
+
     // bumped to sign out every session
     public int SessionVersion { get; set; }
 

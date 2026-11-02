@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     session_version INT NOT NULL DEFAULT 0,
     -- null until the user clicks the emailed link
     email_confirmed_at DATETIME NULL,
+    -- sign in also needs an emailed code
+    email_codes TINYINT(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_username (username),
     UNIQUE KEY uq_users_email (email)
@@ -141,4 +143,20 @@ CREATE TABLE IF NOT EXISTS email_confirmations (
     PRIMARY KEY (id),
     UNIQUE KEY uq_email_confirmations_token (token_hash),
     CONSTRAINT fk_email_confirmations_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- the emailed codes. only hashes of the code and its challenge are stored
+CREATE TABLE IF NOT EXISTS sign_in_codes (
+    id INT NOT NULL AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    challenge_hash CHAR(64) NOT NULL,
+    code_hash CHAR(64) NOT NULL,
+    created_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    attempts INT NOT NULL DEFAULT 0,
+    used_at DATETIME NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_sign_in_codes_challenge (challenge_hash),
+    KEY ix_sign_in_codes_user (user_id, created_at),
+    CONSTRAINT fk_sign_in_codes_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
