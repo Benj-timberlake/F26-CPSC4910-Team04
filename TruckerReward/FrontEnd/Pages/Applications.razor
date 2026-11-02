@@ -129,7 +129,23 @@
     </div>
 }
 
+@if (cdlReview is not null)
+{
+    <div class="review-backdrop" @onclick="CloseCdl" @onkeydown="CdlKeyDown">
+        <section class="review-dialog cdl-dialog" role="dialog" aria-modal="true" aria-labelledby="cdl-review-title" @onclick:stopPropagation="true">
+            <button @ref="cdlCloseButton" type="button" class="review-close" aria-label="Close CDL review" title="Close" @onclick="CloseCdl">×</button>
+            <h2 id="cdl-review-title">CDL — @cdlReview.ApplicantName</h2>
+            <iframe @key="cdlReview.Id" class="cdl-preview" title="Driver CDL license" src="@($"applications/{cdlReview.Id}/cdl")"></iframe>
+            <p class="cdl-fallback"><a href="@($"applications/{cdlReview.Id}/cdl")" target="_blank" rel="noopener">Open CDL in a new tab</a></p>
+        </section>
+    </div>
+}
+
 <style>
+    .review-dialog.cdl-dialog { max-width: 1000px; }
+    .cdl-preview { display: block; width: 100%; height: 65vh; border: 1px solid #e3e9f0; border-radius: 8px; background: #f8fafc; }
+    .cdl-fallback { margin: 12px 0 0; font-size: 13px; }
+    .application-actions .cdl-button { background: #315b99; }
     .applications-page { max-width: 1500px; margin: 0 auto; padding: 36px clamp(20px, 4vw, 56px) 60px; color: #1f2937; }
     .applications-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 28px; }
     .eyebrow { color: var(--brand); font-weight: 700; font-size: 11px; letter-spacing: .12em; margin: 0 0 8px; }
@@ -206,6 +222,30 @@
     private string? reviewError;
     private int? reviewerId;
     private ApplicationRow? activeReview;
+    private ApplicationRow? cdlReview;
+    private ElementReference cdlCloseButton;
+    private bool focusCdl;
+
+    private void OpenCdl(ApplicationRow application)
+    {
+        cdlReview = application;
+        focusCdl = true;
+    }
+
+    private void CloseCdl() => cdlReview = null;
+    private void CdlKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") CloseCdl();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusCdl && cdlReview is not null)
+        {
+            focusCdl = false;
+            await cdlCloseButton.FocusAsync();
+        }
+    }
     private string? reviewDecision;
     private string reviewReason = "";
     private bool isSubmitting;
@@ -340,6 +380,10 @@
                 <p class="application-company">Company: @application.CompanyName</p>
             </div>
             <div class="application-actions" aria-label="Review actions">
+                @if (selectedView == "driver")
+                {
+                    <button type="button" class="cdl-button" @onclick="() => OpenCdl(application)">Review CDL</button>
+                }
                 @if (application.Status == "active")
                 {
                     <button type="button" class="accept-button" @onclick="() => OpenAccept(application)">Accept</button>

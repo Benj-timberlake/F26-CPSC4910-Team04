@@ -9,6 +9,7 @@ builder.Services.AddServerSideBlazor();
 builder.AddTruckerAuthentication();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CdlStorage>();
+builder.Services.AddSingleton<ICdlReader>(sp => sp.GetRequiredService<CdlStorage>());
 
 void ConfigureBackendClient(HttpClient client)
 {
@@ -53,6 +54,7 @@ app.UseAuthorization();
 app.MapAccountEndpoints();
 app.MapDriverViewEndpoints();
 app.MapAuditExport();
+app.MapCdlReview();
 app.MapViewAs();
 app.MapPasskeyProxy();
 app.MapBlazorHub();

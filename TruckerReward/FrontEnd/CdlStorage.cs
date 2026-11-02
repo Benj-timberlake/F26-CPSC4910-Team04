@@ -4,9 +4,28 @@ using Amazon.S3.Model;
 
 namespace FrontEnd;
 
-public sealed class CdlStorage(IConfiguration config)
+public interface ICdlReader
+{
+    Task<CdlDocument> DownloadAsync(int driverId, CancellationToken cancellationToken = default);
+}
+
+public sealed record CdlDocument(byte[] Bytes, string ContentType);
+
+public sealed class CdlStorage(IConfiguration config) : ICdlReader
 {
     public const int MaxBytes = 10 * 1024 * 1024;
+
+    public async Task<CdlDocument> DownloadAsync(int driverId, CancellationToken cancellationToken = default)
+    {
+        var bucket = config["CDL_S3_BUCKET"];
+        var region = config["CDL_S3_REGION"];
+        if (string.IsNullOrWhiteSpace(bucket) || string.IsNullOrWhiteSpace(region))
+            throw new InvalidOperationException("CDL storage is not configured.");
+        using var s3 = new AmazonS3Client(RegionEndpoint.GetBySystemName(region));
+        using var response = await s3.GetObjectAsync(bucket, $"cdl/drivers/{driverId}/license", cancellationToken);
+        using var file = await ReadAsync(response.ResponseStream, cancellationToken);
+        return new CdlDocument(file.ToArray(), ContentType(file));
+    }
 
     public static async Task<MemoryStream> ReadAsync(Stream source, CancellationToken cancellationToken = default)
     {
