@@ -1,0 +1,139 @@
+@page "/account/devices"
+@attribute [Authorize]
+@using System.Security.Claims
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Devices</PageTitle>
+
+<div class="tr-page">
+    <h1>Devices</h1>
+    <p class="tr-subtitle">Browsers signed in to your account in the last eight hours. Signing one out takes effect within five minutes.</p>
+
+    @if (notice is not null)
+    {
+        <p role="status" class="tr-alert-success">@notice</p>
+    }
+    @if (error is not null)
+    {
+        <p role="alert" class="tr-alert-error">@error</p>
+    }
+
+    @if (sessions is null)
+    {
+        @if (error is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+    }
+    else if (sessions.Count == 0)
+    {
+        <p class="tr-muted">No signed-in devices found.</p>
+    }
+    else
+    {
+        <div class="tr-table-wrap">
+            <table class="tr-table">
+                <thead><tr><th>Device</th><th>IP</th><th>Signed in</th><th>Last active</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var s in sessions)
+                    {
+                        <tr>
+                            <td>@s.Device @if (s.Current) { <span class="current">This device</span> }</td>
+                            <td>@(s.IpAddress ?? "—")</td>
+                            <td>@When(s.CreatedAt)</td>
+                            <td>@When(s.LastSeenAt)</td>
+                            <td>
+                                @if (!s.Current && !viewing)
+                                {
+                                    <button type="button" class="tr-btn-outline end" disabled="@busy" @onclick="() => End(s)">Sign out</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <p class="back"><a href="profile">Back to your profile</a></p>
+</div>
+
+<style>
+    .current {
+        margin-left: 8px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: #e8eef8;
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .back {
+        margin-top: 16px;
+    }
+</style>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private string? id;
+    private string? key;
+    private bool viewing;
+    private List<Session>? sessions;
+    private string? notice;
+    private string? error;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        key = user.FindFirstValue(FrontEnd.Auth.TruckerSignIn.SessionKeyClaim);
+        viewing = FrontEnd.Auth.ViewAs.IsViewing(user);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            sessions = await client.GetFromJsonAsync<List<Session>>($"users/{id}/sessions" + (key is null ? "" : "?current=" + Uri.EscapeDataString(key)));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load your devices right now. Try again in a moment.";
+        }
+    }
+
+    private async Task End(Session s)
+    {
+        busy = true;
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.DeleteAsync($"users/{id}/sessions/{s.Id}");
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                notice = $"{s.Device} will be signed out within five minutes.";
+                await Load();
+            }
+            else
+            {
+                error = "That didn't work.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "That didn't work. Reload and try again.";
+        }
+        busy = false;
+    }
+
+    private static string When(DateTime utc) => utc.ToString("yyyy-MM-dd HH:mm") + " UTC";
+
+    private sealed record Session(int Id, DateTime CreatedAt, DateTime LastSeenAt, string? IpAddress, string Device, bool Current);
+}

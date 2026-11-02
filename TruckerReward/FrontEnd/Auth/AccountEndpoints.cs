@@ -207,8 +207,19 @@ public static class AccountEndpoints
             return Results.Redirect("/profile?profile=updated");
         }).RequireAuthorization().AddEndpointFilter(ViewAs.NotWhileViewing).DisableAntiforgery();
 
-        app.MapPost("/account/logout", async (HttpContext http) =>
+        app.MapPost("/account/logout", async (HttpContext http, IHttpClientFactory clients) =>
         {
+            if (http.User.FindFirstValue(TruckerSignIn.SessionKeyClaim) is { } key)
+            {
+                try
+                {
+                    using var _ = await clients.CreateClient("Backend").PostAsJsonAsync("sessions/end", new { key });
+                }
+                catch (HttpRequestException)
+                {
+                    // the cookie still goes, the row just ages out
+                }
+            }
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.Redirect("/");
         }).DisableAntiforgery();

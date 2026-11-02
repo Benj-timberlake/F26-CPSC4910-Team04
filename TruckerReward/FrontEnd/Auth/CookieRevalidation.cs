@@ -54,10 +54,21 @@ public sealed class CookieRevalidation(IHttpClientFactory clients, TimeProvider 
                     await Reject(context);
                     return;
                 }
-                context.ReplacePrincipal(TruckerSignIn.DriverPrincipal(driver, sponsorId));
+                context.ReplacePrincipal(ViewAs.Carry(context.Principal!, TruckerSignIn.DriverPrincipal(driver, sponsorId)));
                 MarkChecked(context.Properties, now);
                 context.ShouldRenew = true;
                 return;
+            }
+            // ended from the devices page
+            if (context.Principal?.FindFirstValue(TruckerSignIn.SessionKeyClaim) is { } key)
+            {
+                using var session = await backend.PostAsJsonAsync("sessions/check", new { key, ipAddress = context.HttpContext.Connection.RemoteIpAddress?.ToString() });
+                if (session.StatusCode == HttpStatusCode.Gone)
+                {
+                    log.LogInformation("user {Id} ended this session, signing out", id);
+                    await Reject(context);
+                    return;
+                }
             }
             using var status = await backend.GetAsync($"users/{id}/status");
             var account = status.IsSuccessStatusCode ? await status.Content.ReadFromJsonAsync<AccountStatus>() : null;

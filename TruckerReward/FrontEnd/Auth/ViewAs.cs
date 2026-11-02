@@ -26,7 +26,7 @@ public static class ViewAs
                 return Results.StatusCode((int)response.StatusCode);
             var user = (await response.Content.ReadFromJsonAsync<UserProfile>())!;
 
-            var principal = TruckerSignIn.Principal(user);
+            var principal = Carry(http.User, TruckerSignIn.Principal(user));
             ((ClaimsIdentity)principal.Identity!).AddClaims([
                 new Claim(ViewerIdClaim, viewerId!),
                 new Claim(ViewerNameClaim, http.User.Identity!.Name!)
@@ -72,7 +72,7 @@ public static class ViewAs
     // keeps the viewer claims across cookie rebuilds
     internal static ClaimsPrincipal Carry(ClaimsPrincipal from, ClaimsPrincipal to)
     {
-        ((ClaimsIdentity)to.Identity!).AddClaims(from.Claims.Where(c => c.Type is ViewerIdClaim or ViewerNameClaim).Select(c => new Claim(c.Type, c.Value)));
+        ((ClaimsIdentity)to.Identity!).AddClaims(from.Claims.Where(c => c.Type is ViewerIdClaim or ViewerNameClaim or TruckerSignIn.SessionKeyClaim).Select(c => new Claim(c.Type, c.Value)));
         return to;
     }
 

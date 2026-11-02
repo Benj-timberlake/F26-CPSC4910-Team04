@@ -43,6 +43,7 @@ public sealed class TestApp : IAsyncDisposable
         app.MapPasswordEndpoints();
         app.MapEmailConfirmEndpoints();
         app.MapSignInCodeEndpoints();
+        app.MapSessionEndpoints();
         app.MapUserEndpoints();
         app.MapCartEndpoints();
         app.MapCatalogEndpoints();

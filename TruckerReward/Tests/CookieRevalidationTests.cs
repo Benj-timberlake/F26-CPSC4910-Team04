@@ -73,7 +73,8 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         var (response, role) = await WhoAmI(client, cookie);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("driver", role);
-        Assert.Equal(0, backend.Calls);
+        // only the session recorded at sign in
+        Assert.Equal(1, backend.Calls);
     }
 
     [Fact]
@@ -87,13 +88,13 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         var (response, role) = await WhoAmI(client, cookie);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("sponsor", role);
-        Assert.Equal(2, backend.Calls);
+        Assert.Equal(3, backend.Calls);
         Assert.Equal("users/7", backend.LastPath);
         // and the refreshed cookie carries the new role and check time forward
         var renewed = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(".AspNetCore.Cookies=")).Split(';')[0];
         var (again, roleAgain) = await WhoAmI(client, renewed);
         Assert.Equal("sponsor", roleAgain);
-        Assert.Equal(2, backend.Calls);
+        Assert.Equal(3, backend.Calls);
     }
 
     [Fact]
@@ -137,6 +138,20 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SessionEndedFromTheDevicesPageIsSignedOut()
+    {
+        backend.SessionKey = "k1";
+        var client = await Start();
+        var cookie = await SignIn(client);
+        backend.SessionEnded = true;
+        clock.Advance(CookieRevalidation.Interval + TimeSpan.FromSeconds(1));
+
+        var (response, _) = await WhoAmI(client, cookie);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("sessions/check", backend.LastPath);
+    }
+
+    [Fact]
     public async Task BackendOutageKeepsTheExistingCookie()
     {
         var client = await Start();
@@ -177,6 +192,8 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         public string? LastPath { get; private set; }
         public string AccountStatus { get; set; } = "active";
         public int SessionVersion { get; set; }
+        public string? SessionKey { get; set; }
+        public bool SessionEnded { get; set; }
 
         public void Respond(HttpStatusCode s, string b) { status = s; body = b; fail = false; }
         public void Fail() => fail = true;
@@ -186,6 +203,10 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
             Calls++;
             LastPath = request.RequestUri!.PathAndQuery.TrimStart('/');
             if (fail) throw new HttpRequestException("backend down");
+            if (SessionKey is not null && LastPath.EndsWith("/sessions"))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$"""{"key":"{{SessionKey}}"}""", Encoding.UTF8, "application/json") });
+            if (LastPath == "sessions/check")
+                return Task.FromResult(new HttpResponseMessage(SessionEnded ? HttpStatusCode.Gone : HttpStatusCode.NoContent));
             if (LastPath.EndsWith("/status"))
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$"""{"status":"{{AccountStatus}}","sessionVersion":{{SessionVersion}}}""", Encoding.UTF8, "application/json") });
             return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });

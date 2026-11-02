@@ -109,7 +109,7 @@ public sealed class PasskeyProxyTests : IAsyncDisposable
         var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(["POST /users/8/passkeys/begin"], backend.Requests);
+        Assert.Equal(["POST /users/8/sessions", "POST /users/8/passkeys/begin"], backend.Requests);
     }
 
     [Fact]
