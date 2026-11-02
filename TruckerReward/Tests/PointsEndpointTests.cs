@@ -107,6 +107,50 @@ public sealed class PointsEndpointTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task SponsorAwardsSeveralDriversAtOnce()
+    {
+        await Start();
+
+        var response = await client.PostAsJsonAsync($"/users/{sue}/points/bulk", new { driverIds = new[] { bob, amy }, points = 50, reason = "Top week" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var db = app.Db();
+        Assert.Equal([150, 50], await db.Users.Where(u => u.Id == bob || u.Id == amy).OrderBy(u => u.Id).Select(u => u.Points).ToListAsync());
+        var history = await db.PointsHistory.ToListAsync();
+        Assert.Equal(2, history.Count);
+        Assert.All(history, h => Assert.Equal((50, acme), (h.PointsDelta, h.CompanyId)));
+        Assert.All(await db.AuditHistories.ToListAsync(), a => Assert.Equal((sue, "Top week"), (a.UserId, a.Resoning)));
+        Assert.Equal(2, await db.NotificationsHistories.CountAsync(n => n.UserId == bob || n.UserId == amy));
+    }
+
+    [Fact]
+    public async Task BulkAwardWithAnotherSponsorsDriverChangesNoOne()
+    {
+        await Start();
+        var tom = (await app.Db().Users.SingleAsync(u => u.Username == "tom")).Id;
+
+        var response = await client.PostAsJsonAsync($"/users/{sue}/points/bulk", new { driverIds = new[] { bob, tom }, points = 50, reason = "Top week" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(100, (await app.Db().Users.SingleAsync(u => u.Id == bob)).Points);
+        Assert.Empty(await app.Db().PointsHistory.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(0, 50, "Top week")]
+    [InlineData(2, 0, "Top week")]
+    [InlineData(2, 50, " ")]
+    public async Task BadBulkAwardsAreRefused(int drivers, int points, string reason)
+    {
+        await Start();
+
+        var response = await client.PostAsJsonAsync($"/users/{sue}/points/bulk", new { driverIds = new[] { bob, amy }.Take(drivers), points, reason });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(await app.Db().PointsHistory.ToListAsync());
+    }
+
+    [Fact]
     public async Task SponsorsSearchTheirOwnDrivers()
     {
         await Start();
