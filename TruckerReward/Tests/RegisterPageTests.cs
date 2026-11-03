@@ -16,8 +16,7 @@ public sealed class RegisterPageTests : TestContext
         Services.AddSingleton(new FrontEnd.CdlStorage(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()));
         Bunit.TestDoubles.FakeAuthorizationExtensions.AddTestAuthorization(this);
         backend.Routes["GET /companies"] = (HttpStatusCode.OK, """[{"id":2,"name":"Acme","description":null}]""");
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.UseBackend(backend);
 
         var page = RenderComponent<Register>();
 

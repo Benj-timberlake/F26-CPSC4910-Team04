@@ -1,7 +1,5 @@
 using System.Net;
-using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Pages;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -18,12 +16,8 @@ public sealed class LeaderboardPageTests : TestContext
 
     private IRenderedComponent<FrontEnd.Pages.Leaderboard> Render(string role, int id)
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("someone");
-        auth.SetRoles(role);
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, id.ToString()));
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("someone", role, id.ToString());
+        this.UseBackend(backend);
         return RenderComponent<FrontEnd.Pages.Leaderboard>();
     }
 

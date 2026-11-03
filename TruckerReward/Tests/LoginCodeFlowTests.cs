@@ -1,10 +1,8 @@
 using System.Net;
 using FrontEnd.Auth;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace TruckerReward.Tests;
@@ -18,10 +16,7 @@ public sealed class LoginCodeFlowTests : IAsyncDisposable
 
     private async Task<HttpClient> Start()
     {
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-        builder.AddTruckerAuthentication();
-        builder.Services.AddSingleton<IHttpClientFactory>(new StubClientFactory(backend));
+        var builder = FrontendHost.Builder(backend);
         app = builder.Build();
         app.UseAuthentication();
         app.MapAccountEndpoints();
@@ -92,10 +87,5 @@ public sealed class LoginCodeFlowTests : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (app is not null) await app.DisposeAsync();
-    }
-
-    private sealed class StubClientFactory(HttpMessageHandler handler) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false) { BaseAddress = new Uri("http://backend/") };
     }
 }

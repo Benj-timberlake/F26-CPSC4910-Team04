@@ -133,58 +133,52 @@ public static class PointsEndpoints
 
     private static async Task<IResult> Change(int id, int driverId, ChangePointsRequest req, AppDbContext db, Notifications notifications, TimeProvider clock)
     {
-        var reason = req.Reason?.Trim() ?? "";
-        if (req.Points == 0 || Math.Abs((long)req.Points) > MaxChange)
-            return Results.BadRequest(new { message = $"Change points by 1 to {MaxChange:N0} either way." });
-        if (reason.Length is 0 or > MaxReasonLength)
-            return Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." });
-
-        var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
-        if (actor is null)
-            return Results.NotFound();
-
-        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-        var (failure, driver, historyCompanyId) = await Apply(db, actor, driverId, req.Points, reason, req.CompanyId, clock);
-        if (failure is not null || driver is null)
-            return failure!;
-        await db.SaveChangesAsync();
-        await transaction.CommitAsync();
+        var (failure, changed) = await Give(db, notifications, clock, id, [driverId], req.Points, req.Reason, req.CompanyId);
+        if (failure is not null)
+            return failure;
+        var (driver, historyCompanyId) = changed[0];
         var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
         var displayedPoints = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId).SumAsync(h => (long)h.PointsDelta);
-        await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.') }.", historyCompanyId, actor.Username);
         return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent));
     }
 
-    // all or nothing, so a bad driver in the list changes no one
     private static async Task<IResult> Bulk(int id, BulkPointsRequest req, AppDbContext db, Notifications notifications, TimeProvider clock)
     {
-        var reason = req.Reason?.Trim() ?? "";
         var driverIds = req.DriverIds?.Distinct().ToList() ?? [];
         if (driverIds.Count is 0 or > MaxBulkDrivers)
             return Results.BadRequest(new { message = $"Pick 1 to {MaxBulkDrivers} drivers." });
-        if (req.Points == 0 || Math.Abs((long)req.Points) > MaxChange)
-            return Results.BadRequest(new { message = $"Change points by 1 to {MaxChange:N0} either way." });
+        var (failure, changed) = await Give(db, notifications, clock, id, driverIds, req.Points, req.Reason, req.CompanyId);
+        return failure ?? Results.Ok(new { message = $"{(req.Points > 0 ? "Gave" : "Took")} {Math.Abs(req.Points):N0} points {(req.Points > 0 ? "to" : "from")} {changed.Count} {(changed.Count == 1 ? "driver" : "drivers")}." });
+    }
+
+    // all or nothing, so a bad driver in the list changes no one
+    private static async Task<(IResult? Failure, List<(User Driver, int CompanyId)> Changed)> Give(AppDbContext db, Notifications notifications, TimeProvider clock,
+        int id, List<int> driverIds, int points, string? reasonIn, int? companyIdIn)
+    {
+        var reason = reasonIn?.Trim() ?? "";
+        if (points == 0 || Math.Abs((long)points) > MaxChange)
+            return (Results.BadRequest(new { message = $"Change points by 1 to {MaxChange:N0} either way." }), []);
         if (reason.Length is 0 or > MaxReasonLength)
-            return Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." });
+            return (Results.BadRequest(new { message = $"Give a reason of up to {MaxReasonLength} characters." }), []);
 
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
-            return Results.NotFound();
+            return (Results.NotFound(), []);
 
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var changed = new List<(User Driver, int CompanyId)>();
         foreach (var driverId in driverIds)
         {
-            var (failure, driver, companyId) = await Apply(db, actor, driverId, req.Points, reason, req.CompanyId, clock);
+            var (failure, driver, companyId) = await Apply(db, actor, driverId, points, reason, companyIdIn, clock);
             if (failure is not null || driver is null)
-                return failure!;
+                return (failure!, []);
             changed.Add((driver, companyId));
         }
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         foreach (var (driver, companyId) in changed)
-            await notifications.PointsChanged(driver, req.Points, $"Reason: {reason.TrimEnd('.')}.", companyId, actor.Username);
-        return Results.Ok(new { message = $"{(req.Points > 0 ? "Gave" : "Took")} {Math.Abs(req.Points):N0} points {(req.Points > 0 ? "to" : "from")} {changed.Count} {(changed.Count == 1 ? "driver" : "drivers")}." });
+            await notifications.PointsChanged(driver, points, $"Reason: {reason.TrimEnd('.')}.", companyId, actor.Username);
+        return (null, changed);
     }
 
     // admins have no company, so they get none

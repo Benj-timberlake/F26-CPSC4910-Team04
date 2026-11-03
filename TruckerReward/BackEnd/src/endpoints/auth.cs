@@ -125,10 +125,10 @@ public static class AuthEndpoints
         });
     }
 
-    private static IResult Deactivated() =>
+    internal static IResult Deactivated() =>
         Results.Json(new { message = "This account has been deactivated." }, statusCode: StatusCodes.Status403Forbidden);
 
-    private static Task RecordAttempt(AppDbContext db, string username, int? userId, bool succeeded, string? ip, DateTime at)
+    internal static Task RecordAttempt(AppDbContext db, string username, int? userId, bool succeeded, string? ip, DateTime at)
     {
         db.LoginAttempts.Add(new LoginAttempt { Username = username, UserId = userId, Succeeded = succeeded, IpAddress = ip ?? "", AttemptedAt = at });
         return db.SaveChangesAsync();
@@ -149,7 +149,7 @@ public record RegisterRequest(string Username, string FirstName, string LastName
 
 public record LoginRequest(string Username, string Password, string? IpAddress);
 
-public record ExternalLoginRequest(string Provider, string Email, string? Name, string? IpAddress);
+public record ExternalLoginRequest(string Email, string? Name, string? IpAddress);
 
 // what login and register hand back, the frontend turns it into the cookie claims
 public record UserProfile(int Id, string UserType, string Username, string Email, string PhoneNumber, string Address, int SessionVersion = 0)

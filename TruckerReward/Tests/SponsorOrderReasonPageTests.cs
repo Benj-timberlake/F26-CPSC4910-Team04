@@ -18,12 +18,8 @@ public sealed class SponsorOrderReasonPageTests : TestContext
         var backend = new JsonBackend();
         backend.Routes["GET /users/5/driver-orders"] = (HttpStatusCode.OK,
             $$"""[{"orderId":3,"driverId":8,"driverName":"Bob Baker","timestamp":"2026-10-01T12:00:00","totalPrice":20,"items":[{"id":1,"name":"Gloves","price":20,"quantity":1}],"reason":{{reason}}}]""");
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("sue");
-        auth.SetRoles("sponsor");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "5"));
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("sue", "sponsor", "5");
+        this.UseBackend(backend);
 
         var page = RenderComponent<SponsorOrders>();
 

@@ -1,7 +1,6 @@
 @page "/notifications/settings"
 @attribute [Authorize]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Notification settings</PageTitle>
 
@@ -24,14 +23,7 @@
         }
         else
         {
-            @if (notice is not null)
-            {
-                <p role="status" class="tr-alert-success">@notice</p>
-            }
-            @if (error is not null)
-            {
-                <p role="alert" class="tr-alert-error">@error</p>
-            }
+            <Alerts Notice="@notice" Error="@error" />
             <table class="tr-table">
                 <thead>
                     <tr>
@@ -51,7 +43,7 @@
                     }
                 </tbody>
             </table>
-            <button type="button" class="tr-btn tr-btn-block" disabled="@saving" @onclick="Save">Save</button>
+            <button type="button" class="tr-btn tr-btn-block" disabled="@busy" @onclick="Save">Save</button>
         }
     </div>
 
@@ -59,19 +51,12 @@
 </div>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
-    private string? id;
     private List<Setting>? settings;
     private string? loadError;
-    private string? error;
-    private string? notice;
-    private bool saving;
 
     protected override async Task OnInitializedAsync()
     {
-        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await SignedIn();
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
@@ -83,26 +68,9 @@
         }
     }
 
-    private async Task Save()
-    {
-        saving = true;
-        error = notice = null;
-        try
-        {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PutAsJsonAsync($"users/{id}/notification-settings",
-                settings!.Select(s => new { s.Category, s.Enabled, s.Emailed }));
-            if (response.IsSuccessStatusCode)
-                notice = "Saved.";
-            else
-                error = "Couldn't save your settings.";
-        }
-        catch (HttpRequestException)
-        {
-            error = "Couldn't save your settings right now. Try again in a moment.";
-        }
-        saving = false;
-    }
+    private Task Save() =>
+        Send(c => c.PutAsJsonAsync($"users/{id}/notification-settings", settings!.Select(s => new { s.Category, s.Enabled, s.Emailed })),
+            _ => notice = "Saved.", failed: "Couldn't save your settings.", crashed: "Couldn't save your settings right now. Try again in a moment.");
 
     private sealed class Setting
     {

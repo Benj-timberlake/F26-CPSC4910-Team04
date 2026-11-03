@@ -1,7 +1,6 @@
 using System.Net;
 using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Pages;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,11 +15,8 @@ public sealed class PasskeysPageTests : TestContext
 
     private IRenderedComponent<Passkeys> Render(params Claim[] extra)
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("bob");
-        auth.SetClaims([new Claim(ClaimTypes.NameIdentifier, "8"), .. extra]);
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("bob", null, "8", extra);
+        this.UseBackend(backend);
         return RenderComponent<Passkeys>();
     }
 

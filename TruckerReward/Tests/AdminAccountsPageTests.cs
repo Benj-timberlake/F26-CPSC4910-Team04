@@ -1,7 +1,5 @@
 using System.Net;
-using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Pages;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -19,14 +17,10 @@ public sealed class AdminAccountsPageTests : TestContext
 
     private IRenderedComponent<AdminAccounts> Render()
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("ann");
-        auth.SetRoles("admin");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "4"));
+        this.SignInAs("ann", "admin", "4");
         backend.Routes.TryAdd("GET /companies", (HttpStatusCode.OK, """[{"id":2,"name":"Acme","description":null}]"""));
         backend.Routes.TryAdd("GET /admin/accounts/counts", (HttpStatusCode.OK, """{"activeDrivers":12,"activeSponsors":3,"activeAdmins":1,"inactive":2}"""));
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.UseBackend(backend);
         return RenderComponent<AdminAccounts>();
     }
 

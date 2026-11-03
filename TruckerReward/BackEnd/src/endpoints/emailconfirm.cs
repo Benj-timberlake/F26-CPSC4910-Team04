@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,7 +11,7 @@ public static class EmailConfirmEndpoints
         app.MapPost("/auth/confirm-email", async (ConfirmEmailRequest req, AppDbContext db, TimeProvider clock) =>
         {
             var now = clock.GetUtcNow().UtcDateTime;
-            var hash = Hash(req.Token ?? "");
+            var hash = Tokens.Hash(req.Token ?? "");
             var link = await db.EmailConfirmations.FirstOrDefaultAsync(c => c.TokenHash == hash && c.UsedAt == null && c.ExpiresAt > now);
             var user = link is null ? null : await db.Users.FindAsync(link.UserId);
             // a link for an address the user has since changed away from is dead
@@ -41,22 +39,19 @@ public static class EmailConfirmEndpoints
     // for a new or changed address. emailed only, so the link never sits in the inbox table
     public static async Task Send(AppDbContext db, User user, IEmailSender email, TimeProvider clock, IConfiguration config)
     {
-        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var token = Tokens.New();
         db.EmailConfirmations.Add(new EmailConfirmation
         {
             UserId = user.Id,
             Email = user.Email,
-            TokenHash = Hash(token),
+            TokenHash = Tokens.Hash(token),
             ExpiresAt = clock.GetUtcNow().UtcDateTime + LinkLifetime
         });
         await db.SaveChangesAsync();
-        var link = $"{config["FRONTEND_URL"]?.TrimEnd('/')}/confirm-email?token={token}";
+        var link = Tokens.Link(config, "confirm-email", token);
         await email.SendAsync(user.Email, "Confirm your TruckerReward email",
             $"Hi {user.Username},\n\nUse this link within two days to confirm this is your address:\n{link}\n\nEmail alerts start once it's confirmed. If you didn't make a TruckerReward account, ignore this email.");
     }
-
-    private static string Hash(string token) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }
 
 public record ConfirmEmailRequest(string? Token);

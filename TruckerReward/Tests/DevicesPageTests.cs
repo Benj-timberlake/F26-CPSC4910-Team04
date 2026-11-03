@@ -1,7 +1,6 @@
 using System.Net;
 using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Pages;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -19,11 +18,8 @@ public sealed class DevicesPageTests : TestContext
 
     private IRenderedComponent<Devices> Render()
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("bob");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "8"), new Claim(FrontEnd.Auth.TruckerSignIn.SessionKeyClaim, "k1"));
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("bob", null, "8", new Claim(FrontEnd.Auth.TruckerSignIn.SessionKeyClaim, "k1"));
+        this.UseBackend(backend);
         return RenderComponent<Devices>();
     }
 

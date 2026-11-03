@@ -15,9 +15,7 @@ public sealed class PasswordManagerTests : TestContext
 {
     private readonly JsonBackend backend = new();
 
-    private void UseBackend() =>
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+    private void UseBackend() => this.UseBackend(backend);
 
     [Fact]
     public void ChangePasswordTellsTheManagerWhichAccount()

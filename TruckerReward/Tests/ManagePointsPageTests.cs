@@ -1,7 +1,6 @@
 using System.Net;
 using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Pages;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -21,12 +20,8 @@ public sealed class ManagePointsPageTests : TestContext
 
     private IRenderedComponent<ManagePoints> Render(string role, params Claim[] extra)
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("sue");
-        auth.SetRoles(role);
-        auth.SetClaims([new Claim(ClaimTypes.NameIdentifier, "5"), .. extra]);
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("sue", role, "5", extra);
+        this.UseBackend(backend);
         return RenderComponent<ManagePoints>();
     }
 

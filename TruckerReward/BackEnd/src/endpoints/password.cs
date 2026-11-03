@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,9 +19,10 @@ public static class PasswordEndpoints
             if (PasswordPolicy.Check(req.NewPassword) is { } weak)
                 return Results.BadRequest(new { message = weak });
 
-            await SetPassword(db, user, req.NewPassword, PasswordChange.Changed, req.IpAddress, clock);
+            await SetPassword(db, user, req.NewPassword, PasswordChange.Changed, req.IpAddress, clock, req.SessionKey);
             await notifications.PasswordChanged(user, byReset: false);
-            return Results.NoContent();
+            // the version moved, so the caller refreshes its cookie from this
+            return Results.Ok(UserProfile.Of(await db.Users.AsNoTracking().SingleAsync(u => u.Id == id)));
         });
 
         app.MapPost("/auth/forgot", async (ForgotPasswordRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config) =>
@@ -47,8 +46,7 @@ public static class PasswordEndpoints
 
         app.MapPost("/admin/accounts/{id:int}/reset-link", async (int id, AdminResetRequest req, AppDbContext db, Notifications notifications, TimeProvider clock, IConfiguration config) =>
         {
-            var admin = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == req.AdminId && u.UserType == AuthEndpoints.Admin);
-            if (admin is null)
+            if (!await AdminEndpoints.IsAdmin(db, req.AdminId))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
             if (user is null)
@@ -58,7 +56,7 @@ public static class PasswordEndpoints
 
             var now = clock.GetUtcNow().UtcDateTime;
             var link = ResetLink(db, user, now + ResetLinkLifetime, config);
-            db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = PasswordChange.ResetRequested, ChangedAt = now, RequestedBy = admin.Id });
+            db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = PasswordChange.ResetRequested, ChangedAt = now, RequestedBy = req.AdminId });
             await db.SaveChangesAsync();
 
             await notifications.ResetLinkSent(user, link);
@@ -68,7 +66,7 @@ public static class PasswordEndpoints
         app.MapPost("/auth/reset", async (ResetPasswordRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             var now = clock.GetUtcNow().UtcDateTime;
-            var hash = Hash(req.Token ?? "");
+            var hash = Tokens.Hash(req.Token ?? "");
             var reset = await db.PasswordResets.FirstOrDefaultAsync(r => r.TokenHash == hash && r.UsedAt == null && r.ExpiresAt > now);
             if (reset is null)
                 return Results.BadRequest(new { message = "That reset link is invalid or has expired. Request a new one." });
@@ -88,23 +86,25 @@ public static class PasswordEndpoints
     // the caller saves
     internal static string ResetLink(AppDbContext db, User user, DateTime expiresAt, IConfiguration config)
     {
-        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        db.PasswordResets.Add(new PasswordReset { UserId = user.Id, TokenHash = Hash(token), ExpiresAt = expiresAt });
-        return $"{config["FRONTEND_URL"]?.TrimEnd('/')}/reset-password?token={token}";
+        var token = Tokens.New();
+        db.PasswordResets.Add(new PasswordReset { UserId = user.Id, TokenHash = Tokens.Hash(token), ExpiresAt = expiresAt });
+        return Tokens.Link(config, "reset-password", token);
     }
 
-    private static async Task SetPassword(AppDbContext db, User user, string password, string changeType, string? ip, TimeProvider clock)
+    // signs out every other browser and voids any other reset links
+    private static async Task SetPassword(AppDbContext db, User user, string password, string changeType, string? ip, TimeProvider clock, string? keepSession = null)
     {
+        var now = clock.GetUtcNow().UtcDateTime;
         user.Password = Passwords.Hash(user, password);
-        db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = changeType, IpAddress = ip, ChangedAt = clock.GetUtcNow().UtcDateTime });
+        db.PasswordChanges.Add(new PasswordChange { UserId = user.Id, ChangeType = changeType, IpAddress = ip, ChangedAt = now });
         await db.SaveChangesAsync();
+        await db.PasswordResets.Where(r => r.UserId == user.Id && r.UsedAt == null)
+            .ExecuteUpdateAsync(r => r.SetProperty(x => x.UsedAt, now));
+        await SessionEndpoints.RevokeAll(db, user.Id, now, keepSession);
     }
-
-    private static string Hash(string token) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 }
 
-public record ChangePasswordRequest(string? CurrentPassword, string NewPassword, string? IpAddress);
+public record ChangePasswordRequest(string? CurrentPassword, string NewPassword, string? IpAddress, string? SessionKey = null);
 
 public record ForgotPasswordRequest(string Email, string? IpAddress);
 

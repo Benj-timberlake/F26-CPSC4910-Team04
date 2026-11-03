@@ -1,8 +1,6 @@
 using System.Net;
-using System.Security.Claims;
 using System.Text;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Pages;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -15,13 +13,9 @@ public sealed class PointsPageTests : TestContext
 
     private IRenderedComponent<Points> Render(string json, HttpStatusCode status = HttpStatusCode.OK)
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("bob");
-        auth.SetRoles("driver");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        this.SignInAs("bob", "driver", "7");
         backend.Routes["GET /users/7/points"] = (status, json);
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.UseBackend(backend);
         return RenderComponent<Points>();
     }
 

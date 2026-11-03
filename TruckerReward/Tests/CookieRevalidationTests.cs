@@ -15,7 +15,7 @@ namespace TruckerReward.Tests;
 
 public sealed class CookieRevalidationTests : IAsyncDisposable
 {
-    private readonly FakeClock clock = new(new DateTimeOffset(2026, 9, 17, 12, 0, 0, TimeSpan.Zero));
+    private readonly TestApp.FakeClock clock = new();
     private readonly StubBackend backend = new();
     private WebApplication? app;
 
@@ -26,15 +26,11 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         builder.WebHost.UseTestServer();
         builder.AddTruckerAuthentication();
         builder.Services.AddSingleton<TimeProvider>(clock);
-        builder.Services.AddSingleton<IHttpClientFactory>(new StubClientFactory(backend));
+        builder.Services.AddSingleton<IHttpClientFactory>(new BackendClientFactory(backend));
         app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapGet("/signin", async (HttpContext http) =>
-        {
-            await TruckerSignIn.SignInAsync(http, new FrontEnd.Auth.UserProfile(7, "driver", "bob", "bob@example.com", "", ""));
-            return Results.Ok();
-        });
+        app.MapSignIn(new FrontEnd.Auth.UserProfile(7, "driver", "bob", "bob@example.com", "", ""));
         app.MapGet("/whoami", (ClaimsPrincipal user) => Results.Ok(new
         {
             name = user.Identity!.Name,
@@ -49,14 +45,12 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
     {
         var response = await client.GetAsync("/signin");
         response.EnsureSuccessStatusCode();
-        return response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(".AspNetCore.Cookies=")).Split(';')[0];
+        return response.AuthCookie();
     }
 
     private static async Task<(HttpResponseMessage response, string? role)> WhoAmI(HttpClient client, string cookie)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, "/whoami");
-        request.Headers.Add("Cookie", cookie);
-        var response = await client.SendAsync(request);
+        var response = await client.SendWithCookie(HttpMethod.Get, "/whoami", cookie);
         var role = response.IsSuccessStatusCode
             ? (await response.Content.ReadFromJsonAsync<Identity>())?.Role
             : null;
@@ -91,7 +85,7 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
         Assert.Equal(3, backend.Calls);
         Assert.Equal("users/7", backend.LastPath);
         // and the refreshed cookie carries the new role and check time forward
-        var renewed = response.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(".AspNetCore.Cookies=")).Split(';')[0];
+        var renewed = response.AuthCookie();
         var (again, roleAgain) = await WhoAmI(client, renewed);
         Assert.Equal("sponsor", roleAgain);
         Assert.Equal(3, backend.Calls);
@@ -170,18 +164,6 @@ public sealed class CookieRevalidationTests : IAsyncDisposable
     }
 
     private sealed record Identity(string Name, string? Role);
-
-    private sealed class FakeClock(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset now = now;
-        public override DateTimeOffset GetUtcNow() => now;
-        public void Advance(TimeSpan by) => now += by;
-    }
-
-    private sealed class StubClientFactory(HttpMessageHandler handler) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false) { BaseAddress = new Uri("http://backend/") };
-    }
 
     private sealed class StubBackend : HttpMessageHandler
     {

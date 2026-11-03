@@ -41,12 +41,8 @@ public sealed class AccountBarTests : TestContext
     {
         var backend = new JsonBackend();
         backend.Routes["GET /users/7/notifications/unread"] = (HttpStatusCode.OK, """{"count":0}""");
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("bob");
-        auth.SetRoles("driver");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("bob", "driver", "7");
+        this.UseBackend(backend);
 
         var bar = RenderComponent<AccountBar>();
 
@@ -62,12 +58,8 @@ public sealed class AccountBarTests : TestContext
     public void BannerShowsOnlyWhileViewingAsSomeone(bool viewing)
     {
         var backend = new JsonBackend();
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("bob");
-        auth.SetRoles("driver");
-        auth.SetClaims([new Claim(ClaimTypes.NameIdentifier, "7"), .. viewing ? new[] { new Claim(FrontEnd.Auth.ViewAs.ViewerNameClaim, "ann") } : []]);
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("bob", "driver", "7", viewing ? new[] { new Claim(FrontEnd.Auth.ViewAs.ViewerNameClaim, "ann") } : []);
+        this.UseBackend(backend);
 
         var bar = RenderComponent<AccountBar>();
 
