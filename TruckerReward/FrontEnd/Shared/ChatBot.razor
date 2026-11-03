@@ -1,15 +1,17 @@
-
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
 @using Microsoft.AspNetCore.Components.Routing
+@inject IJSRuntime JS
 @inject NavigationManager Navigation
+@implements IAsyncDisposable
 
-<div class="trucker-chat">
+<div class="trucker-chat" @ref="chatbotElement">
     @if (isOpen)
     {
         <div class="chat-window">
-            <div class="chat-header">
+            <div class="chat-header chat-drag-handle">
                 🚚 TruckerBot
-                <button @onclick="ToggleChat">✕</button>
+                <button @onclick="ToggleChat" data-no-drag>✕</button>
             </div>
 
             <div class="chat-messages">
@@ -32,7 +34,7 @@
         </div>
     }
 
-    <button class="chat-toggle" @onclick="ToggleChat">
+    <button class="chat-toggle chat-drag-handle" @onclick="ToggleChat">
         🚚 @(isOpen ? "Close" : "Chat with Your Best Friend")
     </button>
 </div>
@@ -40,6 +42,66 @@
 @code {
     private bool isOpen = false;
     private string userMessage = "";
+    private ElementReference chatbotElement;
+    private IJSObjectReference? dragModule;
+    
+protected override void OnInitialized()
+{
+    Navigation.LocationChanged += OnLocationChanged;
+}
+
+protected override async Task OnAfterRenderAsync(bool firstRender)
+{
+    if (firstRender)
+    {
+        dragModule = await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./js/chatbotDrag.js");
+
+        await dragModule.InvokeVoidAsync(
+            "enableChatbotDrag", chatbotElement);
+    }
+}
+
+private void OnLocationChanged(
+    object? sender,
+    LocationChangedEventArgs e)
+{
+    _ = InvokeAsync(async () =>
+    {
+        if (dragModule is null) return;
+
+        try
+        {
+            await dragModule.InvokeVoidAsync(
+                "resetChatbotPosition", chatbotElement);
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore disconnected browser sessions.
+        }
+    });
+}
+
+public async ValueTask DisposeAsync()
+{
+    Navigation.LocationChanged -= OnLocationChanged;
+
+    if (dragModule is not null)
+    {
+        try
+        {
+            await dragModule.InvokeVoidAsync(
+                "disableChatbotDrag", chatbotElement);
+
+            await dragModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Ignore disconnected browser sessions.
+        }
+    }
+}
+
 
     private List<ChatMessage> messages = new()
     {
