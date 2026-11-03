@@ -1,0 +1,25 @@
+
+.secret-truck {
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+
+    font-size: 65px;
+    cursor: pointer;
+    z-index: 99999;
+
+    user-select: none;
+    pointer-events: auto;
+
+    animation: truckDrive 7s linear forwards;
+}
+
+@keyframes truckDrive {
+    from {
+        transform: translateX(-120px);
+    }
+
+    to {
+        transform: translateX(calc(100vw + 120px));
+    }
+}
