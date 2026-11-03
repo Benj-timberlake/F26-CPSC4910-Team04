@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Dashboard</PageTitle>
 
@@ -415,23 +416,71 @@
     .extra-info-label { display: block; font-weight: 600; margin: 0 0 6px; }
     .extra-info-label span { color: #687385; font-size: 13px; font-weight: 400; }
     .extra-info-input { display: block; width: 100%; resize: vertical; padding: 10px; border: 1px solid #b8c0cc; border-radius: 8px; margin-bottom: 14px; font: inherit; }
+
+
+    /* Secret truck Easter egg: 10 seconds of inactivity */
+    .secret-truck {
+        position: fixed;
+        bottom: 20px;
+        left: 0;
+        z-index: 99999;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-size: 65px;
+        line-height: 1;
+        cursor: pointer;
+        user-select: none;
+        animation: truckDrive 7s linear forwards;
+    }
+
+    @@keyframes truckDrive {
+        from { transform: translateX(-120px); }
+        to { transform: translateX(calc(100vw + 120px)); }
+    }
 </style>
 
 @code {
+    private IJSObjectReference? truckModule;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
 
-        var user = (await AuthState).User;
+        // Run the secret truck for drivers, sponsors, and admins.
+        truckModule = await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./js/truckEasterEgg.js");
+        await truckModule.InvokeVoidAsync("initializeTruckEasterEgg");
 
+        // Preserve the existing admin-only dancing animation.
+        var user = (await AuthState).User;
         if (!user.IsInRole("admin")) return;
 
         var module = await JS.InvokeAsync<IJSObjectReference>(
             "import", "./js/adminDance.js");
+        try
+        {
+            await module.InvokeVoidAsync("showAdminDance");
+        }
+        finally
+        {
+            await module.DisposeAsync();
+        }
+    }
 
-        await module.InvokeVoidAsync("showAdminDance");
+    public async ValueTask DisposeAsync()
+    {
+        if (truckModule is null) return;
 
-        await module.DisposeAsync();
+        try
+        {
+            await truckModule.InvokeVoidAsync("disposeTruckEasterEgg");
+            await truckModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The Blazor circuit may already be disconnected.
+        }
     }
     [CascadingParameter]
     private Task<AuthenticationState> AuthState { get; set; } = default!;
