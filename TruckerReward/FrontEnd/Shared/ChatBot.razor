@@ -5,6 +5,12 @@
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
 
+@if (showProfessor)
+{
+    <img src="images/professor.png"
+         class="professor-popup"
+         alt="Professor Easter Egg" />
+}
 <div class="trucker-chat" @ref="chatbotElement">
     @if (isOpen)
     {
@@ -112,10 +118,36 @@ public async ValueTask DisposeAsync()
         }
     };
 
-    private void ToggleChat()
+    private bool showProfessor = false;
+private int professorPopupVersion = 0;
+
+private async Task ToggleChat()
+{
+    bool wasOpen = isOpen;
+    isOpen = !isOpen;
+
+    if (wasOpen)
     {
-        isOpen = !isOpen;
+        // Show professor when chatbot closes
+        showProfessor = true;
+        int version = ++professorPopupVersion;
+
+        // Keep professor visible for 1.5 seconds
+        await Task.Delay(1500);
+
+        if (version == professorPopupVersion)
+        {
+            showProfessor = false;
+            StateHasChanged();
+        }
     }
+    else
+    {
+        // Hide professor if chatbot reopens
+        professorPopupVersion++;
+        showProfessor = false;
+    }
+}
 
     private void HandleKeyDown(KeyboardEventArgs e)
     {
