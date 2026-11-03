@@ -96,3 +96,30 @@
     border-radius: 6px;
     cursor: pointer;
 }
+
+
+/* Draggable chatbot */
+.chat-drag-handle {
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.chat-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Prevent selecting header text while dragging */
+.chat-header {
+    user-select: none;
+}
+
+/* Keep close button clickable */
+.chat-header button {
+    cursor: pointer;
+}
+
+/* Keep the chatbot visible on smaller screens */
+.chat-window {
+    height: min(440px, calc(100dvh - 100px));
+}
