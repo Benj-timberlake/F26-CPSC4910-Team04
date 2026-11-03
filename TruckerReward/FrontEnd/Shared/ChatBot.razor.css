@@ -123,25 +123,67 @@
 .chat-window {
     height: min(440px, calc(100dvh - 100px));
 }
-
-.professor-popup {
+/* Professor Easter Egg Container */
+.professor-container {
     position: fixed;
     bottom: 20px;
     right: 20px;
-
-    width: 200px;
-    height: auto;
-
     z-index: 10000;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
     pointer-events: none;
 
     animation: professorAppear 1.5s ease-in-out forwards;
 }
 
+/* Professor Image */
+.professor-popup {
+    width: 200px;
+    height: auto;
+}
+
+/* Speech Bubble */
+.professor-speech {
+    background: white;
+    color: #172b40;
+
+    padding: 14px 18px;
+    border-radius: 20px;
+
+    font-size: 16px;
+    font-weight: bold;
+    font-family: Arial, sans-serif;
+
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+
+    margin-bottom: 12px;
+    position: relative;
+    white-space: nowrap;
+}
+
+/* Speech Bubble Tail */
+.professor-speech::after {
+    content: "";
+    position: absolute;
+
+    bottom: -10px;
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    border-width: 10px 10px 0;
+    border-style: solid;
+    border-color: white transparent transparent;
+}
+
+/* Professor Entrance and Exit */
 @keyframes professorAppear {
     0% {
         opacity: 0;
-        transform: translateY(80px);
+        transform: translateY(110%);
     }
 
     20% {
@@ -156,6 +198,6 @@
 
     100% {
         opacity: 0;
-        transform: translateY(80px);
+        transform: translateY(110%);
     }
 }
