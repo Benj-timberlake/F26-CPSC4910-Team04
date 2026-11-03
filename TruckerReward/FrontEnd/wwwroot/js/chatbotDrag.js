@@ -10,23 +10,21 @@ export function enableChatbotDrag(chatbot) {
     let startY = 0;
     let initialLeft = 0;
     let initialTop = 0;
-
-    function resetPosition() {
-        chatbot.style.removeProperty("left");
-        chatbot.style.removeProperty("top");
-        chatbot.style.removeProperty("right");
-        chatbot.style.removeProperty("bottom");
-    }
+    let pointerId = null;
+    let suppressClick = false;
 
     function pointerDown(e) {
         if (e.button !== 0 || dragging) return;
 
         const handle = e.target.closest(".chat-drag-handle");
+
         if (!handle || !chatbot.contains(handle)) return;
         if (e.target.closest("[data-no-drag]")) return;
 
         dragging = true;
         moved = false;
+        suppressClick = false;
+        pointerId = e.pointerId;
 
         const rect = chatbot.getBoundingClientRect();
 
@@ -34,16 +32,15 @@ export function enableChatbotDrag(chatbot) {
         startY = e.clientY;
         initialLeft = rect.left;
         initialTop = rect.top;
-
-        chatbot.setPointerCapture(e.pointerId);
     }
 
     function pointerMove(e) {
-        if (!dragging) return;
+        if (!dragging || e.pointerId !== pointerId) return;
 
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
+        // Only start dragging after moving 5 pixels.
         if (!moved && Math.hypot(dx, dy) < 5) return;
 
         moved = true;
@@ -64,45 +61,51 @@ export function enableChatbotDrag(chatbot) {
 
         chatbot.style.right = "auto";
         chatbot.style.bottom = "auto";
+
+        e.preventDefault();
     }
 
     function pointerUp(e) {
-        if (!dragging) return;
+        if (!dragging || e.pointerId !== pointerId) return;
+
         dragging = false;
+        pointerId = null;
 
-        if (chatbot.hasPointerCapture(e.pointerId)) {
-            chatbot.releasePointerCapture(e.pointerId);
-        }
+        // Suppress clicks only if the user actually dragged.
+        suppressClick = moved;
+    }
 
-        if (moved) {
-            const stopClick = event => {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-            };
-
-            chatbot.addEventListener("click", stopClick, {
-                capture: true,
-                once: true
-            });
-
-            setTimeout(() => {
-                chatbot.removeEventListener(
-                    "click", stopClick, true
-                );
-            }, 150);
+    function preventDragClick(e) {
+        if (suppressClick) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            suppressClick = false;
         }
     }
 
+    function cancelDrag() {
+        dragging = false;
+        pointerId = null;
+    }
+
     chatbot.addEventListener("pointerdown", pointerDown);
-    chatbot.addEventListener("pointermove", pointerMove);
-    chatbot.addEventListener("pointerup", pointerUp);
-    chatbot.addEventListener("pointercancel", pointerUp);
+
+    document.addEventListener("pointermove", pointerMove, {
+        passive: false
+    });
+
+    document.addEventListener("pointerup", pointerUp);
+    document.addEventListener("pointercancel", cancelDrag);
+
+    // Capture clicks only to prevent accidental opening after dragging.
+    chatbot.addEventListener("click", preventDragClick, true);
 
     const cleanup = () => {
         chatbot.removeEventListener("pointerdown", pointerDown);
-        chatbot.removeEventListener("pointermove", pointerMove);
-        chatbot.removeEventListener("pointerup", pointerUp);
-        chatbot.removeEventListener("pointercancel", pointerUp);
+        document.removeEventListener("pointermove", pointerMove);
+        document.removeEventListener("pointerup", pointerUp);
+        document.removeEventListener("pointercancel", cancelDrag);
+        chatbot.removeEventListener("click", preventDragClick, true);
     };
 
     activeChatbots.set(chatbot, cleanup);
