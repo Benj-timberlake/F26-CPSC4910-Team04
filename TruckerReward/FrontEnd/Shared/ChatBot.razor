@@ -7,9 +7,15 @@
 
 @if (showProfessor)
 {
-    <img src="images/professor.png"
-         class="professor-popup"
-         alt="Professor Easter Egg" />
+    <div class="professor-container">
+        <div class="professor-speech">
+            You can't escape me!
+        </div>
+
+        <img src="images/professor.png"
+             class="professor-popup"
+             alt="Professor Easter Egg" />
+    </div>
 }
 <div class="trucker-chat" @ref="chatbotElement">
     @if (isOpen)
