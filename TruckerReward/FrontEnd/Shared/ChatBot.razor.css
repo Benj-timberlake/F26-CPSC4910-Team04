@@ -123,3 +123,39 @@
 .chat-window {
     height: min(440px, calc(100dvh - 100px));
 }
+
+.professor-popup {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+
+    width: 200px;
+    height: auto;
+
+    z-index: 10000;
+    pointer-events: none;
+
+    animation: professorAppear 1.5s ease-in-out forwards;
+}
+
+@keyframes professorAppear {
+    0% {
+        opacity: 0;
+        transform: translateY(80px);
+    }
+
+    20% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    80% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(80px);
+    }
+}
