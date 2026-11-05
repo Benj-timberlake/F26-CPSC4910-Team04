@@ -26,6 +26,8 @@
     }
     else
     {
+        @if (!Embedded)
+        {
         <form class="search tr-toolbar" @onsubmit="Search" @onsubmit:preventDefault="true">
             <label for="search" class="visually-hidden">Search drivers</label>
             <input id="search" type="search" placeholder="Search by name or username" @bind="search" />
@@ -41,6 +43,7 @@
             <input id="to" type="date" @bind="to" />
             <button type="submit" class="tr-btn">Search</button>
         </form>
+        }
 
         @if (drivers is null)
         {
@@ -160,6 +163,38 @@
                 </table>
             </div>
         }
+    }
+    @if (filtersOpen)
+    {
+        <div class="modal-backdrop" @onkeydown="FilterKeyDown">
+            <section class="change-modal driver-filter-modal" role="dialog" aria-modal="true" aria-labelledby="driver-filter-title">
+                <h2 id="driver-filter-title">Filter drivers</h2>
+                <form @onsubmit="ApplyFilters" @onsubmit:preventDefault="true">
+                    <label for="driver-filter-search">Search drivers</label>
+                    <input id="driver-filter-search" type="search" placeholder="Search by name or username" @bind="draftSearch" />
+                    <label for="driver-filter-sort">Sort by</label>
+                    <select id="driver-filter-sort" @bind="draftSort">
+                        <option value="name">Name</option>
+                        <option value="points">Highest balance first</option>
+                        <option value="spent">Most points spent first</option>
+                        <option value="earned">Most points earned first</option>
+                    </select>
+                    <p class="tr-muted">Date range for points earned</p>
+                    <label for="driver-filter-from">From</label>
+                    <input id="driver-filter-from" type="date" @bind="draftFrom" />
+                    <label for="driver-filter-to">To</label>
+                    <input id="driver-filter-to" type="date" @bind="draftTo" />
+                    @if (filterError is not null)
+                    {
+                        <p role="alert" class="tr-alert-error">@filterError</p>
+                    }
+                    <div class="modal-actions">
+                        <button type="button" class="tr-btn-outline" disabled="@applyingFilters" @onclick="CloseFilters">Cancel</button>
+                        <button type="submit" class="tr-btn" disabled="@applyingFilters">@(applyingFilters ? "Applying..." : "Apply")</button>
+                    </div>
+                </form>
+            </section>
+        </div>
     }
     @if (bulkOpen)
     {
@@ -292,6 +327,53 @@
 @code {
     [Parameter] public bool Embedded { get; set; }
     [Parameter] public EventCallback PointsChanged { get; set; }
+    private bool filtersOpen;
+    private bool applyingFilters;
+    private string? draftSearch;
+    private string draftSort = "name";
+    private DateOnly? draftFrom;
+    private DateOnly? draftTo;
+    private string? filterError;
+
+    public void OpenFilters()
+    {
+        draftSearch = search;
+        draftSort = sort;
+        draftFrom = from;
+        draftTo = to;
+        filterError = null;
+        filtersOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseFilters()
+    {
+        if (!applyingFilters) filtersOpen = false;
+    }
+
+    private void FilterKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") CloseFilters();
+    }
+
+    private async Task ApplyFilters()
+    {
+        if (applyingFilters) return;
+        if (draftFrom > draftTo)
+        {
+            filterError = "The start date has to be on or before the end date.";
+            return;
+        }
+        applyingFilters = true;
+        search = draftSearch;
+        sort = draftSort;
+        from = draftFrom;
+        to = draftTo;
+        await Search();
+        filterError = error;
+        applyingFilters = false;
+        if (filterError is null) filtersOpen = false;
+    }
     private List<Driver>? drivers;
     private string? search;
     private string sort = "name";

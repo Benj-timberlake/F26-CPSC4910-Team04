@@ -21,7 +21,7 @@ public sealed class DashboardDriversTests : TestContext
     }
 
     [Fact]
-    public void CompactTableKeepsNamePointsAndEyeAndSubmitsFilters()
+    public async Task CompactTableKeepsNamePointsAndEyeAndSubmitsFilters()
     {
         var page = RenderDrivers();
         page.WaitForAssertion(() => Assert.Single(page.FindAll("tbody tr")));
@@ -33,12 +33,31 @@ public sealed class DashboardDriversTests : TestContext
         Assert.Single(page.FindAll(".driver-view-eye svg"));
 
         backend.Routes["GET /users/5/points/drivers?search=amy&sort=earned&from=2026-09-01&to=2026-09-15"] = (HttpStatusCode.OK, "[]");
-        page.Find("#search").Change("amy");
-        page.Find("select[aria-label=Sort]").Change("earned");
-        page.Find("#from").Change("2026-09-01");
-        page.Find("#to").Change("2026-09-15");
-        page.Find("form.search").Submit();
+        Assert.Empty(page.FindAll("form.search"));
+        await page.InvokeAsync(page.Instance.OpenFilters);
+        page.Find("#driver-filter-search").Change("amy");
+        page.Find("#driver-filter-sort").Change("earned");
+        page.Find("#driver-filter-from").Change("2026-09-01");
+        page.Find("#driver-filter-to").Change("2026-09-15");
+        page.Find(".driver-filter-modal form").Submit();
         page.WaitForAssertion(() => Assert.Contains("No drivers found.", page.Markup));
+    }
+
+    [Fact]
+    public async Task FilterModalValidatesDatesAndCancelDiscardsEdits()
+    {
+        var page = RenderDrivers();
+        await page.InvokeAsync(page.Instance.OpenFilters);
+        page.Find("#driver-filter-search").Change("amy");
+        page.Find("#driver-filter-from").Change("2026-11-05");
+        page.Find("#driver-filter-to").Change("2026-11-01");
+        page.Find(".driver-filter-modal form").Submit();
+        Assert.Contains("The start date has to be on or before the end date.", page.Find(".driver-filter-modal").TextContent);
+        page.FindAll(".driver-filter-modal button").Single(b => b.TextContent == "Cancel").Click();
+        Assert.Empty(page.FindAll(".driver-filter-modal"));
+        await page.InvokeAsync(page.Instance.OpenFilters);
+        Assert.True(string.IsNullOrEmpty(page.Find("#driver-filter-search").GetAttribute("value")));
+        Assert.True(string.IsNullOrEmpty(page.Find("#driver-filter-from").GetAttribute("value")));
     }
 
     [Fact]
@@ -60,13 +79,14 @@ public sealed class DashboardDriversTests : TestContext
     }
 
     [Fact]
-    public void BulkAwardUpdatesSelectedDriversAndNotifiesDashboard()
+    public async Task BulkAwardUpdatesSelectedDriversAndNotifiesDashboard()
     {
         var changes = 0;
         var page = RenderDrivers(() => changes++);
         var twoDrivers = Drivers[..^1] + "," + Drivers[1..].Replace("8", "9").Replace("Bob", "Amy").Replace("Baker", "Zane");
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, twoDrivers);
-        page.Find("form.search").Submit();
+        await page.InvokeAsync(page.Instance.OpenFilters);
+        page.Find(".driver-filter-modal form").Submit();
         page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
         page.Find("thead input[type=checkbox]").Change(true);
         page.FindAll("button").Single(b => b.TextContent == "Award selected").Click();
