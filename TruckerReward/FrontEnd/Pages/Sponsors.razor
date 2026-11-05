@@ -1,7 +1,6 @@
 @page "/sponsors"
 @attribute [Authorize(Roles = "sponsor")]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Other sponsors</PageTitle>
 
@@ -23,7 +22,7 @@
         }
         else
         {
-            <ul class="sponsor-list">
+            <ul class="sponsor-list tr-list">
                 @foreach (var c in others)
                 {
                     <li>
@@ -37,32 +36,17 @@
 </div>
 
 <style>
-    .sponsor-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-
-    .sponsor-list li {
-        border-top: 1px solid #e5e7eb;
-        padding: 12px 0;
-    }
-
     .sponsor-list p {
         margin: 4px 0 0;
     }
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
     private List<Company>? others;
-    private string? error;
 
     protected override async Task OnInitializedAsync()
     {
-        var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await SignedIn();
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");

@@ -3,10 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FrontEnd.Auth;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace TruckerReward.Tests;
@@ -18,18 +16,11 @@ public sealed class PasskeyProxyTests : IAsyncDisposable
 
     private async Task<HttpClient> Start()
     {
-        var builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseTestServer();
-        builder.AddTruckerAuthentication();
-        builder.Services.AddSingleton<IHttpClientFactory>(new StubClientFactory(backend));
+        var builder = FrontendHost.Builder(backend);
         app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapGet("/signin", async (HttpContext http) =>
-        {
-            await TruckerSignIn.SignInAsync(http, new FrontEnd.Auth.UserProfile(8, "driver", "bob", "bob@example.com", "", ""));
-            return Results.Ok();
-        });
+        app.MapSignIn(new FrontEnd.Auth.UserProfile(8, "driver", "bob", "bob@example.com", "", ""));
         app.MapPasskeyProxy();
         await app.StartAsync();
         return app.GetTestClient();
@@ -104,9 +95,7 @@ public sealed class PasskeyProxyTests : IAsyncDisposable
         Assert.NotEqual(HttpStatusCode.OK, (await client.PostAsync("/account/passkeys/options", null)).StatusCode);
 
         var signin = await client.GetAsync("/signin");
-        var request = new HttpRequestMessage(HttpMethod.Post, "/account/passkeys/options");
-        request.Headers.Add("Cookie", signin.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(".AspNetCore.Cookies=")).Split(';')[0]);
-        var response = await client.SendAsync(request);
+        var response = await client.SendWithCookie(HttpMethod.Post, "/account/passkeys/options", signin.AuthCookie());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(["POST /users/8/sessions", "POST /users/8/passkeys/begin"], backend.Requests);
@@ -119,9 +108,7 @@ public sealed class PasskeyProxyTests : IAsyncDisposable
         var client = await Start();
 
         var signin = await client.GetAsync("/signin");
-        var request = new HttpRequestMessage(HttpMethod.Post, "/account/passkeys") { Content = JsonContent.Create(new { requestId = "r2", name = "phone", response = new { } }) };
-        request.Headers.Add("Cookie", signin.Headers.GetValues("Set-Cookie").Single(c => c.StartsWith(".AspNetCore.Cookies=")).Split(';')[0]);
-        var response = await client.SendAsync(request);
+        var response = await client.SendWithCookie(HttpMethod.Post, "/account/passkeys", signin.AuthCookie(), JsonContent.Create(new { requestId = "r2", name = "phone", response = new { } }));
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal("", await response.Content.ReadAsStringAsync());
@@ -130,10 +117,5 @@ public sealed class PasskeyProxyTests : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (app is not null) await app.DisposeAsync();
-    }
-
-    private sealed class StubClientFactory(HttpMessageHandler handler) : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false) { BaseAddress = new Uri("http://backend/") };
     }
 }

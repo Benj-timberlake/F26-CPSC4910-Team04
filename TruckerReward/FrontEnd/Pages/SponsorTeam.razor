@@ -1,7 +1,6 @@
 @page "/sponsor-team"
 @attribute [Authorize(Roles = "sponsor")]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Your team</PageTitle>
 
@@ -9,14 +8,7 @@
     <div class="tr-card">
         <h1>Your team</h1>
 
-        @if (notice is not null)
-        {
-            <p role="status" class="tr-alert-success">@notice</p>
-        }
-        @if (error is not null)
-        {
-            <p role="alert" class="tr-alert-error">@error</p>
-        }
+        <Alerts Notice="@notice" Error="@error" />
 
         @if (noCompany)
         {
@@ -39,7 +31,7 @@
 
             @if (team is not null)
             {
-                <ul class="team-list">
+                <ul class="team-list tr-list">
                     @foreach (var m in team)
                     {
                         <li>
@@ -57,28 +49,14 @@
         margin-bottom: 24px;
     }
 
-    .team-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-
     .team-list li {
-        border-top: 1px solid #e5e7eb;
         padding: 10px 0;
     }
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
-    private string? id;
     private List<Member>? team;
     private bool noCompany;
-    private bool busy;
-    private string? error;
-    private string? notice;
     private string username = "";
     private string firstName = "";
     private string lastName = "";
@@ -86,7 +64,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await SignedIn();
         await Load();
     }
 
@@ -110,32 +88,13 @@
         }
     }
 
-    private async Task Invite()
-    {
-        busy = true;
-        error = notice = null;
-        try
+    private Task Invite() =>
+        Send(c => c.PostAsJsonAsync($"users/{id}/sponsor-team", new { username, firstName, lastName, email }), async _ =>
         {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"users/{id}/sponsor-team", new { username, firstName, lastName, email });
-            if (response.IsSuccessStatusCode)
-            {
-                notice = $"{username.Trim()} was added and emailed a link to set a password.";
-                username = firstName = lastName = email = "";
-                await Load();
-            }
-            else
-            {
-                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
-        {
-            error = "That didn't work. Reload and try again.";
-        }
-        busy = false;
-    }
+            notice = $"{username.Trim()} was added and emailed a link to set a password.";
+            username = firstName = lastName = email = "";
+            await Load();
+        });
 
     private sealed record Member(int Id, string Username, string FirstName, string LastName, string Email, string Status);
-    private sealed record Problem(string? Message);
 }

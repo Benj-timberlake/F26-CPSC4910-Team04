@@ -1,6 +1,5 @@
 @page "/confirm-email"
-@inject NavigationManager Nav
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Confirm your email</PageTitle>
 
@@ -8,7 +7,7 @@
     <div class="tr-card">
         <h1>Confirm your email</h1>
 
-        @if (string.IsNullOrEmpty(token))
+        @if (string.IsNullOrEmpty(Token))
         {
             <p role="alert" class="tr-alert-error">This link is missing its token. Open the link from the email again, or send a new one from your profile.</p>
         }
@@ -28,13 +27,9 @@
 </div>
 
 @code {
-    private string? token;
+    [SupplyParameterFromQuery] private string? Token { get; set; }
     private string? message;
     private bool confirmed;
-    private bool busy;
-
-    protected override void OnInitialized() =>
-        token = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["token"];
 
     private async Task Confirm()
     {
@@ -42,9 +37,9 @@
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync("auth/confirm-email", new { token });
+            var response = await client.PostAsJsonAsync("auth/confirm-email", new { token = Token });
             confirmed = response.IsSuccessStatusCode;
-            message = (await response.Content.ReadFromJsonAsync<Problem>())?.Message
+            message = await Message(response)
                 ?? (confirmed ? "Your email is confirmed." : "That didn't work. Try the link again.");
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
@@ -53,6 +48,4 @@
         }
         busy = false;
     }
-
-    private sealed record Problem(string? Message);
 }

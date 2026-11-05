@@ -1,7 +1,7 @@
 @page "/account/devices"
 @attribute [Authorize]
 @using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Devices</PageTitle>
 
@@ -9,14 +9,7 @@
     <h1>Devices</h1>
     <p class="tr-subtitle">Browsers signed in to your account in the last eight hours. Signing one out takes effect within five minutes.</p>
 
-    @if (notice is not null)
-    {
-        <p role="status" class="tr-alert-success">@notice</p>
-    }
-    @if (error is not null)
-    {
-        <p role="alert" class="tr-alert-error">@error</p>
-    }
+    <Alerts Notice="@notice" Error="@error" />
 
     @if (sessions is null)
     {
@@ -75,21 +68,13 @@
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
-    private string? id;
     private string? key;
     private bool viewing;
     private List<Session>? sessions;
-    private string? notice;
-    private string? error;
-    private bool busy;
 
     protected override async Task OnInitializedAsync()
     {
-        var user = (await AuthState).User;
-        id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await SignedIn();
         key = user.FindFirstValue(FrontEnd.Auth.TruckerSignIn.SessionKeyClaim);
         viewing = FrontEnd.Auth.ViewAs.IsViewing(user);
         await Load();

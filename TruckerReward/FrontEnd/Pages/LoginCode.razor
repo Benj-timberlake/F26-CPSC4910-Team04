@@ -1,5 +1,4 @@
 @page "/login/code"
-@inject NavigationManager Nav
 
 <PageTitle>Enter your code</PageTitle>
 
@@ -8,7 +7,7 @@
         <h1>Enter your code</h1>
         <p>We emailed you a 6-digit code. It works for ten minutes.</p>
 
-        @if (wrong)
+        @if (Error == "wrong")
         {
             <p role="alert" class="tr-alert-error">That code isn't right. Check the email and try again.</p>
         }
@@ -24,8 +23,5 @@
 </div>
 
 @code {
-    private bool wrong;
-
-    protected override void OnInitialized() =>
-        wrong = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["error"] == "wrong";
+    [SupplyParameterFromQuery] private string? Error { get; set; }
 }

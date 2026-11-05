@@ -1,7 +1,6 @@
 @page "/points"
 @attribute [Authorize(Roles = "driver")]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Points</PageTitle>
 
@@ -62,7 +61,7 @@
                             @foreach (var e in summary.History)
                             {
                                 <tr>
-                                    <td>@(e.At?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                                    <td>@(e.At is { } at ? at.ToString("yyyy-MM-dd HH:mm") + " UTC" : "—")</td>
                                     <td class="@(e.Points < 0 ? "minus" : "plus")">@e.Points.ToString("+#,0;-#,0")</td>
                                     <td>@e.Reason</td>
                                     <td>@(e.By ?? "")</td>
@@ -97,15 +96,12 @@
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
     private Summary? summary;
     private string? loadError;
 
     protected override async Task OnInitializedAsync()
     {
-        var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await SignedIn();
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");

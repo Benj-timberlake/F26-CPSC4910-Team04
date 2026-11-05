@@ -17,7 +17,7 @@ public sealed class SessionEndpointTests : IAsyncDisposable
     private async Task Start()
     {
         client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.Register("bob", "Bob", "Driver");
         bob = (await app.Db().Users.SingleAsync()).Id;
     }
 

@@ -15,7 +15,7 @@ public sealed class SignInCodeTests : IAsyncDisposable
     private async Task Start(bool codes = true)
     {
         client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.Register("bob", "Bob", "Driver");
         await app.ConfirmEmails();
         using var db = app.Db();
         var user = await db.Users.SingleAsync();

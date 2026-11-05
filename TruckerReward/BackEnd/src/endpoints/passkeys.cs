@@ -136,19 +136,17 @@ public static class PasskeyEndpoints
             }
             catch (Fido2VerificationException)
             {
-                db.LoginAttempts.Add(new LoginAttempt { Username = user.Username, UserId = user.Id, Succeeded = false, IpAddress = req.IpAddress ?? "", AttemptedAt = now });
-                await db.SaveChangesAsync();
+                await AuthEndpoints.RecordAttempt(db, user.Username, user.Id, false, req.IpAddress, now);
                 return Results.Unauthorized();
             }
 
             var active = user.Status == User.Active;
             if (active)
                 stored.LastUsedAt = now;
-            db.LoginAttempts.Add(new LoginAttempt { Username = user.Username, UserId = user.Id, Succeeded = active, IpAddress = req.IpAddress ?? "", AttemptedAt = now });
-            await db.SaveChangesAsync();
+            await AuthEndpoints.RecordAttempt(db, user.Username, user.Id, active, req.IpAddress, now);
             return active
                 ? Results.Ok(UserProfile.Of(user))
-                : Results.Json(new { message = "This account has been deactivated." }, statusCode: StatusCodes.Status403Forbidden);
+                : AuthEndpoints.Deactivated();
         });
     }
 

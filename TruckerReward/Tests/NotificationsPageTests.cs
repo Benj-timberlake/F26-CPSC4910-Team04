@@ -1,7 +1,5 @@
 using System.Net;
-using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using NotificationsPage = FrontEnd.Pages.Notifications;
@@ -14,13 +12,10 @@ public sealed class NotificationsPageTests : TestContext
 
     private IRenderedComponent<NotificationsPage> Render(string json, HttpStatusCode status = HttpStatusCode.OK)
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("bob");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
+        this.SignInAs("bob", null, "7");
         backend.ListJson = json;
         backend.ListStatus = status;
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.UseBackend(backend);
         return RenderComponent<NotificationsPage>();
     }
 

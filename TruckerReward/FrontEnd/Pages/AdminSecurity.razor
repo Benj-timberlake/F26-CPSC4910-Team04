@@ -1,7 +1,6 @@
 @page "/admin/security"
 @attribute [Authorize(Roles = "admin")]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Security</PageTitle>
 
@@ -115,9 +114,6 @@
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
     private bool failedOnly = true;
     private List<Locked>? locked;
     private List<Attempt>? attempts;
@@ -125,21 +121,22 @@
     private string? loadError;
     private string? unlockMessage;
     private bool unlockFailed;
-    private bool busy;
 
     protected override async Task OnInitializedAsync()
     {
+        await SignedIn();
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
             locked = await client.GetFromJsonAsync<List<Locked>>("admin/locked-accounts");
             changes = await client.GetFromJsonAsync<List<Change>>("admin/password-changes");
-            await LoadAttempts();
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
             loadError = "Couldn't reach the backend. Try again in a moment.";
+            return;
         }
+        await LoadAttempts();
     }
 
     // only for someone whose identity was checked another way
@@ -148,14 +145,13 @@
         busy = true;
         try
         {
-            var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
             using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"admin/locked-accounts/{Uri.EscapeDataString(l.Username)}/unlock", new { adminId = int.Parse(id!) });
+            using var response = await client.PostAsJsonAsync($"admin/locked-accounts/{Uri.EscapeDataString(l.Username)}/unlock", new { adminId = int.Parse(id!) });
             unlockFailed = !response.IsSuccessStatusCode;
-            unlockMessage = unlockFailed ? (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "Couldn't unlock that account." : $"{l.Username} can sign in again.";
+            unlockMessage = unlockFailed ? await MessageOf(response) ?? "Couldn't unlock that account." : $"{l.Username} can sign in again.";
             locked = await client.GetFromJsonAsync<List<Locked>>("admin/locked-accounts");
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
             unlockFailed = true;
             unlockMessage = "Couldn't reach the backend. Try again in a moment.";
@@ -168,11 +164,31 @@
 
     private async Task LoadAttempts()
     {
-        using var client = HttpClientFactory.CreateClient("Backend");
-        attempts = await client.GetFromJsonAsync<List<Attempt>>($"admin/login-attempts?failedOnly={failedOnly}");
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            attempts = await client.GetFromJsonAsync<List<Attempt>>($"admin/login-attempts?failedOnly={failedOnly}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            loadError = "Couldn't reach the backend. Try again in a moment.";
+        }
     }
 
-    private static string Time(DateTime utc) => utc.ToString("yyyy-MM-dd HH:mm:ss");
+    // a refusal can come back with no body
+    private static async Task<string?> MessageOf(HttpResponseMessage response)
+    {
+        try
+        {
+            return (await response.Content.ReadFromJsonAsync<Problem>())?.Message;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string Time(DateTime utc) => utc.ToString("yyyy-MM-dd HH:mm:ss") + " UTC";
 
     private static string ChangeLabel(string type) => type switch
     {
@@ -185,5 +201,4 @@
     private sealed record Locked(string Username, DateTime LockedUntil);
     private sealed record Attempt(string Username, int? UserId, bool Succeeded, string? IpAddress, DateTime AttemptedAt);
     private sealed record Change(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress, string? RequestedBy);
-    private sealed record Problem(string? Message);
 }

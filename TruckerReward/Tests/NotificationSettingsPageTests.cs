@@ -1,7 +1,5 @@
 using System.Net;
-using System.Security.Claims;
 using Bunit;
-using Bunit.TestDoubles;
 using FrontEnd.Pages;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -19,11 +17,8 @@ public sealed class NotificationSettingsPageTests : TestContext
 
     private IRenderedComponent<NotificationSettings> Render()
     {
-        var auth = this.AddTestAuthorization();
-        auth.SetAuthorized("bob");
-        auth.SetClaims(new Claim(ClaimTypes.NameIdentifier, "7"));
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.SignInAs("bob", null, "7");
+        this.UseBackend(backend);
         return RenderComponent<NotificationSettings>();
     }
 

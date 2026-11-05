@@ -1,0 +1,13 @@
+@if (Notice is not null)
+{
+    <p role="status" class="tr-alert-success">@Notice</p>
+}
+@if (Error is not null)
+{
+    <p role="alert" class="tr-alert-error">@Error</p>
+}
+
+@code {
+    [Parameter] public string? Notice { get; set; }
+    [Parameter] public string? Error { get; set; }
+}

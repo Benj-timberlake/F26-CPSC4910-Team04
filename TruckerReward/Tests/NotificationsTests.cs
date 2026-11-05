@@ -12,7 +12,7 @@ public sealed class NotificationsTests : IAsyncDisposable
     private async Task<(HttpClient client, int id)> StartWithBob()
     {
         var client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.Register("bob", "Bob", "Driver");
         await app.ConfirmEmails();
         var id = (await app.Db().Users.SingleAsync(u => u.Username == "bob")).Id;
         return (client, id);
@@ -40,7 +40,7 @@ public sealed class NotificationsTests : IAsyncDisposable
     {
         var (client, id) = await StartWithBob();
         var response = await client.PostAsJsonAsync($"/users/{id}/password", new { currentPassword = "Hunter22x!", newPassword = "NewPass99!" });
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var mail = Assert.Single(app.Email.Sent);
         var saved = await app.Db().NotificationsHistories.SingleAsync();
@@ -64,14 +64,14 @@ public sealed class NotificationsTests : IAsyncDisposable
     {
         var client = await app.Start();
         foreach (var name in new[] { "ann", "max" })
-            await client.PostAsJsonAsync("/auth/register", new { username = name, firstName = name, lastName = "Admin", email = $"{name}@example.com", password = "Hunter22x!", userType = "driver" });
+            await client.Register(name, name, "Admin");
         await app.ConfirmEmails();
         using (var db = app.Db())
         {
             await db.Users.ExecuteUpdateAsync(u => u.SetProperty(x => x.UserType, "admin"));
         }
 
-        var response = await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
+        var response = await client.Register("bob", "Bob", "Driver");
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var saved = await app.Db().NotificationsHistories.Include(n => n.User).ToListAsync();

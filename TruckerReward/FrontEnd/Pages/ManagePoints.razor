@@ -1,7 +1,6 @@
 @page "/manage-points"
 @attribute [Authorize(Roles = "sponsor,admin")]
-@using System.Security.Claims
-@inject IHttpClientFactory HttpClientFactory
+@inherits BackendPage
 
 <PageTitle>Driver points</PageTitle>
 
@@ -13,14 +12,7 @@
         once they have been assigned to a sponsor.
     </p>
 
-    @if (notice is not null)
-    {
-        <p role="status" class="tr-alert-success">@notice</p>
-    }
-    @if (error is not null)
-    {
-        <p role="alert" class="tr-alert-error">@error</p>
-    }
+    <Alerts Notice="@notice" Error="@error" />
 
     @if (noCompany)
     {
@@ -28,7 +20,7 @@
     }
     else
     {
-        <form class="search" @onsubmit="Search">
+        <form class="search tr-toolbar" @onsubmit="Search">
             <label for="search" class="visually-hidden">Search drivers</label>
             <input id="search" type="search" placeholder="Search by name or username" @bind="search" />
             <select aria-label="Sort" @bind="sort">
@@ -219,16 +211,8 @@
 </div>
 
 <style>
-    form.view-as {
-        display: inline;
-    }
-
     .search {
-        display: flex;
-        flex-wrap: wrap;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 16px;
     }
 
     .search input {
@@ -264,10 +248,6 @@
 </style>
 
 @code {
-    [CascadingParameter]
-    private Task<AuthenticationState> AuthState { get; set; } = default!;
-
-    private string? id;
     private List<Driver>? drivers;
     private string? search;
     private string sort = "name";
@@ -277,12 +257,9 @@
     private int? removing;
     private int? amount;
     private string? reason;
-    private bool busy;
     private bool noCompany;
     private bool viewing;
     private bool admin;
-    private string? error;
-    private string? notice;
     private Driver? editingDriver;
     private List<DriverCompany>? editCompanies;
     private int? selectedCompanyId;
@@ -296,8 +273,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var user = (await AuthState).User;
-        id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await SignedIn();
         viewing = FrontEnd.Auth.ViewAs.IsViewing(user);
         admin = user.IsInRole("admin");
         await Load();
@@ -489,11 +465,18 @@
     {
         if (pickedReasonId is not int reasonId)
             return;
-        using var client = HttpClientFactory.CreateClient("Backend");
-        var response = await client.DeleteAsync($"users/{id}/points/reasons/{reasonId}");
-        if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            savedReasons.RemoveAll(r => r.Id == reasonId);
-        pickedReasonId = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.DeleteAsync($"users/{id}/points/reasons/{reasonId}");
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                savedReasons.RemoveAll(r => r.Id == reasonId);
+            pickedReasonId = null;
+        }
+        catch (HttpRequestException)
+        {
+            // it stays in the list to try again
+        }
     }
 
     // after a successful change, so a typo'd reason that failed isn't kept
@@ -550,34 +533,15 @@
         error = null;
     }
 
-    private async Task SaveBulk()
-    {
-        busy = true;
-        error = null;
-        try
+    private Task SaveBulk() =>
+        Send(c => c.PostAsJsonAsync($"users/{id}/points/bulk", new { driverIds = selected.ToList(), points = amount ?? 0, reason }), async r =>
         {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"users/{id}/points/bulk", new { driverIds = selected.ToList(), points = amount ?? 0, reason });
-            var message = (await response.Content.ReadFromJsonAsync<Problem>())?.Message;
-            if (response.IsSuccessStatusCode)
-            {
-                notice = message;
-                await RememberReason();
-                bulkOpen = false;
-                selected.Clear();
-                await Load();
-            }
-            else
-            {
-                error = message ?? "That didn't work.";
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
-        {
-            error = "That didn't work. Reload and try again.";
-        }
-        busy = false;
-    }
+            notice = await Message(r);
+            await RememberReason();
+            bulkOpen = false;
+            selected.Clear();
+            await Load();
+        });
 
     private void StartRemove(Driver d)
     {
@@ -587,31 +551,13 @@
         notice = null;
     }
 
-    private async Task Remove(Driver d)
-    {
-        busy = true;
-        error = null;
-        try
+    private Task Remove(Driver d) =>
+        Send(c => c.PostAsJsonAsync($"users/{id}/points/drivers/{d.Id}/remove", new { reason }), _ =>
         {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"users/{id}/points/drivers/{d.Id}/remove", new { reason });
-            if (response.IsSuccessStatusCode)
-            {
-                drivers = drivers!.Where(x => x.Id != d.Id).ToList();
-                notice = $"{d.Username} was removed and told why.";
-                removing = null;
-            }
-            else
-            {
-                error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
-        {
-            error = "That didn't work. Reload and try again.";
-        }
-        busy = false;
-    }
+            drivers = drivers!.Where(x => x.Id != d.Id).ToList();
+            notice = $"{d.Username} was removed and told why.";
+            removing = null;
+        });
 
     private string RangeLabel => (from, to) switch
     {
@@ -623,6 +569,5 @@
     private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned);
     private sealed record DriverDetails(List<DriverCompany>? Companies);
     private sealed record DriverCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
-    private sealed record Problem(string? Message);
     private sealed record SavedReason(int Id, string Reason);
 }

@@ -454,10 +454,7 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => new { e.UserId, e.Category });
             entity.ToTable("notification_preferences");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.Category).HasMaxLength(30).HasColumnName("category");
-            entity.Property(e => e.Enabled).HasColumnName("enabled");
-            entity.Property(e => e.Emailed).HasColumnName("emailed");
+            entity.Property(e => e.Category).HasMaxLength(30);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_notification_preferences_user");
@@ -468,11 +465,7 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PRIMARY");
             entity.ToTable("impersonations");
             entity.HasIndex(e => e.UserId, "ix_impersonations_user");
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.ViewerId).HasColumnName("viewer_id");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.StartedAt).HasColumnType("datetime").HasColumnName("started_at");
-            entity.Property(e => e.IpAddress).HasMaxLength(45).HasColumnName("ip_address");
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.ViewerId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_impersonations_viewer");
@@ -486,14 +479,9 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PRIMARY");
             entity.ToTable("passkey_credentials");
             entity.HasIndex(e => e.CredentialId, "uq_passkey_credentials_credential").IsUnique();
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.CredentialId).HasMaxLength(1023).HasColumnName("credential_id");
-            entity.Property(e => e.PublicKey).HasColumnType("blob").HasColumnName("public_key");
-            entity.Property(e => e.SignCount).HasColumnName("sign_count");
-            entity.Property(e => e.Name).HasMaxLength(100).HasColumnName("name");
-            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
-            entity.Property(e => e.LastUsedAt).HasColumnType("datetime").HasColumnName("last_used_at");
+            entity.Property(e => e.CredentialId).HasMaxLength(1023);
+            entity.Property(e => e.PublicKey).HasColumnType("blob");
+            entity.Property(e => e.Name).HasMaxLength(100);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_passkey_credentials_user");
@@ -504,11 +492,7 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PRIMARY");
             entity.ToTable("lockout_resets");
             entity.HasIndex(e => e.Username, "ix_lockout_resets_username");
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Username).HasMaxLength(255).HasColumnName("username");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.AdminId).HasColumnName("admin_id");
-            entity.Property(e => e.ResetAt).HasColumnType("datetime").HasColumnName("reset_at");
+            entity.Property(e => e.Username).HasMaxLength(255);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_lockout_resets_user");
@@ -522,9 +506,7 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PRIMARY");
             entity.ToTable("saved_reasons");
             entity.HasIndex(e => new { e.CompanyId, e.Reason }, "uq_saved_reasons_company_reason").IsUnique();
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.CompanyId).HasColumnName("company_id");
-            entity.Property(e => e.Reason).HasMaxLength(500).HasColumnName("reason");
+            entity.Property(e => e.Reason).HasMaxLength(500);
             entity.HasOne<Company>().WithMany().HasForeignKey(e => e.CompanyId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_saved_reasons_company");
@@ -536,14 +518,9 @@ public partial class AppDbContext : DbContext
             entity.ToTable("user_sessions");
             entity.HasIndex(e => e.KeyHash, "uq_user_sessions_key").IsUnique();
             entity.HasIndex(e => new { e.UserId, e.LastSeenAt }, "ix_user_sessions_user");
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.KeyHash).HasMaxLength(64).HasColumnName("key_hash");
-            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
-            entity.Property(e => e.LastSeenAt).HasColumnType("datetime").HasColumnName("last_seen_at");
-            entity.Property(e => e.IpAddress).HasMaxLength(45).HasColumnName("ip_address");
-            entity.Property(e => e.UserAgent).HasMaxLength(255).HasColumnName("user_agent");
-            entity.Property(e => e.RevokedAt).HasColumnType("datetime").HasColumnName("revoked_at");
+            entity.Property(e => e.KeyHash).HasMaxLength(64);
+            entity.Property(e => e.IpAddress).HasMaxLength(45);
+            entity.Property(e => e.UserAgent).HasMaxLength(255);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_user_sessions_user");
@@ -555,14 +532,8 @@ public partial class AppDbContext : DbContext
             entity.ToTable("sign_in_codes");
             entity.HasIndex(e => e.ChallengeHash, "uq_sign_in_codes_challenge").IsUnique();
             entity.HasIndex(e => new { e.UserId, e.CreatedAt }, "ix_sign_in_codes_user");
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.ChallengeHash).HasMaxLength(64).HasColumnName("challenge_hash");
-            entity.Property(e => e.CodeHash).HasMaxLength(64).HasColumnName("code_hash");
-            entity.Property(e => e.CreatedAt).HasColumnType("datetime").HasColumnName("created_at");
-            entity.Property(e => e.ExpiresAt).HasColumnType("datetime").HasColumnName("expires_at");
-            entity.Property(e => e.Attempts).HasColumnName("attempts");
-            entity.Property(e => e.UsedAt).HasColumnType("datetime").HasColumnName("used_at");
+            entity.Property(e => e.ChallengeHash).HasMaxLength(64);
+            entity.Property(e => e.CodeHash).HasMaxLength(64);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_sign_in_codes_user");
@@ -573,12 +544,8 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PRIMARY");
             entity.ToTable("email_confirmations");
             entity.HasIndex(e => e.TokenHash, "uq_email_confirmations_token").IsUnique();
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.UserId).HasColumnName("user_id");
-            entity.Property(e => e.Email).HasMaxLength(255).HasColumnName("email");
-            entity.Property(e => e.TokenHash).HasMaxLength(64).HasColumnName("token_hash");
-            entity.Property(e => e.ExpiresAt).HasColumnType("datetime").HasColumnName("expires_at");
-            entity.Property(e => e.UsedAt).HasColumnType("datetime").HasColumnName("used_at");
+            entity.Property(e => e.Email).HasMaxLength(255);
+            entity.Property(e => e.TokenHash).HasMaxLength(64);
             entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_email_confirmations_user");
@@ -631,6 +598,16 @@ public partial class AppDbContext : DbContext
             entity.Ignore(user => user.ApplicationDriver);
             entity.Ignore(user => user.ApplicationSponsors);
         });
+
+        // these tables name each column after its property in snake_case, and store times as datetime
+        foreach (var type in new[] { typeof(NotificationPreference), typeof(Impersonation), typeof(PasskeyCredential), typeof(LockoutReset),
+                     typeof(SavedReason), typeof(UserSession), typeof(SignInCode), typeof(EmailConfirmation) })
+            foreach (var property in modelBuilder.Model.FindEntityType(type)!.GetProperties())
+            {
+                property.SetColumnName(System.Text.RegularExpressions.Regex.Replace(property.Name, "(?<=.)([A-Z])", "_$1").ToLowerInvariant());
+                if ((Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType) == typeof(DateTime))
+                    property.SetColumnType("datetime");
+            }
 
         OnModelCreatingPartial(modelBuilder);
     }

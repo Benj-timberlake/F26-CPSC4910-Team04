@@ -30,11 +30,8 @@ public static class PasskeyProxy
                 return Results.Json(new { message = "This account has been deactivated. Contact an administrator." }, statusCode: StatusCodes.Status403Forbidden);
             if (!response.IsSuccessStatusCode)
                 return Results.Json(new { message = "That passkey didn't work. Try again or use your password." }, statusCode: StatusCodes.Status401Unauthorized);
-            var user = (await response.Content.ReadFromJsonAsync<UserProfile>())!;
-            await TruckerSignIn.SignInAsync(http, user);
-            AccountEndpoints.AdminDance(http, user);
-            var returnUrl = body.ReturnUrl;
-            return Results.Ok(new { redirect = !string.IsNullOrEmpty(returnUrl) && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") ? returnUrl : "/dashboard" });
+            await AccountEndpoints.SignIn(http, response);
+            return Results.Ok(new { redirect = AccountEndpoints.SafeReturn(body.ReturnUrl) });
         }).DisableAntiforgery();
     }
 

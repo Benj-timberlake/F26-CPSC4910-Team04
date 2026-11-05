@@ -93,10 +93,7 @@ public static class AdminEndpoints
         {
             if (req.ActorId != id && !await IsAdmin(db, req.ActorId))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
-            var changed = await db.Users.Where(u => u.Id == id)
-                .ExecuteUpdateAsync(u => u.SetProperty(x => x.SessionVersion, x => x.SessionVersion + 1));
-            await db.UserSessions.Where(s => s.UserId == id && s.RevokedAt == null)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, clock.GetUtcNow().UtcDateTime));
+            var changed = await SessionEndpoints.RevokeAll(db, id, clock.GetUtcNow().UtcDateTime);
             return changed == 0 ? Results.NotFound() : Results.NoContent();
         });
 
@@ -248,22 +245,16 @@ public static class AdminEndpoints
         if (account is null)
             return Results.NotFound();
         if (await db.PointsHistory.AnyAsync(h => h.UserId == id) || await db.AuditHistories.AnyAsync(a => a.UserId == id) ||
-            await db.Applications.AnyAsync(a => a.ReviewerId == id) || await db.LockoutResets.AnyAsync(r => r.AdminId == id))
+            await db.Applications.AnyAsync(a => a.ReviewerId == id) || await db.LockoutResets.AnyAsync(r => r.AdminId == id) ||
+            await db.Impersonations.AnyAsync(i => i.ViewerId == id))
             return Results.Conflict(new { message = $"{account.Username} has history on record, so deactivate the account instead." });
 
         try
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
-            await db.LoginAttempts.Where(a => a.UserId == id).ExecuteUpdateAsync(u => u.SetProperty(a => a.UserId, (int?)null));
-            await db.LockoutResets.Where(r => r.UserId == id).ExecuteUpdateAsync(u => u.SetProperty(r => r.UserId, (int?)null));
             await db.Applications.Where(a => a.ApplicantId == id).ExecuteDeleteAsync();
             await db.CartItems.Where(c => c.UserId == id).ExecuteDeleteAsync();
             await db.NotificationsHistories.Where(n => n.UserId == id).ExecuteDeleteAsync();
-            await db.NotificationPreferences.Where(n => n.UserId == id).ExecuteDeleteAsync();
-            await db.PasswordChanges.Where(c => c.UserId == id).ExecuteDeleteAsync();
-            await db.PasswordResets.Where(r => r.UserId == id).ExecuteDeleteAsync();
-            await db.PasskeyCredentials.Where(c => c.UserId == id).ExecuteDeleteAsync();
-            await db.Impersonations.Where(i => i.UserId == id || i.ViewerId == id).ExecuteDeleteAsync();
             await db.AccountsCompanies.Where(m => m.AccountId == id).ExecuteDeleteAsync();
             await db.AccountsHistories.Where(h => h.UserId == id).ExecuteDeleteAsync();
             await db.Users.Where(u => u.Id == id).ExecuteDeleteAsync();
@@ -276,7 +267,7 @@ public static class AdminEndpoints
         return Results.NoContent();
     }
 
-    private static Task<bool> IsAdmin(AppDbContext db, int id) =>
+    internal static Task<bool> IsAdmin(AppDbContext db, int id) =>
         db.Users.AnyAsync(u => u.Id == id && u.UserType == AuthEndpoints.Admin);
 
     private static string Trim(string? value) => value?.Trim() ?? "";

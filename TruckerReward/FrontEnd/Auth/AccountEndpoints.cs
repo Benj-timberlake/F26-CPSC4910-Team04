@@ -43,9 +43,7 @@ public static class AccountEndpoints
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/login?error=backend" + ReturnParam(returnUrl));
 
-            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
-            await TruckerSignIn.SignInAsync(http, user!);
-            AdminDance(http, user!);
+            await SignIn(http, response);
             return Results.LocalRedirect(SafeReturn(returnUrl));
         }).DisableAntiforgery();
 
@@ -65,9 +63,7 @@ public static class AccountEndpoints
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/login?error=backend" + ReturnParam(returnUrl));
 
-            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
-            await TruckerSignIn.SignInAsync(http, user!);
-            AdminDance(http, user!);
+            await SignIn(http, response);
             return Results.LocalRedirect(SafeReturn(returnUrl));
         }).DisableAntiforgery();
 
@@ -167,10 +163,14 @@ public static class AccountEndpoints
             IHttpClientFactory clients) =>
         {
             var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var sessionKey = http.User.FindFirstValue(TruckerSignIn.SessionKeyClaim);
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync($"users/{id}/password",
-                new { currentPassword, newPassword = password, ipAddress = Ip(http) });
+                new { currentPassword, newPassword = password, ipAddress = Ip(http), sessionKey });
             if (!response.IsSuccessStatusCode)
                 return Results.Redirect("/account/password?error=" + await ErrorParam(response, "Could not change the password."));
+            // other browsers are signed out now, this one gets a cookie with the new version
+            var user = await response.Content.ReadFromJsonAsync<UserProfile>();
+            await TruckerSignIn.SignInAsync(http, user!);
             return Results.Redirect("/profile?password=changed");
         }).RequireAuthorization().AddEndpointFilter(ViewAs.NotWhileViewing).DisableAntiforgery();
 
@@ -251,9 +251,11 @@ public static class AccountEndpoints
         }).RequireAuthorization().DisableAntiforgery();
     }
 
-    // the dashboard shows the admin image once when it sees this
-    internal static void AdminDance(HttpContext http, UserProfile user)
+    // admins also get a cookie so the dashboard shows the admin image once
+    internal static async Task SignIn(HttpContext http, HttpResponseMessage response)
     {
+        var user = (await response.Content.ReadFromJsonAsync<UserProfile>())!;
+        await TruckerSignIn.SignInAsync(http, user);
         if (!string.Equals(user.UserType, "admin", StringComparison.OrdinalIgnoreCase))
             return;
         http.Response.Cookies.Append("adminDance", "1", new CookieOptions
@@ -314,7 +316,7 @@ public static class AccountEndpoints
 
     private static string? Ip(HttpContext http) => http.Connection.RemoteIpAddress?.ToString();
 
-    private static string SafeReturn(string? returnUrl) =>
+    internal static string SafeReturn(string? returnUrl) =>
         !string.IsNullOrEmpty(returnUrl) && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") ? returnUrl : "/dashboard";
 
     private static string ReturnParam(string? returnUrl, bool first = false) =>

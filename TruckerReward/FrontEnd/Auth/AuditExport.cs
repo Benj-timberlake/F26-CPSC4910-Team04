@@ -5,7 +5,7 @@ namespace FrontEnd.Auth;
 // proxies the csv download for the browser
 public static class AuditExport
 {
-    private static readonly string[] Filters = ["category", "from", "to", "companyId", "driverId"];
+    private static readonly string[] Filters = ["category", "from", "to", "companyId", "driverId", "by"];
 
     public static void MapAuditExport(this WebApplication app) =>
         app.MapGet("/audit/export", async (HttpContext http, IHttpClientFactory clients) =>

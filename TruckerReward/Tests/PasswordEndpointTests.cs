@@ -12,15 +12,7 @@ public sealed class PasswordEndpointTests : IAsyncDisposable
 
     private async Task<(HttpClient client, int id)> StartWithBob()
     {
-        var client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
-        await client.PostAsJsonAsync("/auth/register", new { username = "root", firstName = "Root", lastName = "Admin", email = "root@example.com", password = "Hunter22x!", userType = "driver" });
-        await app.ConfirmEmails();
-        using (var db = app.Db())
-        {
-            (await db.Users.SingleAsync(u => u.Username == "root")).UserType = "admin";
-            await db.SaveChangesAsync();
-        }
+        var client = await app.StartWithBobAndRoot();
         var id = (await app.Db().Users.SingleAsync(u => u.Username == "bob")).Id;
         return (client, id);
     }
@@ -51,7 +43,7 @@ public sealed class PasswordEndpointTests : IAsyncDisposable
     {
         var (client, id) = await StartWithBob();
         var response = await client.PostAsJsonAsync($"/users/{id}/password", new { currentPassword = "Hunter22x!", newPassword = "NewPass99!", ipAddress = "10.0.0.5" });
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         Assert.Equal(HttpStatusCode.Unauthorized, await Login(client, "Hunter22x!"));
         Assert.Equal(HttpStatusCode.OK, await Login(client, "NewPass99!"));
@@ -73,7 +65,7 @@ public sealed class PasswordEndpointTests : IAsyncDisposable
         await client.PostAsJsonAsync("/auth/external", new { provider = "Google", email = "sue@gmail.com" });
         var id = (await app.Db().Users.SingleAsync()).Id;
         var response = await client.PostAsJsonAsync($"/users/{id}/password", new { newPassword = "NewPass99!" });
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/auth/login", new { username = "sue", password = "NewPass99!" })).StatusCode);
     }
 
@@ -208,6 +200,45 @@ public sealed class PasswordEndpointTests : IAsyncDisposable
         Assert.Empty(app.Email.Sent);
         Assert.Empty(await app.Db().PasswordResets.ToListAsync());
     }
+
+    [Fact]
+    public async Task ChangeSignsOutOtherBrowsersButNotThisOne()
+    {
+        var (client, id) = await StartWithBob();
+        var here = await Session(client, id);
+        var other = await Session(client, id);
+        var before = (await app.Db().Users.SingleAsync(u => u.Id == id)).SessionVersion;
+
+        var response = await client.PostAsJsonAsync($"/users/{id}/password", new { currentPassword = "Hunter22x!", newPassword = "NewPass99!", sessionKey = here });
+
+        var profile = await response.Content.ReadFromJsonAsync<UserProfile>();
+        Assert.Equal(before + 1, profile!.SessionVersion);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/sessions/check", new { key = here })).StatusCode);
+        Assert.Equal(HttpStatusCode.Gone, (await client.PostAsJsonAsync("/sessions/check", new { key = other })).StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetSignsOutEveryBrowserAndVoidsOtherLinks()
+    {
+        var (client, id) = await StartWithBob();
+        var session = await Session(client, id);
+        await client.PostAsJsonAsync("/auth/forgot", new { email = "bob@example.com" });
+        await client.PostAsJsonAsync("/auth/forgot", new { email = "bob@example.com" });
+        var links = app.Email.Sent.Where(m => m.To == "bob@example.com").Select(m => TokenFrom(m.Body)).ToList();
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/auth/reset", new { token = links[1], newPassword = "NewPass99!" })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Gone, (await client.PostAsJsonAsync("/sessions/check", new { key = session })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/auth/reset", new { token = links[0], newPassword = "Another11!" })).StatusCode);
+    }
+
+    private async Task<string> Session(HttpClient client, int id)
+    {
+        var response = await client.PostAsJsonAsync($"/users/{id}/sessions", new { ipAddress = "10.0.0.1", userAgent = "test" });
+        return (await response.Content.ReadFromJsonAsync<Started>())!.Key;
+    }
+
+    private sealed record Started(string Key);
 
     private static string TokenFrom(string body) =>
         body.Split("token=")[1].Split('\n')[0].Trim();

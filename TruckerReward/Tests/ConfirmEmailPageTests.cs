@@ -13,8 +13,7 @@ public sealed class ConfirmEmailPageTests : TestContext
 
     private IRenderedComponent<ConfirmEmail> Render(string url)
     {
-        Services.AddHttpClient("Backend", c => c.BaseAddress = new Uri("http://backend/"))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        this.UseBackend(backend);
         Services.GetRequiredService<NavigationManager>().NavigateTo(url);
         return RenderComponent<ConfirmEmail>();
     }

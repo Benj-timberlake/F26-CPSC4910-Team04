@@ -16,7 +16,7 @@ public static class SignInCodeEndpoints
         app.MapPost("/auth/login/code", async (CodeRequest req, AppDbContext db, Notifications notifications, TimeProvider clock) =>
         {
             var now = clock.GetUtcNow().UtcDateTime;
-            var hash = Hash(req.Challenge ?? "");
+            var hash = Tokens.Hash(req.Challenge ?? "");
             var pending = await db.SignInCodes.FirstOrDefaultAsync(c => c.ChallengeHash == hash && c.UsedAt == null && c.ExpiresAt > now && c.Attempts < MaxAttempts);
             var user = pending is null ? null : await db.Users.FindAsync(pending.UserId);
             if (pending is null || user is null)
@@ -24,13 +24,12 @@ public static class SignInCodeEndpoints
             if (await Lockout.LockedUntil(db, user.Username, now) is { } lockedUntil)
                 return Results.Json(new { message = "Too many failed attempts.", lockedUntil }, statusCode: StatusCodes.Status423Locked);
 
-            var right = CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(Hash(req.Code?.Trim() ?? "")), Encoding.UTF8.GetBytes(pending.CodeHash));
+            var right = CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(Tokens.Hash(req.Code?.Trim() ?? "")), Encoding.UTF8.GetBytes(pending.CodeHash));
             pending.Attempts++;
             if (right)
                 pending.UsedAt = now;
             // wrong codes feed the same lockout as wrong passwords
-            db.LoginAttempts.Add(new LoginAttempt { Username = user.Username, UserId = user.Id, Succeeded = right, IpAddress = req.IpAddress ?? "", AttemptedAt = now });
-            await db.SaveChangesAsync();
+            await AuthEndpoints.RecordAttempt(db, user.Username, user.Id, right, req.IpAddress, now);
             if (right)
                 return Results.Ok(UserProfile.Of(user));
             if (await Lockout.LockedUntil(db, user.Username, now) is { } until)
@@ -69,17 +68,14 @@ public static class SignInCodeEndpoints
         if (await db.SignInCodes.CountAsync(c => c.UserId == user.Id && c.CreatedAt > now - Lifetime) >= MaxIssued)
             return Results.Json(new { message = "Too many codes asked for. Wait a few minutes and log in again." }, statusCode: StatusCodes.Status429TooManyRequests);
 
-        var challenge = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var challenge = Tokens.New();
         var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
-        db.SignInCodes.Add(new SignInCode { UserId = user.Id, ChallengeHash = Hash(challenge), CodeHash = Hash(code), CreatedAt = now, ExpiresAt = now + Lifetime });
+        db.SignInCodes.Add(new SignInCode { UserId = user.Id, ChallengeHash = Tokens.Hash(challenge), CodeHash = Tokens.Hash(code), CreatedAt = now, ExpiresAt = now + Lifetime });
         await db.SaveChangesAsync();
         await email.SendAsync(user.Email, $"Your TruckerReward sign-in code is {code}",
             $"Hi {user.Username},\n\nYour sign-in code is {code}. It works for ten minutes.\n\nIf you didn't just sign in, someone has your password. Reset it right away from the login page.");
         return Results.Json(new { challenge }, statusCode: StatusCodes.Status202Accepted);
     }
-
-    private static string Hash(string value) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
 
 public record CodeRequest(string? Challenge, string? Code, string? IpAddress);

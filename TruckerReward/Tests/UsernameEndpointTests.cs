@@ -12,8 +12,8 @@ public sealed class UsernameEndpointTests : IAsyncDisposable
     private async Task<(HttpClient client, int id)> StartWithBob()
     {
         var client = await app.Start();
-        await client.PostAsJsonAsync("/auth/register", new { username = "bob", firstName = "Bob", lastName = "Driver", email = "bob@example.com", password = "Hunter22x!", userType = "driver" });
-        await client.PostAsJsonAsync("/auth/register", new { username = "sue", firstName = "Sue", lastName = "Driver", email = "sue@example.com", password = "Hunter22x!", userType = "driver" });
+        await client.Register("bob", "Bob", "Driver");
+        await client.Register("sue", "Sue", "Driver");
         await app.ConfirmEmails();
         var id = (await app.Db().Users.SingleAsync(u => u.Username == "bob")).Id;
         return (client, id);
