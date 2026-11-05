@@ -2,15 +2,21 @@
 @attribute [Authorize(Roles = "sponsor,admin")]
 @inherits BackendPage
 
-<PageTitle>Driver points</PageTitle>
+@if (!Embedded)
+{
+    <PageTitle>Driver points</PageTitle>
+}
 
-<div class="tr-page">
-    <h1>Driver points</h1>
-     <p class="tr-muted" style="margin-bottom: 20px;">
-        Only drivers who are connected to a sponsor company are
-        displayed here. Additional drivers will automatically appear
-        once they have been assigned to a sponsor.
-    </p>
+<div class="@(Embedded ? "dashboard-drivers" : "tr-page")">
+    @if (!Embedded)
+    {
+        <h1>Driver points</h1>
+        <p class="tr-muted" style="margin-bottom: 20px;">
+            Only drivers who are connected to a sponsor company are
+            displayed here. Additional drivers will automatically appear
+            once they have been assigned to a sponsor.
+        </p>
+    }
 
     <Alerts Notice="@notice" Error="@error" />
 
@@ -20,7 +26,7 @@
     }
     else
     {
-        <form class="search tr-toolbar" @onsubmit="Search">
+        <form class="search tr-toolbar" @onsubmit="Search" @onsubmit:preventDefault="true">
             <label for="search" class="visually-hidden">Search drivers</label>
             <input id="search" type="search" placeholder="Search by name or username" @bind="search" />
             <select aria-label="Sort" @bind="sort">
@@ -62,15 +68,25 @@
                             {
                                 <th><input type="checkbox" aria-label="Select all drivers" checked="@(selected.Count == drivers.Count)" @onchange="ToggleAll" /></th>
                             }
-                            <th>Driver</th>
-                            <th>Email</th>
-                            <th>Points</th>
-                            <th>Spent</th>
-                            @if (ranged)
+                            <th>@(Embedded ? "Name" : "Driver")</th>
+                            @if (!Embedded)
                             {
-                                <th>Earned @RangeLabel</th>
+                                <th>Email</th>
                             }
-                            <th></th>
+                            <th>Points</th>
+                            @if (!Embedded)
+                            {
+                                <th>Spent</th>
+                                @if (ranged)
+                                {
+                                    <th>Earned @RangeLabel</th>
+                                }
+                            }
+                            <th aria-label="Driver actions"></th>
+                            @if (Embedded)
+                            {
+                                <th class="driver-view-action" aria-label="Driver view"></th>
+                            }
                         </tr>
                     </thead>
                     <tbody>
@@ -81,13 +97,25 @@
                                 {
                                     <td><input type="checkbox" aria-label="Select @d.Username" checked="@selected.Contains(d.Id)" @onchange="() => Toggle(d.Id)" /></td>
                                 }
-                                <td>@d.FirstName @d.LastName (@d.Username)</td>
-                                <td>@d.Email</td>
-                                <td class="balance">@d.Points.ToString("N0")</td>
-                                <td class="spent">@d.Spent.ToString("N0")</td>
-                                @if (ranged)
+                                <td>
+                                    @d.FirstName @d.LastName
+                                    @if (!Embedded)
+                                    {
+                                        <span>@($" ({d.Username})")</span>
+                                    }
+                                </td>
+                                @if (!Embedded)
                                 {
-                                    <td class="earned">@d.Earned?.ToString("N0")</td>
+                                    <td>@d.Email</td>
+                                }
+                                <td class="balance">@d.Points.ToString("N0")</td>
+                                @if (!Embedded)
+                                {
+                                    <td class="spent">@d.Spent.ToString("N0")</td>
+                                    @if (ranged)
+                                    {
+                                        <td class="earned">@d.Earned?.ToString("N0")</td>
+                                    }
                                 }
                                 <td>
                                     @if (removing == d.Id)
@@ -113,6 +141,19 @@
                                         }
                                     }
                                 </td>
+                                @if (Embedded)
+                                {
+                                    <td class="driver-view-action">
+                                        <form method="post" action="@($"account/driver-view/{d.Id}")">
+                                            <button type="submit" class="driver-view-eye" title="See their view" aria-label="@($"See their view: {d.FirstName} {d.LastName}")">
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                                                    <circle cx="12" cy="12" r="3" />
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    </td>
+                                }
                             </tr>
                         }
                     </tbody>
@@ -211,6 +252,7 @@
 </div>
 
 <style>
+    .dashboard-drivers td.balance { font-size: inherit; font-weight: 400; line-height: inherit; }
     .search {
         align-items: center;
     }
@@ -248,6 +290,8 @@
 </style>
 
 @code {
+    [Parameter] public bool Embedded { get; set; }
+    [Parameter] public EventCallback PointsChanged { get; set; }
     private List<Driver>? drivers;
     private string? search;
     private string sort = "name";
@@ -390,7 +434,7 @@
             {
                 var updated = await response.Content.ReadFromJsonAsync<Driver>();
                 await RememberReason();
-                if (ranged || admin)
+                if (Embedded || ranged || admin)
                     await Load();
                 else
                     drivers = drivers!.Select(x => x.Id == d.Id && updated is not null ? updated : x).ToList();
@@ -398,6 +442,7 @@
                     ? $"{d.Username}'s selected company balance is now {updated?.Points.ToString("N0")} points."
                     : $"{d.Username} now has {updated?.Points.ToString("N0")} points.";
                 editingDriver = null;
+                await PointsChanged.InvokeAsync();
             }
             else
             {
@@ -541,6 +586,7 @@
             bulkOpen = false;
             selected.Clear();
             await Load();
+            await PointsChanged.InvokeAsync();
         });
 
     private void StartRemove(Driver d)

@@ -141,45 +141,9 @@
                 {
                     <p>Join a company to see its associated drivers.</p>
                 }
-                else if (driverLoadError is not null)
-                {
-                    <p role="alert" class="tr-alert-error">@driverLoadError</p>
-                }
-                else if (drivers is null)
-                {
-                    <p role="status"><em>Loading drivers...</em></p>
-                }
-                else if (drivers.Count == 0)
-                {
-                    <p>No drivers are currently associated with your company.</p>
-                }
                 else
                 {
-                    <div class="tr-table-wrap">
-                        <table class="tr-table">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Name</th>
-                                    <th scope="col">Points</th>
-                                    <th scope="col">Driver view</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var driver in drivers)
-                                {
-                                    <tr>
-                                        <td>@driver.FirstName @driver.LastName</td>
-                                        <td>@FrontEnd.Shared.RewardPoints.Format(driver.Points)</td>
-                                        <td>
-                                            <form method="post" action="@($"account/driver-view/{driver.Id}")">
-                                                <button type="submit" class="tr-btn" aria-label="@($"See their view: {driver.Username}")">See their view</button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
+                    <FrontEnd.Pages.ManagePoints Embedded="true" PointsChanged="RefreshSponsorBudget" />
                 }
             </section>
         }
@@ -284,6 +248,11 @@
 </div>
 
 <style>
+    .tr-table .driver-view-action { width: 1%; text-align: right; white-space: nowrap; }
+    .driver-view-action form { margin: 0; }
+    .driver-view-eye { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--brand); cursor: pointer; }
+    .driver-view-eye:hover { background: #edf1f6; }
+    .driver-view-eye:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
     .points {
         background: var(--brand);
         border-color: var(--brand);
@@ -482,8 +451,6 @@
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     private Account? account;
-    private List<Driver>? drivers;
-    private string? driverLoadError;
     private string? loadError;
     private string? notice;
     private List<CompanyOption>? companies;
@@ -518,16 +485,18 @@
             loadError = "Couldn't load your account right now. Try again in a moment.";
         }
 
-        if (account is { UserType: "sponsor", CompanyId: not null })
+    }
+
+    private async Task RefreshSponsorBudget()
+    {
+        try
         {
-            try
-            {
-                drivers = await client.GetFromJsonAsync<List<Driver>>($"users/{id}/points/drivers") ?? [];
-            }
-            catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
-            {
-                driverLoadError = "Couldn't load drivers right now. Try again in a moment.";
-            }
+            using var client = HttpClientFactory.CreateClient("Backend");
+            account = await client.GetFromJsonAsync<Account>($"users/{account!.Id}");
+        }
+        catch (HttpRequestException)
+        {
+            notice = "Points saved, but the budget couldn't refresh. Reload to see the latest budget.";
         }
     }
 
@@ -759,7 +728,6 @@
     private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, List<CompanyMembership>? Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, int MonthlyDriverPoints = 0, DateTime? NextMonthlyReward = null);
     private sealed record CompanyMembership(int Id, string Name, bool CurrentCompanyViewed);
     private sealed record CompanyOption(int Id, string Name, string? Description);
-    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, long Points);
     private sealed record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
     private sealed record CancelApplicationRequest(string Reasoning);
 }
