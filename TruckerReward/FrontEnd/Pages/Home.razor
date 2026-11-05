@@ -1,7 +1,10 @@
 @page "/"
+@inject NavigationManager Nav
 
 <PageTitle>TruckerReward</PageTitle>
 
+@if (!isSponsor)
+{
 <div class="tr-page-narrow home">
     <h1>TruckerReward</h1>
 
@@ -22,6 +25,21 @@
         </NotAuthorized>
     </AuthorizeView>
 </div>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private bool isSponsor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isSponsor = (await AuthState).User.IsInRole("sponsor");
+        if (isSponsor)
+            Nav.NavigateTo("dashboard", replace: true);
+    }
+}
 
 <style>
     .home {

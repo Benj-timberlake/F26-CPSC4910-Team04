@@ -160,8 +160,6 @@
                             <thead>
                                 <tr>
                                     <th scope="col">Name</th>
-                                    <th scope="col">Username</th>
-                                    <th scope="col">Email</th>
                                     <th scope="col">Points</th>
                                     <th scope="col">Driver view</th>
                                 </tr>
@@ -171,8 +169,6 @@
                                 {
                                     <tr>
                                         <td>@driver.FirstName @driver.LastName</td>
-                                        <td>@driver.Username</td>
-                                        <td>@driver.Email</td>
                                         <td>@FrontEnd.Shared.RewardPoints.Format(driver.Points)</td>
                                         <td>
                                             <form method="post" action="@($"account/driver-view/{driver.Id}")">
