@@ -44,6 +44,15 @@
     }
     else
     {
+        <div class="application-sort">
+            <label for="application-sort">Sort by</label>
+            <select id="application-sort" @bind="selectedSort">
+                <option value="@ApplicationSort.OldestFirst">Time applied: oldest first</option>
+                <option value="@ApplicationSort.NewestFirst">Time applied: newest first</option>
+                <option value="@ApplicationSort.NameAscending">Name: A–Z</option>
+                <option value="@ApplicationSort.NameDescending">Name: Z–A</option>
+            </select>
+        </div>
         <div class="application-columns">
             <section class="application-panel active-panel" aria-labelledby="active-title">
                 <div class="panel-heading">
@@ -155,6 +164,9 @@
     .application-tab { padding: 9px 15px; border: 0; border-radius: 7px; color: #596779; background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
     .application-tab.selected { color: #2455a4; background: white; box-shadow: 0 1px 3px #18283d20; }
     .application-columns { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 18px; align-items: start; }
+    .application-sort { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .application-sort label { font-size: 13px; font-weight: 600; }
+    .application-sort select { max-width: 100%; padding: 9px 12px; border: 1px solid #b8c0cc; border-radius: 8px; background: white; color: #1f2937; font: inherit; }
     .application-panel { background: #f8fafc; border: 1px solid #e3e9f0; border-radius: 14px; padding: 20px; min-width: 0; }
     .active-panel { background: #f5f8fd; border-color: #dbe6f5; }
     .approved-panel { background: #f7fbf8; border-color: #dcebe0; }
@@ -251,18 +263,25 @@
     private bool isSubmitting;
     private List<ApplicationRow> applications = [];
 
-    private List<ApplicationRow> ActiveApplications => applications
-        .Where(application => application.Status == "active")
-        .OrderBy(application => application.ApplicationTimestamp)
-        .ToList();
-    private List<ApplicationRow> ApprovedApplications => applications
-        .Where(application => application.Status == "approved")
-        .OrderByDescending(application => application.ResponseTimestamp ?? application.ApplicationTimestamp)
-        .ToList();
-    private List<ApplicationRow> DeniedApplications => applications
-        .Where(application => application.Status == "rejected")
-        .OrderByDescending(application => application.ResponseTimestamp ?? application.ApplicationTimestamp)
-        .ToList();
+    private enum ApplicationSort { OldestFirst, NewestFirst, NameAscending, NameDescending }
+    private ApplicationSort selectedSort = ApplicationSort.OldestFirst;
+
+    private List<ApplicationRow> ActiveApplications => SortedApplications("active");
+    private List<ApplicationRow> ApprovedApplications => SortedApplications("approved");
+    private List<ApplicationRow> DeniedApplications => SortedApplications("rejected");
+
+    private List<ApplicationRow> SortedApplications(string status)
+    {
+        var matching = applications.Where(application => application.Status == status);
+        var sorted = selectedSort switch
+        {
+            ApplicationSort.NameAscending => matching.OrderBy(application => application.ApplicantName, StringComparer.CurrentCultureIgnoreCase),
+            ApplicationSort.NameDescending => matching.OrderByDescending(application => application.ApplicantName, StringComparer.CurrentCultureIgnoreCase),
+            ApplicationSort.NewestFirst => matching.OrderByDescending(application => application.ApplicationTimestamp),
+            _ => matching.OrderBy(application => application.ApplicationTimestamp)
+        };
+        return sorted.ThenBy(application => application.Id).ToList();
+    }
 
     protected override async Task OnInitializedAsync()
     {
