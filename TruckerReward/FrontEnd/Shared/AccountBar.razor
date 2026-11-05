@@ -1,4 +1,6 @@
 @namespace FrontEnd.Shared
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
 <nav class="account-bar">
     <AuthorizeView Context="homeNav">
@@ -49,10 +51,16 @@
                     <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                 </svg>
             </a>
-            <a href="profile" class="profile-link">@context.User.Identity?.Name</a>
-            <form method="post" action="account/logout">
-                <button type="submit">Log out</button>
-            </form>
+            <details class="profile-dropdown">
+                <summary class="profile-link">@context.User.Identity?.Name</summary>
+                <div class="profile-dropdown-items">
+                    <a href="profile">Profile</a>
+                    <button type="button" disabled>Settings</button>
+                    <form method="post" action="account/logout">
+                        <button type="submit">Log out</button>
+                    </form>
+                </div>
+            </details>
         </Authorized>
         <NotAuthorized>
             <span class="spacer"></span>
@@ -72,6 +80,31 @@
         </div>
     }
 </AuthorizeView>
+
+@code {
+    private IJSObjectReference? dropdownModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        dropdownModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/profileDropdown.js");
+        await dropdownModule.InvokeVoidAsync("initialize");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (dropdownModule is null) return;
+        try
+        {
+            await dropdownModule.InvokeVoidAsync("dispose");
+            await dropdownModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser connection may already be closed.
+        }
+    }
+}
 
 <style>
     .account-bar {
@@ -127,4 +160,18 @@
         cursor: pointer;
         white-space: nowrap;
     }
+
+    .profile-dropdown { position: relative; }
+    .profile-dropdown summary { display: flex; align-items: center; gap: 8px; list-style: none; }
+    .profile-dropdown summary::-webkit-details-marker { display: none; }
+    .profile-dropdown-items { position: absolute; right: 0; top: calc(100% + 8px); z-index: 1100; min-width: 160px; padding: 6px; border: 1px solid #e3e9f0; border-radius: 8px; background: white; box-shadow: 0 8px 24px #18283d26; }
+    .profile-dropdown-items form { margin: 0; }
+    .account-bar .profile-dropdown-items a,
+    .account-bar .profile-dropdown-items button { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 4px; background: white; color: #1f2937; font: inherit; text-align: left; }
+    .profile-dropdown-items a:hover,
+    .profile-dropdown-items button:not(:disabled):hover { background: #edf1f6; }
+    .account-bar .profile-dropdown-items button:disabled { color: #8a94a3; cursor: default; }
+    .profile-dropdown summary:focus-visible,
+    .profile-dropdown-items a:focus-visible,
+    .profile-dropdown-items button:focus-visible { outline: 2px solid #2455a4; outline-offset: 2px; }
 </style>
