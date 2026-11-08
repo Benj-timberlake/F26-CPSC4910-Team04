@@ -12,7 +12,7 @@ public sealed class LogEmailSender(ILogger<LogEmailSender> log) : IEmailSender
 {
     public Task SendAsync(string to, string subject, string body)
     {
-        log.LogInformation("email to {To}: {Subject}\n{Body}", to, subject, body);
+        log.LogInformation("email to {To}: {Subject}", to, subject);
         return Task.CompletedTask;
     }
 }

@@ -1,3 +1,6 @@
+@using System.Text
+@inject IHttpClientFactory HttpClientFactory
+
 @if (IsOpen)
 {
     <div class="mass-account-backdrop" @onclick="Close">
@@ -5,15 +8,25 @@
             <button type="button" class="mass-account-close" aria-label="Close" title="Close" @onclick="Close">×</button>
             <h2 id="mass-account-creation-title">Mass Account Creation</h2>
             <label class="mass-account-drop-zone" for="mass-account-file">
-                <InputFile id="mass-account-file" class="mass-account-file-input" accept=".txt,text/plain" OnChange="SelectFile" aria-label="Choose a text file" />
+                <InputFile id="mass-account-file" class="mass-account-file-input" accept=".txt,text/plain" OnChange="SelectFile" aria-label="Choose a text file" disabled="@isAdding" />
                 <span>Drag and drop a text file here, or browse to choose one.</span>
                 @if (selectedFileName is not null)
                 {
                     <span class="mass-account-file-name">@selectedFileName</span>
                 }
             </label>
+            <p class="mass-account-format">One account per line (D = driver, S = sponsor): D|organization|first name|last name|email|points|reason</p>
+            <p class="mass-account-format">Organization and points are validated but not applied yet.</p>
+            @if (error is not null)
+            {
+                <p class="tr-alert-error mass-account-error" role="alert">@error</p>
+            }
+            @if (notice is not null)
+            {
+                <p class="tr-alert-success" role="status">@notice</p>
+            }
             <div class="mass-account-actions">
-                <button type="button" class="tr-btn">Add Users</button>
+                <button type="button" class="tr-btn" disabled="@(selectedFile is null || isAdding)" @onclick="AddUsers">@(isAdding ? "Adding..." : "Add Users")</button>
             </div>
         </section>
     </div>
@@ -29,23 +42,89 @@
     .mass-account-drop-zone:hover { border-color: var(--brand); background: #f8fafc; }
     .mass-account-file-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
     .mass-account-file-name { color: #222; font-weight: 600; overflow-wrap: anywhere; }
+    .mass-account-format { margin: 8px 0 0; color: #4b5563; font-size: 13px; overflow-wrap: anywhere; }
+    .mass-account-error { white-space: pre-line; }
     .mass-account-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
 </style>
 
 @code {
     [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public int ActorId { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnCreated { get; set; }
 
+    private const long MaxFileBytes = 1_000_000;
+    private IBrowserFile? selectedFile;
     private string? selectedFileName;
+    private string? error;
+    private string? notice;
+    private bool isAdding;
 
     private void SelectFile(InputFileChangeEventArgs args)
     {
-        selectedFileName = args.File.Name;
+        error = notice = null;
+        selectedFile = args.File;
+        if (!selectedFile.Name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+        {
+            selectedFile = null;
+            selectedFileName = null;
+            error = "Choose a .txt file.";
+            return;
+        }
+        if (selectedFile.Size > MaxFileBytes)
+        {
+            selectedFile = null;
+            selectedFileName = null;
+            error = "The text file must be no larger than 1 MB.";
+            return;
+        }
+        selectedFileName = selectedFile.Name;
+    }
+
+    private async Task AddUsers()
+    {
+        if (selectedFile is null || isAdding)
+            return;
+
+        isAdding = true;
+        error = notice = null;
+        try
+        {
+            await using var stream = selectedFile.OpenReadStream(MaxFileBytes);
+            using var reader = new StreamReader(stream, new UTF8Encoding(false, true));
+            var content = await reader.ReadToEndAsync();
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PostAsJsonAsync($"users/{ActorId}/mass-accounts", new { content });
+            var result = await response.Content.ReadFromJsonAsync<MassAccountResult>();
+            if (!response.IsSuccessStatusCode)
+            {
+                error = result?.Message ?? "Couldn't add accounts. Check the file and try again.";
+                return;
+            }
+
+            notice = result?.Message ?? "Accounts added.";
+            selectedFile = null;
+            selectedFileName = null;
+            await OnCreated.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException
+            or IOException or InvalidOperationException or DecoderFallbackException)
+        {
+            error = "Couldn't read the text file or add accounts. Check the file and try again.";
+        }
+        finally
+        {
+            isAdding = false;
+        }
     }
 
     private async Task Close()
     {
+        selectedFile = null;
         selectedFileName = null;
+        error = notice = null;
         await OnClose.InvokeAsync();
     }
+
+    private sealed record MassAccountResult(string? Message);
 }

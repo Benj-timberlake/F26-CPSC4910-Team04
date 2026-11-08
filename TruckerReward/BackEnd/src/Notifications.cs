@@ -17,6 +17,12 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             null, emailed: true,
             stored: "Your account was created by an administrator. A link to choose your password was emailed to you.");
 
+    public Task MassAccountCreated(User user, string password) =>
+        Send(user, "Your TruckerReward account is ready",
+            $"Hi {user.FirstName},\n\nYour TruckerReward {user.UserType} account is ready.\nUsername: {user.Username}\nTemporary password: {password}\n\nSign in and change your password as soon as possible.",
+            null, emailed: true,
+            stored: "Your account was created and sign-in information was emailed to you.");
+
     public Task PasswordChanged(User user, bool byReset) => byReset
         ? Send(user, "Your TruckerReward password was reset",
             $"Hi {user.Username},\n\nYour password was just reset. If that wasn't you, contact your sponsor or an administrator.",

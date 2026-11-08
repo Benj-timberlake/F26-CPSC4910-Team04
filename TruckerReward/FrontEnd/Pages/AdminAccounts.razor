@@ -90,7 +90,7 @@
         </form>
     }
 
-    <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" OnClose="@CloseMassAccountCreationModal" />
+    <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" ActorId="@actorId" OnClose="@CloseMassAccountCreationModal" OnCreated="@Load" />
 
     <Alerts Notice="@notice" Error="@error" />
 
@@ -259,12 +259,14 @@
     private int? deleting;
     private NewAccount? creating;
     private bool showMassAccountCreationModal;
+    private int actorId;
 
     private void CloseMassAccountCreationModal() => showMassAccountCreationModal = false;
 
     protected override async Task OnInitializedAsync()
     {
         await SignedIn();
+        actorId = int.Parse(id!);
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");

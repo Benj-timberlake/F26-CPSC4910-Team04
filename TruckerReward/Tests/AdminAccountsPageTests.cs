@@ -2,6 +2,7 @@ using System.Net;
 using Bunit;
 using FrontEnd.Pages;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Components.Forms;
 using Xunit;
 
 namespace TruckerReward.Tests;
@@ -113,6 +114,23 @@ public sealed class AdminAccountsPageTests : TestContext
         dialog.QuerySelector("button[aria-label='Close']")!.Click();
 
         Assert.Empty(page.FindAll("[role=dialog]"));
+    }
+
+    [Fact]
+    public void MassAccountCreationUploadsSelectedTextAndShowsResult()
+    {
+        const string content = "D|Acme|Kim|Lee|kim@example.com|50|Safe driving";
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        backend.Routes["POST /users/4/mass-accounts"] = (HttpStatusCode.OK, """{"message":"Added 1 account."}""");
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+        page.Find("button.mass-account-creation-button").Click();
+
+        page.FindComponent<InputFile>().UploadFiles(InputFileContent.CreateFromText(content, "accounts.txt", contentType: "text/plain"));
+        page.Find(".mass-account-dialog button.tr-btn").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("Added 1 account.", page.Find(".mass-account-dialog .tr-alert-success").TextContent));
+        Assert.Equal("""{"content":"D|Acme|Kim|Lee|kim@example.com|50|Safe driving"}""", backend.Bodies["POST /users/4/mass-accounts"]);
     }
 
     [Fact]
