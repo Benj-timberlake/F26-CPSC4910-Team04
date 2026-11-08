@@ -14,7 +14,7 @@ public static class MassAccountCreationEndpoints
     }
 
     private static async Task<IResult> CreateAccounts(
-        int id, MassAccountCreationRequest request, AppDbContext db, Notifications notifications)
+        int id, MassAccountCreationRequest request, AppDbContext db, Notifications notifications, TimeProvider clock)
     {
         var actor = await db.Users.AsNoTracking()
             .FirstOrDefaultAsync(user => user.Id == id && user.Status == User.Active);
@@ -122,15 +122,16 @@ public static class MassAccountCreationEndpoints
                 validRow = false;
             }
             var hasPoints = pointsText.Length > 0;
-            var validPoints = !hasPoints || (int.TryParse(pointsText, out var points) && points >= 0);
+            var validPoints = !hasPoints || (int.TryParse(pointsText, out var points)
+                && points >= 0 && points <= PointsEndpoints.MaxChange);
             if (!validPoints)
             {
-                errors.Add($"Line {index + 1}: Points must be a non-negative whole number when provided.");
+                errors.Add($"Line {index + 1}: Points must be a whole number from 0 to {PointsEndpoints.MaxChange:N0} when provided.");
                 validRow = false;
             }
-            if (hasPoints && reason.Length == 0)
+            if (hasPoints && (reason.Length == 0 || reason.Length > PointsEndpoints.MaxReasonLength))
             {
-                errors.Add($"Line {index + 1}: A reason for points is required.");
+                errors.Add($"Line {index + 1}: A reason of 1 to {PointsEndpoints.MaxReasonLength} characters is required when points are provided.");
                 validRow = false;
             }
 
@@ -143,7 +144,8 @@ public static class MassAccountCreationEndpoints
                 errors.Add($"Line {index + 1}: The email address must have a username of 1 to 255 characters.");
                 continue;
             }
-            rows.Add(new MassAccountRow(index + 1, type, username, firstName, lastName, email));
+            rows.Add(new MassAccountRow(index + 1, type, organization, username, firstName, lastName, email,
+                hasPoints ? int.Parse(pointsText) : null, reason));
         }
 
         if (rows.Count == 0 && organizationNames.Count == 0 && errors.Count == 0)
@@ -157,14 +159,29 @@ public static class MassAccountCreationEndpoints
         foreach (var duplicate in duplicateOrganizationNames)
             errors.Add($"Line {duplicate.Line}: This organization name appears more than once in the file.");
 
-        var normalizedOrganizationNames = organizationNames.Select(row => row.Name.ToLowerInvariant()).ToArray();
+        var awardOrganizationNames = actor.UserType == AuthEndpoints.Admin
+            ? rows.Where(row => row.UserType == AuthEndpoints.Driver && row.Points is > 0)
+                .Select(row => row.Organization).ToArray()
+            : [];
+        var normalizedOrganizationNames = organizationNames.Select(row => row.Name)
+            .Concat(awardOrganizationNames)
+            .Select(name => name.ToLowerInvariant())
+            .Distinct()
+            .ToArray();
         var existingOrganizationNames = await db.Companies.AsNoTracking()
             .Where(company => normalizedOrganizationNames.Contains(company.Name.ToLower()))
-            .Select(company => company.Name)
+            .Select(company => new { company.Id, company.Name })
             .ToListAsync();
         foreach (var organization in organizationNames.Where(row => existingOrganizationNames
-            .Any(name => string.Equals(name, row.Name, StringComparison.OrdinalIgnoreCase))))
+            .Any(company => string.Equals(company.Name, row.Name, StringComparison.OrdinalIgnoreCase))))
             errors.Add($"Line {organization.Line}: An organization named {organization.Name} already exists.");
+        if (actor.UserType == AuthEndpoints.Admin)
+        {
+            foreach (var row in rows.Where(row => row.UserType == AuthEndpoints.Driver && row.Points is > 0 &&
+                !existingOrganizationNames.Any(company => string.Equals(company.Name, row.Organization, StringComparison.OrdinalIgnoreCase)) &&
+                !organizationNames.Any(company => string.Equals(company.Name, row.Organization, StringComparison.OrdinalIgnoreCase))))
+                errors.Add($"Line {row.Line}: Organization {row.Organization} must already exist or be created with an O|{row.Organization} line to award driver points.");
+        }
 
         var duplicateRows = new HashSet<int>();
         foreach (var group in rows.GroupBy(row => row.Username, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1))
@@ -193,6 +210,19 @@ public static class MassAccountCreationEndpoints
         if (errors.Count > 0)
             return Results.BadRequest(new { message = string.Join("\n", errors) });
 
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var organizations = organizationNames
+            .Select(row => new Company { Name = row.Name })
+            .ToList();
+        db.Companies.AddRange(organizations);
+        await db.SaveChangesAsync();
+
+        var companyIds = existingOrganizationNames
+            .GroupBy(company => company.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var company in organizations)
+            companyIds.Add(company.Name, company.Id);
+
         var created = rows.Select(row =>
         {
             var user = new User
@@ -203,29 +233,56 @@ public static class MassAccountCreationEndpoints
                 LastName = row.LastName,
                 Email = row.Email,
                 PhoneNumber = "",
-                Address = ""
+                Address = "",
+                Points = row.UserType == AuthEndpoints.Sponsor ? row.Points ?? 0 : 0
             };
             var password = GeneratePassword();
             user.Password = Passwords.Hash(user, password);
-            return (User: user, Password: password);
+            int? historyCompanyId = sponsorCompanyId;
+            if (sponsorCompanyId is int sponsorOrganizationId)
+            {
+                user.AccountsCompanies.Add(new AccountsCompany { CompanyId = sponsorOrganizationId, CurrentCompanyViewed = true });
+            }
+            else if (row.UserType == AuthEndpoints.Driver && row.Points is > 0)
+            {
+                var companyId = companyIds[row.Organization];
+                user.AccountsCompanies.Add(new AccountsCompany { CompanyId = companyId, CurrentCompanyViewed = true });
+                historyCompanyId = companyId;
+            }
+            return (User: user, Password: password, Row: row, HistoryCompanyId: historyCompanyId);
         }).ToList();
 
-        if (sponsorCompanyId is int companyId)
-        {
-            foreach (var account in created)
-                account.User.AccountsCompanies.Add(new AccountsCompany { CompanyId = companyId, CurrentCompanyViewed = true });
-        }
-        var organizations = organizationNames
-            .Select(row => new Company { Name = row.Name })
-            .ToList();
-        db.Companies.AddRange(organizations);
         db.Users.AddRange(created.Select(account => account.User));
         await db.SaveChangesAsync();
+        foreach (var account in created.Where(account => account.Row.UserType == AuthEndpoints.Driver &&
+            account.Row.Points is > 0 && account.HistoryCompanyId is not null))
+        {
+            var history = new PointsHistory
+            {
+                UserId = account.User.Id,
+                CompanyId = account.HistoryCompanyId!.Value,
+                PointsDelta = account.Row.Points!.Value,
+                Timestamp = clock.GetUtcNow().UtcDateTime
+            };
+            account.User.Points += account.Row.Points.Value;
+            db.PointsHistory.Add(history);
+            db.AuditHistories.Add(new AuditHistory
+            {
+                UserId = actor.Id,
+                PointsHistory = history,
+                Resoning = $"Reason: {account.Row.Reason.Trim().TrimEnd('.')}.",
+            });
+        }
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         foreach (var account in created)
         {
             await notifications.MassAccountCreated(account.User, account.Password);
             await notifications.AccountCreated(account.User);
+            if (account.Row.UserType == AuthEndpoints.Driver && account.Row.Points is > 0 && account.HistoryCompanyId is int companyId)
+                await notifications.PointsChanged(account.User, account.Row.Points.Value,
+                    $"Reason: {account.Row.Reason.Trim().TrimEnd('.')}.", companyId, actor.Username);
         }
 
         var message = created.Count > 0 && organizations.Count > 0
@@ -258,7 +315,8 @@ public static class MassAccountCreationEndpoints
         return new string(password);
     }
 
-    private sealed record MassAccountRow(int Line, string UserType, string Username, string FirstName, string LastName, string Email);
+    private sealed record MassAccountRow(int Line, string UserType, string Organization, string Username,
+        string FirstName, string LastName, string Email, int? Points, string Reason);
     private sealed record OrganizationRow(int Line, string Name);
 }
 

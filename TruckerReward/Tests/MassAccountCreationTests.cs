@@ -37,38 +37,53 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task AdminAndSponsorCreateAccountsFromRowsWithoutApplyingOrganizationOrPoints()
+    public async Task AdminAndSponsorAwardsAreRecordedWithTheirAccountRows()
     {
         var ids = await Start();
         var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
         {
-            content = "D|Acme|Ava|Driver|ava.driver@example.com|500|Safe driving\nS|Northwind|Sam|Sponsor|sam.sponsor@example.com|0|New sponsor"
+            content = "O|Acme\nD|Acme|Ava|Driver|ava.driver@example.com|500|Safe driving\nS|Northwind|Sam|Sponsor|sam.sponsor@example.com|25|Sponsor balance"
         });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("Added 2 accounts.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        Assert.Equal("Added 2 accounts and 1 organization.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
         response = await client.PostAsJsonAsync($"/users/{ids.SponsorId}/mass-accounts", new
         {
-            content = "D||Max|Driver|max.driver@example.com"
+            content = "D||Max|Driver|max.driver@example.com|100|Safe week"
         });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         Assert.Equal("Added 1 account.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
 
         using var db = app.Db();
         var created = await db.Users.Where(user => user.Email.Contains("@example.com") && user.Id > ids.DriverId)
             .OrderBy(user => user.Email).ToListAsync();
         Assert.Equal(3, created.Count);
-        Assert.Equal(("driver", "ava.driver", "Ava", "Driver", "", "", 0),
+        Assert.Equal(("driver", "ava.driver", "Ava", "Driver", "", "", 500),
             (created[0].UserType, created[0].Username, created[0].FirstName, created[0].LastName, created[0].PhoneNumber, created[0].Address, created[0].Points));
-        Assert.Equal(("driver", "max.driver", "Max", "Driver", "", "", 0),
+        Assert.Equal(("driver", "max.driver", "Max", "Driver", "", "", 100),
             (created[1].UserType, created[1].Username, created[1].FirstName, created[1].LastName, created[1].PhoneNumber, created[1].Address, created[1].Points));
-        Assert.Equal(("sponsor", "sam.sponsor", "Sam", "Sponsor", "", "", 0),
+        Assert.Equal(("sponsor", "sam.sponsor", "Sam", "Sponsor", "", "", 25),
             (created[2].UserType, created[2].Username, created[2].FirstName, created[2].LastName, created[2].PhoneNumber, created[2].Address, created[2].Points));
         var memberships = await db.AccountsCompanies.Where(membership => created.Select(user => user.Id).Contains(membership.AccountId))
             .ToListAsync();
-        var sponsorCreatedDriver = created.Single(user => user.Username == "max.driver");
-        var sponsorMembership = Assert.Single(memberships);
-        Assert.Equal((sponsorCreatedDriver.Id, ids.CompanyId), (sponsorMembership.AccountId, sponsorMembership.CompanyId));
-        Assert.True(sponsorMembership.CurrentCompanyViewed);
+        var maxDriver = created.Single(user => user.Username == "max.driver");
+        var avaDriver = created.Single(user => user.Username == "ava.driver");
+        Assert.Equal(2, memberships.Count);
+        Assert.Contains(memberships, membership => membership.AccountId == maxDriver.Id && membership.CompanyId == ids.CompanyId);
+        var avaMembership = Assert.Single(memberships, membership => membership.AccountId == avaDriver.Id);
+        var acmeId = await db.Companies.Where(company => company.Name == "Acme").Select(company => company.Id).SingleAsync();
+        Assert.Equal(acmeId, avaMembership.CompanyId);
+        Assert.All(memberships, membership => Assert.True(membership.CurrentCompanyViewed));
+        var awardHistory = await db.PointsHistory.Where(history => created.Select(user => user.Id).Contains(history.UserId))
+            .OrderBy(history => history.UserId).ToListAsync();
+        Assert.Collection(awardHistory,
+            history => Assert.Equal((avaDriver.Id, acmeId, 500), (history.UserId, history.CompanyId, history.PointsDelta)),
+            history => Assert.Equal((maxDriver.Id, ids.CompanyId, 100), (history.UserId, history.CompanyId, history.PointsDelta)));
+        var sponsorDashboardDrivers = await client.GetFromJsonAsync<List<PointsDriver>>(
+            $"/users/{ids.SponsorId}/points/drivers");
+        Assert.Equal(100, Assert.Single(sponsorDashboardDrivers!, driver => driver.Id == maxDriver.Id).Points);
+        var reasons = await db.AuditHistories.Where(audit => awardHistory.Select(history => history.Id).Contains(audit.PointsHistoryId))
+            .OrderBy(audit => audit.UserId).Select(audit => audit.Resoning).ToListAsync();
+        Assert.Equal(["Reason: Safe driving.", "Reason: Safe week."], reasons);
         foreach (var user in created)
         {
             var email = Assert.Single(app.Email.Sent, message => message.To == user.Email);
@@ -142,7 +157,8 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("A reason for points is required.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+        Assert.Contains("A reason of 1 to 500 characters is required when points are provided.",
+            (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
         Assert.Equal(4, await db.Users.CountAsync());
         Assert.Single(app.Email.Sent);
     }
