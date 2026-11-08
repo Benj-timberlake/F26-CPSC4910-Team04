@@ -210,7 +210,7 @@
             </div>
         }
 
-        <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" ActorId="@account.Id" OnClose="@CloseMassAccountCreationModal" />
+        <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" ActorId="@account.Id" IsAdmin="@(account.UserType == "admin")" OnClose="@CloseMassAccountCreationModal" />
 
         @if (showCompanyModal)
         {

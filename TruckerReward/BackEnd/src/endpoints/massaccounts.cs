@@ -21,6 +21,12 @@ public static class MassAccountCreationEndpoints
         if (actor is null || actor.UserType is not (AuthEndpoints.Admin or AuthEndpoints.Sponsor))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
+        var sponsorCompanyId = actor.UserType == AuthEndpoints.Sponsor
+            ? await CompanyMembershipQueries.FirstCompanyId(db, actor.Id)
+            : null;
+        if (actor.UserType == AuthEndpoints.Sponsor && sponsorCompanyId is null)
+            return Results.BadRequest(new { message = "You must belong to an organization to add users as a sponsor." });
+
         if (string.IsNullOrWhiteSpace(request.Content))
             return Results.BadRequest(new { message = "Choose a non-empty text file." });
         if (request.Content.Length > MaxFileBytes || Encoding.UTF8.GetByteCount(request.Content) > MaxFileBytes)
@@ -67,9 +73,14 @@ public static class MassAccountCreationEndpoints
             var email = fields[4].Trim();
             var reason = fields[6].Trim();
             var validRow = true;
-            if (organization.Length == 0)
+            if (actor.UserType == AuthEndpoints.Admin && organization.Length == 0)
             {
                 errors.Add($"Line {index + 1}: Organization name is required.");
+                validRow = false;
+            }
+            if (actor.UserType == AuthEndpoints.Sponsor && organization.Length != 0)
+            {
+                errors.Add($"Line {index + 1}: Leave organization blank when uploading as a sponsor; your organization will be used.");
                 validRow = false;
             }
             if (firstName.Length is 0 or > 100 || lastName.Length is 0 or > 100)
@@ -86,13 +97,15 @@ public static class MassAccountCreationEndpoints
                 errors.Add($"Line {index + 1}: Enter a valid email address of 255 characters or fewer.");
                 validRow = false;
             }
-            var validPoints = int.TryParse(fields[5].Trim(), out var points) && points >= 0;
+            var pointsText = fields[5].Trim();
+            var hasPoints = pointsText.Length > 0;
+            var validPoints = !hasPoints || (int.TryParse(pointsText, out var points) && points >= 0);
             if (!validPoints)
             {
-                errors.Add($"Line {index + 1}: Points must be a non-negative whole number.");
+                errors.Add($"Line {index + 1}: Points must be a non-negative whole number when provided.");
                 validRow = false;
             }
-            if (reason.Length == 0)
+            if (hasPoints && reason.Length == 0)
             {
                 errors.Add($"Line {index + 1}: A reason for points is required.");
                 validRow = false;
@@ -157,6 +170,11 @@ public static class MassAccountCreationEndpoints
             return (User: user, Password: password);
         }).ToList();
 
+        if (sponsorCompanyId is int companyId)
+        {
+            foreach (var account in created)
+                account.User.AccountsCompanies.Add(new AccountsCompany { CompanyId = companyId, CurrentCompanyViewed = true });
+        }
         db.Users.AddRange(created.Select(account => account.User));
         await db.SaveChangesAsync();
 

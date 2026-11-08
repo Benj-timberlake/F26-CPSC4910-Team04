@@ -90,7 +90,7 @@
         </form>
     }
 
-    <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" ActorId="@actorId" OnClose="@CloseMassAccountCreationModal" OnCreated="@Load" />
+    <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" ActorId="@actorId" IsAdmin="true" OnClose="@CloseMassAccountCreationModal" OnCreated="@Load" />
 
     <Alerts Notice="@notice" Error="@error" />
 

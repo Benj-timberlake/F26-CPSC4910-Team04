@@ -11,10 +11,13 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
     private readonly TestApp app = new();
     private HttpClient client = null!;
 
-    private async Task<(int AdminId, int SponsorId, int DriverId)> Start()
+    private async Task<(int AdminId, int SponsorId, int DriverId, int CompanyId)> Start()
     {
         client = await app.Start();
         using var db = app.Db();
+        var company = new Company { Name = "Sponsor Org" };
+        db.Companies.Add(company);
+        await db.SaveChangesAsync();
         var users = new[]
         {
             User("admin", "admin"),
@@ -23,7 +26,14 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
         };
         db.Users.AddRange(users);
         await db.SaveChangesAsync();
-        return (users[0].Id, users[1].Id, users[2].Id);
+        db.AccountsCompanies.Add(new AccountsCompany
+        {
+            AccountId = users[1].Id,
+            CompanyId = company.Id,
+            CurrentCompanyViewed = true
+        });
+        await db.SaveChangesAsync();
+        return (users[0].Id, users[1].Id, users[2].Id, company.Id);
     }
 
     [Fact]
@@ -38,7 +48,7 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
         Assert.Equal("Added 2 accounts.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
         response = await client.PostAsJsonAsync($"/users/{ids.SponsorId}/mass-accounts", new
         {
-            content = "D|Acme|Max|Driver|max.driver@example.com|100|Safe week"
+            content = "D||Max|Driver|max.driver@example.com||"
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Added 1 account.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
@@ -53,7 +63,12 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
             (created[1].UserType, created[1].Username, created[1].FirstName, created[1].LastName, created[1].PhoneNumber, created[1].Address, created[1].Points));
         Assert.Equal(("sponsor", "sam.sponsor", "Sam", "Sponsor", "", "", 0),
             (created[2].UserType, created[2].Username, created[2].FirstName, created[2].LastName, created[2].PhoneNumber, created[2].Address, created[2].Points));
-        Assert.Empty(await db.AccountsCompanies.Where(membership => created.Select(user => user.Id).Contains(membership.AccountId)).ToListAsync());
+        var memberships = await db.AccountsCompanies.Where(membership => created.Select(user => user.Id).Contains(membership.AccountId))
+            .ToListAsync();
+        var sponsorCreatedDriver = created.Single(user => user.Username == "max.driver");
+        var sponsorMembership = Assert.Single(memberships);
+        Assert.Equal((sponsorCreatedDriver.Id, ids.CompanyId), (sponsorMembership.AccountId, sponsorMembership.CompanyId));
+        Assert.True(sponsorMembership.CurrentCompanyViewed);
         foreach (var user in created)
         {
             var email = Assert.Single(app.Email.Sent, message => message.To == user.Email);
@@ -83,6 +98,53 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
         using var db = app.Db();
         Assert.Equal(3, await db.Users.CountAsync());
         Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
+    public async Task OrganizationRulesDependOnUploader()
+    {
+        var ids = await Start();
+        var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
+        {
+            content = "D||Ava|Driver|ava.driver@example.com||"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Organization name is required.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+
+        response = await client.PostAsJsonAsync($"/users/{ids.SponsorId}/mass-accounts", new
+        {
+            content = "D|Acme|Ava|Driver|ava.driver@example.com||"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Leave organization blank", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+
+        using var db = app.Db();
+        Assert.Equal(3, await db.Users.CountAsync());
+        Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
+    public async Task PointsAreOptionalButRequireAReasonWhenProvided()
+    {
+        var ids = await Start();
+        var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
+        {
+            content = "D|Acme|Ava|Driver|ava.driver@example.com||"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var db = app.Db();
+        Assert.Equal(0, (await db.Users.SingleAsync(user => user.Username == "ava.driver")).Points);
+
+        response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
+        {
+            content = "D|Acme|Max|Driver|max.driver@example.com|50|"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("A reason for points is required.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+        Assert.Equal(4, await db.Users.CountAsync());
+        Assert.Single(app.Email.Sent);
     }
 
     [Fact]

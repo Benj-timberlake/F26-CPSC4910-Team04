@@ -16,7 +16,15 @@
                 }
             </label>
             <p class="mass-account-format">One account per line (D = driver, S = sponsor): D|organization|first name|last name|email|points|reason</p>
-            <p class="mass-account-format">Organization and points are validated but not applied yet.</p>
+            @if (IsAdmin)
+            {
+                <p class="mass-account-format">Organization is required and will not be created yet.</p>
+            }
+            else
+            {
+                <p class="mass-account-format">Leave organization blank; your existing organization will be used.</p>
+            }
+            <p class="mass-account-format">Points are optional. If provided, include a reason. Points will not be applied yet.</p>
             @if (error is not null)
             {
                 <p class="tr-alert-error mass-account-error" role="alert">@error</p>
@@ -50,6 +58,7 @@
 @code {
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public int ActorId { get; set; }
+    [Parameter] public bool IsAdmin { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnCreated { get; set; }
 
