@@ -159,12 +159,11 @@ public static class MassAccountCreationEndpoints
         foreach (var duplicate in duplicateOrganizationNames)
             errors.Add($"Line {duplicate.Line}: This organization name appears more than once in the file.");
 
-        var awardOrganizationNames = actor.UserType == AuthEndpoints.Admin
-            ? rows.Where(row => row.UserType == AuthEndpoints.Driver && row.Points is > 0)
-                .Select(row => row.Organization).ToArray()
+        var accountOrganizationNames = actor.UserType == AuthEndpoints.Admin
+            ? rows.Select(row => row.Organization).ToArray()
             : [];
         var normalizedOrganizationNames = organizationNames.Select(row => row.Name)
-            .Concat(awardOrganizationNames)
+            .Concat(accountOrganizationNames)
             .Select(name => name.ToLowerInvariant())
             .Distinct()
             .ToArray();
@@ -177,10 +176,10 @@ public static class MassAccountCreationEndpoints
             errors.Add($"Line {organization.Line}: An organization named {organization.Name} already exists.");
         if (actor.UserType == AuthEndpoints.Admin)
         {
-            foreach (var row in rows.Where(row => row.UserType == AuthEndpoints.Driver && row.Points is > 0 &&
+            foreach (var row in rows.Where(row =>
                 !existingOrganizationNames.Any(company => string.Equals(company.Name, row.Organization, StringComparison.OrdinalIgnoreCase)) &&
                 !organizationNames.Any(company => string.Equals(company.Name, row.Organization, StringComparison.OrdinalIgnoreCase))))
-                errors.Add($"Line {row.Line}: Organization {row.Organization} must already exist or be created with an O|{row.Organization} line to award driver points.");
+                errors.Add($"Line {row.Line}: Organization {row.Organization} must already exist or be created with an O|{row.Organization} line.");
         }
 
         var duplicateRows = new HashSet<int>();
@@ -243,7 +242,7 @@ public static class MassAccountCreationEndpoints
             {
                 user.AccountsCompanies.Add(new AccountsCompany { CompanyId = sponsorOrganizationId, CurrentCompanyViewed = true });
             }
-            else if (row.UserType == AuthEndpoints.Driver && row.Points is > 0)
+            else
             {
                 var companyId = companyIds[row.Organization];
                 user.AccountsCompanies.Add(new AccountsCompany { CompanyId = companyId, CurrentCompanyViewed = true });

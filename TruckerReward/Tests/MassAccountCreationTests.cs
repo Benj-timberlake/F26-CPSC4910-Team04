@@ -42,7 +42,7 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
         var ids = await Start();
         var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
         {
-            content = "O|Acme\nD|Acme|Ava|Driver|ava.driver@example.com|500|Safe driving\nS|Northwind|Sam|Sponsor|sam.sponsor@example.com|25|Sponsor balance"
+            content = "O|Acme\nD|Acme|Ava|Driver|ava.driver@example.com|500|Safe driving\nS|Acme|Sam|Sponsor|sam.sponsor@example.com|25|Sponsor balance"
         });
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         Assert.Equal("Added 2 accounts and 1 organization.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
@@ -67,11 +67,13 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
             .ToListAsync();
         var maxDriver = created.Single(user => user.Username == "max.driver");
         var avaDriver = created.Single(user => user.Username == "ava.driver");
-        Assert.Equal(2, memberships.Count);
+        Assert.Equal(3, memberships.Count);
         Assert.Contains(memberships, membership => membership.AccountId == maxDriver.Id && membership.CompanyId == ids.CompanyId);
         var avaMembership = Assert.Single(memberships, membership => membership.AccountId == avaDriver.Id);
         var acmeId = await db.Companies.Where(company => company.Name == "Acme").Select(company => company.Id).SingleAsync();
         Assert.Equal(acmeId, avaMembership.CompanyId);
+        var samSponsor = created.Single(user => user.Username == "sam.sponsor");
+        Assert.Contains(memberships, membership => membership.AccountId == samSponsor.Id && membership.CompanyId == acmeId);
         Assert.All(memberships, membership => Assert.True(membership.CurrentCompanyViewed));
         var awardHistory = await db.PointsHistory.Where(history => created.Select(user => user.Id).Contains(history.UserId))
             .OrderBy(history => history.UserId).ToListAsync();
@@ -139,21 +141,43 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AdminAccountsRequireAnExistingOrBatchCreatedOrganizationEvenWithoutPoints()
+    {
+        var ids = await Start();
+        var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
+        {
+            content = "D|Unknown Org|Ava|Driver|ava.driver@example.com"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Organization Unknown Org must already exist or be created with an O|Unknown Org line.",
+            (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+        using var db = app.Db();
+        Assert.Equal(3, await db.Users.CountAsync());
+        Assert.Empty(await db.AccountsCompanies.Where(membership => membership.AccountId > ids.DriverId).ToListAsync());
+        Assert.Empty(app.Email.Sent);
+    }
+
+    [Fact]
     public async Task PointsAreOptionalButRequireAReasonWhenProvided()
     {
         var ids = await Start();
         var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
         {
-            content = "D|Acme|Ava|Driver|ava.driver@example.com"
+            content = "D|Sponsor Org|Ava|Driver|ava.driver@example.com"
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var db = app.Db();
-        Assert.Equal(0, (await db.Users.SingleAsync(user => user.Username == "ava.driver")).Points);
+        var noPointsDriver = await db.Users.SingleAsync(user => user.Username == "ava.driver");
+        Assert.Equal(0, noPointsDriver.Points);
+        var noPointsMembership = await db.AccountsCompanies.SingleAsync(membership => membership.AccountId == noPointsDriver.Id);
+        var sponsorOrgId = await db.Companies.Where(company => company.Name == "Sponsor Org").Select(company => company.Id).SingleAsync();
+        Assert.Equal(sponsorOrgId, noPointsMembership.CompanyId);
 
         response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
         {
-            content = "D|Acme|Max|Driver|max.driver@example.com|50|"
+            content = "D|Sponsor Org|Max|Driver|max.driver@example.com|50|"
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
