@@ -210,15 +210,7 @@
             </div>
         }
 
-        @if (showMassAccountCreationModal)
-        {
-            <div class="company-backdrop" @onclick="() => showMassAccountCreationModal = false">
-                <section class="company-dialog" role="dialog" aria-modal="true" aria-labelledby="mass-account-creation-title" @onclick:stopPropagation="true">
-                    <button type="button" class="company-close-button" aria-label="Close" title="Close" @onclick="() => showMassAccountCreationModal = false">×</button>
-                    <h2 id="mass-account-creation-title">Mass Account Creation</h2>
-                </section>
-            </div>
-        }
+        <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" OnClose="@CloseMassAccountCreationModal" />
 
         @if (showCompanyModal)
         {
@@ -523,6 +515,7 @@
         driversCollapsed = false;
         driverManagement?.OpenFilters();
     }
+    private void CloseMassAccountCreationModal() => showMassAccountCreationModal = false;
     private string? loadError;
     private string? notice;
     private List<CompanyOption>? companies;

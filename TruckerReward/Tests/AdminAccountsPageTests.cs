@@ -107,6 +107,9 @@ public sealed class AdminAccountsPageTests : TestContext
 
         var dialog = page.Find("[role=dialog]");
         Assert.Equal("Mass Account Creation", dialog.QuerySelector("h2")!.TextContent);
+        Assert.Equal(".txt,text/plain", dialog.QuerySelector("input[type=file]")!.GetAttribute("accept"));
+        Assert.Contains("Drag and drop a text file here", dialog.TextContent);
+        Assert.Equal("Add Users", dialog.QuerySelector("button.tr-btn")!.TextContent);
         dialog.QuerySelector("button[aria-label='Close']")!.Click();
 
         Assert.Empty(page.FindAll("[role=dialog]"));
