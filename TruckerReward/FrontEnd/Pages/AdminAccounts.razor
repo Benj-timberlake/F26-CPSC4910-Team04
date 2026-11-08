@@ -51,11 +51,19 @@
         <button type="submit" class="tr-btn">Apply</button>
     </form>
 
-    @if (creating is null)
-    {
-        <button type="button" class="tr-btn-outline new-account" @onclick="() => creating = new()">New account</button>
-    }
-    else
+    <div class="account-actions">
+        @if (creating is null)
+        {
+            <button type="button" class="tr-btn-outline new-account" @onclick="() => creating = new()">New account</button>
+        }
+        <button type="button" class="mass-account-creation-button" title="Mass Account Creation" aria-label="Open mass account creation" @onclick="() => showMassAccountCreationModal = true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+            </svg>
+        </button>
+    </div>
+    @if (creating is not null)
     {
         <form class="create-form tr-toolbar" @onsubmit="Create">
             <select aria-label="New account type" @bind="creating.UserType">
@@ -80,6 +88,16 @@
             <button type="submit" class="tr-btn" disabled="@busy">Create</button>
             <button type="button" class="tr-btn-outline" @onclick="() => creating = null">Cancel</button>
         </form>
+    }
+
+    @if (showMassAccountCreationModal)
+    {
+        <div class="company-backdrop" @onclick="() => showMassAccountCreationModal = false">
+            <section class="company-dialog" role="dialog" aria-modal="true" aria-labelledby="mass-account-creation-title" @onclick:stopPropagation="true">
+                <button type="button" class="company-close-button" aria-label="Close" title="Close" @onclick="() => showMassAccountCreationModal = false">×</button>
+                <h2 id="mass-account-creation-title">Mass Account Creation</h2>
+            </section>
+        </div>
     }
 
     <Alerts Notice="@notice" Error="@error" />
@@ -208,8 +226,17 @@
     }
 
     .new-account {
-        margin-bottom: 16px;
+        margin: 0;
     }
+
+    .account-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .mass-account-creation-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: white; color: var(--brand); cursor: pointer; }
+    .mass-account-creation-button:hover { background: #edf1f6; }
+    .mass-account-creation-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .company-backdrop { position: fixed; inset: 0; z-index: 1050; background: #0009; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .company-dialog { position: relative; background: white; color: #222; border-radius: 12px; padding: 24px; width: 100%; max-width: 520px; max-height: 90vh; overflow: auto; box-shadow: 0 12px 40px #0005; }
+    .company-close-button { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #b8bec7; border-radius: 9px; background: #f1f2f4; color: #666; font-size: 24px; line-height: 1; cursor: pointer; }
+    .company-close-button:hover { background: #e5e7eb; color: #444; }
 
     .edit-form {
         display: flex;
@@ -244,6 +271,7 @@
     private Edit? editing;
     private int? deleting;
     private NewAccount? creating;
+    private bool showMassAccountCreationModal;
 
     protected override async Task OnInitializedAsync()
     {

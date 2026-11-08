@@ -97,6 +97,22 @@ public sealed class AdminAccountsPageTests : TestContext
     }
 
     [Fact]
+    public void MassAccountCreationButtonOpensAndClosesItsModal()
+    {
+        backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("tbody tr"));
+
+        page.Find("button.mass-account-creation-button").Click();
+
+        var dialog = page.Find("[role=dialog]");
+        Assert.Equal("Mass Account Creation", dialog.QuerySelector("h2")!.TextContent);
+        dialog.QuerySelector("button[aria-label='Close']")!.Click();
+
+        Assert.Empty(page.FindAll("[role=dialog]"));
+    }
+
+    [Fact]
     public void DeactivatingPostsAndReloads()
     {
         backend.Routes["GET /admin/accounts"] = (HttpStatusCode.OK, Accounts);
