@@ -33,6 +33,7 @@ public static class MassAccountCreationEndpoints
             return Results.BadRequest(new { message = "The text file must be no larger than 1 MB." });
 
         var rows = new List<MassAccountRow>();
+        var organizationNames = new List<OrganizationRow>();
         var errors = new List<string>();
         var lines = request.Content.Split('\n');
         var accountLines = 0;
@@ -41,6 +42,28 @@ public static class MassAccountCreationEndpoints
             var line = lines[index].TrimEnd('\r');
             if (string.IsNullOrWhiteSpace(line))
                 continue;
+
+            var firstSeparator = line.IndexOf('|');
+            var lineType = firstSeparator < 0 ? line.Trim() : line[..firstSeparator].Trim();
+            if (lineType == "O")
+            {
+                if (actor.UserType != AuthEndpoints.Admin)
+                {
+                    errors.Add($"Line {index + 1}: Only administrators can create organizations.");
+                    continue;
+                }
+
+                var organizationFields = line.Split('|');
+                var organizationName = organizationFields.Length == 2 ? organizationFields[1].Trim() : "";
+                if (organizationFields.Length != 2 || organizationName.Length is 0 or > 255)
+                {
+                    errors.Add($"Line {index + 1}: Organization rows must use O|name with a name of 1 to 255 characters.");
+                    continue;
+                }
+                organizationNames.Add(new OrganizationRow(index + 1, organizationName));
+                continue;
+            }
+
             accountLines++;
             if (accountLines > MaxAccountsPerFile)
             {
@@ -123,8 +146,25 @@ public static class MassAccountCreationEndpoints
             rows.Add(new MassAccountRow(index + 1, type, username, firstName, lastName, email));
         }
 
-        if (rows.Count == 0 && errors.Count == 0)
-            errors.Add("The text file does not contain any account rows.");
+        if (rows.Count == 0 && organizationNames.Count == 0 && errors.Count == 0)
+            errors.Add("The text file does not contain any account or organization rows.");
+
+        var duplicateOrganizationNames = organizationNames
+            .GroupBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .SelectMany(group => group)
+            .ToList();
+        foreach (var duplicate in duplicateOrganizationNames)
+            errors.Add($"Line {duplicate.Line}: This organization name appears more than once in the file.");
+
+        var normalizedOrganizationNames = organizationNames.Select(row => row.Name.ToLowerInvariant()).ToArray();
+        var existingOrganizationNames = await db.Companies.AsNoTracking()
+            .Where(company => normalizedOrganizationNames.Contains(company.Name.ToLower()))
+            .Select(company => company.Name)
+            .ToListAsync();
+        foreach (var organization in organizationNames.Where(row => existingOrganizationNames
+            .Any(name => string.Equals(name, row.Name, StringComparison.OrdinalIgnoreCase))))
+            errors.Add($"Line {organization.Line}: An organization named {organization.Name} already exists.");
 
         var duplicateRows = new HashSet<int>();
         foreach (var group in rows.GroupBy(row => row.Username, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1))
@@ -175,6 +215,10 @@ public static class MassAccountCreationEndpoints
             foreach (var account in created)
                 account.User.AccountsCompanies.Add(new AccountsCompany { CompanyId = companyId, CurrentCompanyViewed = true });
         }
+        var organizations = organizationNames
+            .Select(row => new Company { Name = row.Name })
+            .ToList();
+        db.Companies.AddRange(organizations);
         db.Users.AddRange(created.Select(account => account.User));
         await db.SaveChangesAsync();
 
@@ -184,7 +228,12 @@ public static class MassAccountCreationEndpoints
             await notifications.AccountCreated(account.User);
         }
 
-        return Results.Ok(new { message = $"Added {created.Count} account{(created.Count == 1 ? "" : "s")}." });
+        var message = created.Count > 0 && organizations.Count > 0
+            ? $"Added {created.Count} account{(created.Count == 1 ? "" : "s")} and {organizations.Count} organization{(organizations.Count == 1 ? "" : "s")}."
+            : organizations.Count > 0
+                ? $"Added {organizations.Count} organization{(organizations.Count == 1 ? "" : "s")}."
+                : $"Added {created.Count} account{(created.Count == 1 ? "" : "s")}.";
+        return Results.Ok(new { message });
     }
 
     private static string GeneratePassword()
@@ -210,6 +259,7 @@ public static class MassAccountCreationEndpoints
     }
 
     private sealed record MassAccountRow(int Line, string UserType, string Username, string FirstName, string LastName, string Email);
+    private sealed record OrganizationRow(int Line, string Name);
 }
 
 public sealed record MassAccountCreationRequest(string? Content);

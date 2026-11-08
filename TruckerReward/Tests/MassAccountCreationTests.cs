@@ -148,6 +148,45 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task AdminCanCreateOrganizationsAndSponsorCannot()
+    {
+        var ids = await Start();
+        var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
+        {
+            content = "O|New Organization"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Added 1 organization.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+        using var db = app.Db();
+        Assert.True(await db.Companies.AnyAsync(company => company.Name == "New Organization"));
+
+        response = await client.PostAsJsonAsync($"/users/{ids.SponsorId}/mass-accounts", new
+        {
+            content = "O|Another Organization"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Only administrators can create organizations.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+        Assert.False(await db.Companies.AnyAsync(company => company.Name == "Another Organization"));
+    }
+
+    [Fact]
+    public async Task DuplicateOrganizationRowsRejectTheWholeBatch()
+    {
+        var ids = await Start();
+        var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
+        {
+            content = "O|New Organization\nO|new organization"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("This organization name appears more than once", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
+        using var db = app.Db();
+        Assert.False(await db.Companies.AnyAsync(company => company.Name == "New Organization"));
+    }
+
+    [Fact]
     public async Task OnlyActiveAdminOrSponsorCanUseTheEndpoint()
     {
         var ids = await Start();
