@@ -49,9 +49,9 @@ public static class MassAccountCreationEndpoints
             }
 
             var fields = line.Split('|', 7);
-            if (fields.Length != 7)
+            if (fields.Length is < 5 or > 7)
             {
-                errors.Add($"Line {index + 1}: Expected 7 pipe-separated fields.");
+                errors.Add($"Line {index + 1}: Expected 5 to 7 pipe-separated fields.");
                 continue;
             }
 
@@ -71,7 +71,8 @@ public static class MassAccountCreationEndpoints
             var firstName = fields[2].Trim();
             var lastName = fields[3].Trim();
             var email = fields[4].Trim();
-            var reason = fields[6].Trim();
+            var pointsText = fields.Length > 5 ? fields[5].Trim() : "";
+            var reason = fields.Length > 6 ? fields[6].Trim() : "";
             var validRow = true;
             if (actor.UserType == AuthEndpoints.Admin && organization.Length == 0)
             {
@@ -97,7 +98,6 @@ public static class MassAccountCreationEndpoints
                 errors.Add($"Line {index + 1}: Enter a valid email address of 255 characters or fewer.");
                 validRow = false;
             }
-            var pointsText = fields[5].Trim();
             var hasPoints = pointsText.Length > 0;
             var validPoints = !hasPoints || (int.TryParse(pointsText, out var points) && points >= 0);
             if (!validPoints)

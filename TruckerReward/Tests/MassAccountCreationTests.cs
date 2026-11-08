@@ -48,7 +48,7 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
         Assert.Equal("Added 2 accounts.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
         response = await client.PostAsJsonAsync($"/users/{ids.SponsorId}/mass-accounts", new
         {
-            content = "D||Max|Driver|max.driver@example.com||"
+            content = "D||Max|Driver|max.driver@example.com"
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Added 1 account.", (await response.Content.ReadFromJsonAsync<ApiMessage>())!.Message);
@@ -129,7 +129,7 @@ public sealed class MassAccountCreationTests : IAsyncDisposable
         var ids = await Start();
         var response = await client.PostAsJsonAsync($"/users/{ids.AdminId}/mass-accounts", new
         {
-            content = "D|Acme|Ava|Driver|ava.driver@example.com||"
+            content = "D|Acme|Ava|Driver|ava.driver@example.com"
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
