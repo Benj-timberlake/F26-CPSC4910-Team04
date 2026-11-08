@@ -147,6 +147,12 @@
                             </svg>
                         </button>
                     }
+                    <button type="button" class="drivers-filter" title="Mass Account Creation" aria-label="Open mass account creation" @onclick="() => showMassAccountCreationModal = true">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 5v14" />
+                            <path d="M5 12h14" />
+                        </svg>
+                    </button>
                     <a href="applications" class="drivers-leaderboard" title="Applications" aria-label="Open driver applications">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -200,6 +206,16 @@
                             <button type="submit" class="tr-btn" disabled="@savingMonthlyPoints">@(savingMonthlyPoints ? "Saving..." : "Confirm")</button>
                         </div>
                     </form>
+                </section>
+            </div>
+        }
+
+        @if (showMassAccountCreationModal)
+        {
+            <div class="company-backdrop" @onclick="() => showMassAccountCreationModal = false">
+                <section class="company-dialog" role="dialog" aria-modal="true" aria-labelledby="mass-account-creation-title" @onclick:stopPropagation="true">
+                    <button type="button" class="company-close-button" aria-label="Close" title="Close" @onclick="() => showMassAccountCreationModal = false">×</button>
+                    <h2 id="mass-account-creation-title">Mass Account Creation</h2>
                 </section>
             </div>
         }
@@ -513,6 +529,7 @@
     private int? selectedCompanyId;
     private bool showCompanyModal;
     private bool showMonthlyPointsModal;
+    private bool showMassAccountCreationModal;
     private long? monthlyPoints;
     private bool savingMonthlyPoints;
     private string? monthlyPointsError;
