@@ -1,0 +1,8 @@
+jsPDF 2.5.1 (jspdf.umd.min.js) is MIT licensed.
+Copyright (c) 2010-2021 James Hall, https://github.com/MrRio/jsPDF
+Copyright (c) 2015-2021 yWorks GmbH, http://www.yworks.com
+
+jsPDF-AutoTable 3.8.2 (jspdf.plugin.autotable.min.js) is MIT licensed.
+Copyright (c) 2024 Simon Bengtsson, https://github.com/simonbengtsson/jsPDF-AutoTable
+
+Both files are the unmodified minified builds served by cdnjs.
