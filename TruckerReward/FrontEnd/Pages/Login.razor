@@ -66,6 +66,7 @@
     [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
     [SupplyParameterFromQuery] private string? Reset { get; set; }
     [SupplyParameterFromQuery] private string? SignedOut { get; set; }
+    [SupplyParameterFromQuery] private string? Deleted { get; set; }
     private string? message;
     private List<AuthenticationScheme> providers = new();
 
@@ -83,6 +84,7 @@
             "codes" => "Too many codes asked for. Wait a few minutes and try again.",
             null when Reset == "1" => "Your password has been reset. Log in with the new one.",
             null when SignedOut == "everywhere" => "You were signed out on every device. Log in again here.",
+            null when Deleted == "1" => "Your account has been deleted.",
             _ => null
         };
 

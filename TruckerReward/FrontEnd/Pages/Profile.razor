@@ -74,7 +74,7 @@
                     <dt>Password</dt>
                     <dd>@(activity.PasswordChangedAt is null ? "Not changed since you signed up." : "Changed " + When(activity.PasswordChangedAt))</dd>
                 </dl>
-                <p><a class="passkeys-link" href="account/passkeys">Face ID and passkeys</a> &middot; <a class="codes-link" href="account/sign-in-codes">Sign-in codes: @(account.EmailCodes ? "on" : "off")</a> &middot; <a class="devices-link" href="account/devices">Devices</a></p>
+                <p><a class="passkeys-link" href="account/passkeys">Face ID and passkeys</a> &middot; <a class="codes-link" href="account/sign-in-codes">Sign-in codes: @(account.EmailCodes ? "on" : "off")</a> &middot; <a class="devices-link" href="account/devices">Devices</a> &middot; <a class="data-link" href="account/data">Your data</a></p>
                 <form method="post" action="account/logout-everywhere" class="logout-everywhere">
                     <button type="submit" class="tr-btn-outline">Sign out everywhere</button>
                     <span class="tr-muted">Ends every session, this one too. Others can take up to five minutes.</span>

@@ -21,5 +21,6 @@ public static class Api
         app.MapMassAccountCreationEndpoints();
         app.MapBannerEndpoints();
         app.MapAnnouncementEndpoints();
+        app.MapAccountDataEndpoints();
     }
 }

@@ -244,11 +244,21 @@ public static class AdminEndpoints
         var account = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
         if (account is null)
             return Results.NotFound();
-        if (await db.PointsHistory.AnyAsync(h => h.UserId == id) || await db.AuditHistories.AnyAsync(a => a.UserId == id) ||
-            await db.Applications.AnyAsync(a => a.ReviewerId == id) || await db.LockoutResets.AnyAsync(r => r.AdminId == id) ||
-            await db.Impersonations.AnyAsync(i => i.ViewerId == id))
+        if (await HasHistory(db, id))
             return Results.Conflict(new { message = $"{account.Username} has history on record, so deactivate the account instead." });
+        if (!await HardDelete(db, id))
+            return Results.Conflict(new { message = $"{account.Username} couldn't be deleted, so deactivate the account instead." });
+        return Results.NoContent();
+    }
 
+    // rows that block a hard delete
+    internal static async Task<bool> HasHistory(AppDbContext db, int id) =>
+        await db.PointsHistory.AnyAsync(h => h.UserId == id) || await db.AuditHistories.AnyAsync(a => a.UserId == id) ||
+        await db.Applications.AnyAsync(a => a.ReviewerId == id) || await db.LockoutResets.AnyAsync(r => r.AdminId == id) ||
+        await db.Impersonations.AnyAsync(i => i.ViewerId == id);
+
+    internal static async Task<bool> HardDelete(AppDbContext db, int id)
+    {
         try
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
@@ -259,12 +269,12 @@ public static class AdminEndpoints
             await db.AccountsHistories.Where(h => h.UserId == id).ExecuteDeleteAsync();
             await db.Users.Where(u => u.Id == id).ExecuteDeleteAsync();
             await transaction.CommitAsync();
+            return true;
         }
         catch (System.Data.Common.DbException)
         {
-            return Results.Conflict(new { message = $"{account.Username} couldn't be deleted, so deactivate the account instead." });
+            return false;
         }
-        return Results.NoContent();
     }
 
     internal static Task<bool> IsAdmin(AppDbContext db, int id) =>
