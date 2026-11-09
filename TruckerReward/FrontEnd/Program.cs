@@ -54,6 +54,7 @@ app.UseAuthorization();
 app.MapAccountEndpoints();
 app.MapDriverViewEndpoints();
 app.MapAuditExport();
+app.MapPointsExport();
 app.MapCdlReview();
 app.MapViewAs();
 app.MapPasskeyProxy();

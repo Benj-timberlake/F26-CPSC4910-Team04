@@ -43,6 +43,13 @@ public sealed class PointsPageTests : TestContext
     }
 
     [Fact]
+    public void LinksToTheCsvDownload()
+    {
+        var page = Render("""{"balance":0,"earnedThisMonth":0,"earned":0,"spent":0,"deducted":0,"history":[]}""");
+        page.WaitForAssertion(() => Assert.Equal("points/export", page.Find("a.export").GetAttribute("href")));
+    }
+
+    [Fact]
     public void EmptyHistorySaysSo()
     {
         var page = Render("""{"balance":0,"earnedThisMonth":0,"earned":0,"spent":0,"deducted":0,"history":[]}""");

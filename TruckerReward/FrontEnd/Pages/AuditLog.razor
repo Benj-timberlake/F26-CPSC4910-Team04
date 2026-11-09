@@ -1,6 +1,7 @@
 @page "/audit"
 @attribute [Authorize(Roles = "sponsor,admin")]
 @inherits BackendPage
+@inject IJSRuntime Js
 
 <PageTitle>Audit log</PageTitle>
 
@@ -76,7 +77,8 @@
         }
         else
         {
-            <p class="tr-muted">Showing the newest @rows.Count entries. <a class="export" href="@ExportUrl">Download CSV</a></p>
+            <p class="tr-muted">Showing the newest @rows.Count entries. <a class="export" href="@ExportUrl">Download CSV</a>
+                <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="DownloadPdf">Download PDF</button></p>
             <div class="tr-table-wrap">
                 <table class="tr-table">
                     <thead>
@@ -162,6 +164,8 @@
     private DateOnly? from;
     private DateOnly? to;
     private string applied = "";
+    // the filters the rows were fetched with
+    private string appliedSummary = "no filters";
 
     protected override async Task OnInitializedAsync()
     {
@@ -203,6 +207,7 @@
         {
             using var client = HttpClientFactory.CreateClient("Backend");
             applied = string.Join("&", query);
+            appliedSummary = FilterSummary();
             rows = await client.GetFromJsonAsync<List<Row>>($"users/{id}/audit" + (applied == "" ? "" : "?" + applied)) ?? [];
             if (madeBy == "" && driverId == 0)
             {
@@ -216,6 +221,38 @@
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
             error = "Couldn't load the audit log right now. Try again in a moment.";
+        }
+    }
+
+    private string FilterSummary()
+    {
+        var parts = new List<string>();
+        if (category != "") parts.Add("category " + Label(category));
+        if (admin && companyId != 0) parts.Add("company " + (companies.FirstOrDefault(c => c.Id == companyId)?.Name ?? companyId.ToString()));
+        if (driverId != 0) parts.Add("account " + (accounts.FirstOrDefault(a => a.Id == driverId)?.Name ?? driverId.ToString()));
+        if (madeBy != "") parts.Add("made by " + madeBy);
+        if (from is not null) parts.Add("from " + from.Value.ToString("yyyy-MM-dd"));
+        if (to is not null) parts.Add("to " + to.Value.ToString("yyyy-MM-dd"));
+        return parts.Count == 0 ? "no filters" : "filters: " + string.Join(", ", parts);
+    }
+
+    private async Task DownloadPdf()
+    {
+        busy = true;
+        try
+        {
+            await PdfReport.Save(Js, "Audit log", $"{appliedSummary}, {PdfReport.Generated()}",
+                ["When (UTC)", "Category", "Account", "What happened", "By"],
+                rows!.Select(r => new[] { r.At.ToString("yyyy-MM-dd HH:mm"), Label(r.Category), r.Username, r.Detail, r.By ?? "" }),
+                "audit-log.pdf");
+        }
+        catch (JSException)
+        {
+            error = "Couldn't build the PDF. Try again in a moment.";
+        }
+        finally
+        {
+            busy = false;
         }
     }
 

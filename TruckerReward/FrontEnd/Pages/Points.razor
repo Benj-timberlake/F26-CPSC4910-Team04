@@ -1,11 +1,17 @@
 @page "/points"
 @attribute [Authorize(Roles = "driver")]
 @inherits BackendPage
+@inject IJSRuntime Js
 
 <PageTitle>Points</PageTitle>
 
 <div class="tr-page">
     <h1>Points</h1>
+
+    @if (error is not null)
+    {
+        <p role="alert" class="tr-alert-error">@error</p>
+    }
 
     @if (loadError is not null)
     {
@@ -41,6 +47,10 @@
 
         <section class="tr-card history">
             <h2>History</h2>
+            <p>
+                <a class="export" href="points/export">Download CSV</a>
+                <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="DownloadPdf">Download PDF</button>
+            </p>
             @if (summary.History.Count == 0)
             {
                 <p class="tr-muted">No point changes yet.</p>
@@ -98,10 +108,12 @@
 @code {
     private Summary? summary;
     private string? loadError;
+    private string name = "";
 
     protected override async Task OnInitializedAsync()
     {
-        await SignedIn();
+        var user = await SignedIn();
+        name = user.Identity?.Name ?? "";
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
@@ -110,6 +122,29 @@
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {
             loadError = "Couldn't load your points right now. Try again in a moment.";
+        }
+    }
+
+    private async Task DownloadPdf()
+    {
+        busy = true;
+        try
+        {
+            await PdfReport.Save(Js, "Points history", $"{name}, {PdfReport.Generated()}",
+                ["When (UTC)", "Points", "Reason", "By"],
+                summary!.History.Select(e => new[]
+                {
+                    e.At is { } at ? at.ToString("yyyy-MM-dd HH:mm") : "",
+                    e.Points.ToString("+#,0;-#,0"), e.Reason, e.By ?? ""
+                }), "points-history.pdf");
+        }
+        catch (JSException)
+        {
+            error = "Couldn't build the PDF. Try again in a moment.";
+        }
+        finally
+        {
+            busy = false;
         }
     }
 

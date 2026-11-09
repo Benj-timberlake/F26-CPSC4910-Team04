@@ -41,6 +41,9 @@ public partial class User
     // sign in also needs a code emailed to the confirmed address
     public bool EmailCodes { get; set; }
 
+    // shows as anonymous on the leaderboard
+    public bool LeaderboardHidden { get; set; }
+
     // bumped to sign out every session
     public int SessionVersion { get; set; }
 

@@ -65,7 +65,7 @@ public static class AuditEndpoints
     }
 
     // quotes every cell and defuses spreadsheet formulas
-    private static string Cell(string value)
+    internal static string Cell(string value)
     {
         if (value.Length > 0 && "=+-@\t\r".Contains(value[0]))
             value = "'" + value;
