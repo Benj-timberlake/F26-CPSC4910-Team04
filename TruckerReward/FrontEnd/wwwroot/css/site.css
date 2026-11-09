@@ -308,3 +308,90 @@ main:focus {
         scroll-behavior: auto !important;
     }
 }
+
+/* small screens */
+img, video {
+    max-width: 100%;
+    height: auto;
+}
+
+main {
+    overflow-wrap: break-word;
+}
+
+@media (max-width: 640px) {
+    .tr-cards {
+        grid-template-columns: 1fr;
+    }
+
+    nav.account-bar {
+        padding: 10px 12px;
+        gap: 8px 12px;
+    }
+
+    nav.account-bar .spacer {
+        display: none;
+    }
+
+    nav.account-bar a,
+    nav.account-bar button {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .view-as-banner {
+        padding: 8px 12px;
+    }
+
+    .tr-page {
+        padding: 16px 12px;
+    }
+
+    .tr-page-narrow {
+        margin: 24px auto;
+        padding: 0 12px;
+    }
+
+    .tr-card {
+        padding: 16px;
+    }
+
+    .tr-kv {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+
+    .tr-kv dd {
+        margin-bottom: 8px;
+    }
+
+    .tr-table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .tr-toolbar > *,
+    .tr-toolbar input,
+    .tr-toolbar select,
+    .tr-toolbar .filter-field {
+        width: 100%;
+        max-width: 100%;
+        font-size: 16px;
+    }
+
+    .tr-btn,
+    .tr-btn-outline {
+        min-height: 44px;
+    }
+
+    .tr-toolbar .tr-btn,
+    .tr-toolbar .tr-btn-outline {
+        width: 100%;
+    }
+
+    .tr-alt {
+        line-height: 2;
+    }
+}
