@@ -45,6 +45,8 @@ public partial class AppDbContext : DbContext
 
     public DbSet<UserSession> UserSessions { get; set; }
 
+    public DbSet<UptimeCheck> UptimeChecks { get; set; }
+
     public DbSet<LockoutReset> LockoutResets { get; set; }
 
     public DbSet<SavedReason> SavedReasons { get; set; }
@@ -526,6 +528,14 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_user_sessions_user");
         });
 
+        modelBuilder.Entity<UptimeCheck>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("uptime_checks");
+            entity.HasIndex(e => e.CheckedAt, "ix_uptime_checks_checked");
+            entity.Property(e => e.Error).HasMaxLength(255);
+        });
+
         modelBuilder.Entity<SignInCode>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -601,7 +611,7 @@ public partial class AppDbContext : DbContext
 
         // these tables name each column after its property in snake_case, and store times as datetime
         foreach (var type in new[] { typeof(NotificationPreference), typeof(Impersonation), typeof(PasskeyCredential), typeof(LockoutReset),
-                     typeof(SavedReason), typeof(UserSession), typeof(SignInCode), typeof(EmailConfirmation) })
+                     typeof(SavedReason), typeof(UserSession), typeof(UptimeCheck), typeof(SignInCode), typeof(EmailConfirmation) })
             foreach (var property in modelBuilder.Model.FindEntityType(type)!.GetProperties())
             {
                 property.SetColumnName(System.Text.RegularExpressions.Regex.Replace(property.Name, "(?<=.)([A-Z])", "_$1").ToLowerInvariant());

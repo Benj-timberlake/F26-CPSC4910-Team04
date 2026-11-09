@@ -1,0 +1,78 @@
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<section class="tr-card uptime">
+    <h2>Uptime</h2>
+    @if (failed)
+    {
+        <p role="alert" class="tr-alert-error">Couldn't load the uptime figures.</p>
+    }
+    else if (report is null)
+    {
+        <p role="status"><em>Loading...</em></p>
+    }
+    else if (report.Day.Percent is null)
+    {
+        <p class="tr-muted">No checks recorded yet.</p>
+    }
+    else
+    {
+        <p class="tr-muted">The backend checks the database every minute. A minute with no check counts as down. Target @report.Target%.</p>
+        <table class="tr-table">
+            <thead><tr><th>Window</th><th>Uptime</th><th>Minutes up</th></tr></thead>
+            <tbody>
+                <tr><td>Last 24 hours</td><td class="@Class(report.Day)">@Percent(report.Day)</td><td>@report.Day.Up of @report.Day.Expected</td></tr>
+                <tr><td>Last 7 days</td><td class="@Class(report.Week)">@Percent(report.Week)</td><td>@report.Week.Up of @report.Week.Expected</td></tr>
+                <tr><td>Last 30 days</td><td class="@Class(report.Month)">@Percent(report.Month)</td><td>@report.Month.Up of @report.Month.Expected</td></tr>
+            </tbody>
+        </table>
+        @if (report.Failures.Count > 0)
+        {
+            <h3>Recent failed checks</h3>
+            <div class="tr-table-wrap">
+                <table class="tr-table">
+                    <thead><tr><th>When</th><th>Took</th><th>Error</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in report.Failures)
+                        {
+                            <tr><td>@f.CheckedAt.ToString("yyyy-MM-dd HH:mm") UTC</td><td>@f.LatencyMs ms</td><td>@(f.Error ?? "—")</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</section>
+
+<style>
+    .uptime .low {
+        color: #b3261e;
+        font-weight: 600;
+    }
+</style>
+
+@code {
+    private Report? report;
+    private bool failed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            report = await client.GetFromJsonAsync<Report>("admin/uptime");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            failed = true;
+        }
+    }
+
+    private sealed record Win(double? Percent, int Expected, int Up);
+    private sealed record Fail(DateTime CheckedAt, int LatencyMs, string? Error);
+    private sealed record Report(double Target, Win Day, Win Week, Win Month, List<Fail> Failures);
+
+    private string Class(Win w) => w.Percent < report!.Target ? "low" : "";
+
+    private string Percent(Win w) => w.Percent is null ? "—" : $"{w.Percent}%" + (w.Percent < report!.Target ? " (below target)" : "");
+}

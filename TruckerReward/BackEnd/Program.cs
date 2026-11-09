@@ -14,6 +14,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHostedService<MonthlySponsorBudgetService>();
+builder.Services.AddHostedService<UptimeService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<EbayClient>();
 builder.AddEmail();
