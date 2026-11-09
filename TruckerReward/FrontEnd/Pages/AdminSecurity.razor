@@ -32,15 +32,15 @@
             else
             {
                 <div class="tr-table-wrap">
-                    <table class="tr-table">
-                        <thead><tr><th>Username</th><th>Locked until</th><th></th></tr></thead>
+                    <table class="tr-table" aria-label="Locked accounts">
+                        <thead><tr><th scope="col">Username</th><th scope="col">Locked until</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
                         <tbody>
                             @foreach (var l in locked)
                             {
                                 <tr>
                                     <td>@l.Username</td>
                                     <td>@Time(l.LockedUntil)</td>
-                                    <td><button type="button" class="tr-btn-outline unlock" disabled="@busy" @onclick="() => Unlock(l)">Unlock</button></td>
+                                    <td><button type="button" class="tr-btn-outline unlock" disabled="@busy" aria-label="Unlock @l.Username" @onclick="() => Unlock(l)">Unlock</button></td>
                                 </tr>
                             }
                         </tbody>
@@ -62,8 +62,8 @@
             else
             {
                 <div class="tr-table-wrap">
-                    <table class="tr-table">
-                        <thead><tr><th>When</th><th>Username</th><th>Result</th><th>IP</th></tr></thead>
+                    <table class="tr-table" aria-label="Sign-in attempts">
+                        <thead><tr><th scope="col">When</th><th scope="col">Username</th><th scope="col">Result</th><th scope="col">IP</th></tr></thead>
                         <tbody>
                             @foreach (var a in attempts)
                             {
@@ -89,8 +89,8 @@
             else
             {
                 <div class="tr-table-wrap">
-                    <table class="tr-table">
-                        <thead><tr><th>When</th><th>Username</th><th>Change</th><th>IP</th></tr></thead>
+                    <table class="tr-table" aria-label="Password changes">
+                        <thead><tr><th scope="col">When</th><th scope="col">Username</th><th scope="col">Change</th><th scope="col">IP</th></tr></thead>
                         <tbody>
                             @foreach (var c in changes)
                             {

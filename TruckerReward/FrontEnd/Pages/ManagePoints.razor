@@ -64,25 +64,25 @@
                 </div>
             }
             <div class="tr-table-wrap">
-                <table class="tr-table">
+                <table class="tr-table" aria-label="Drivers">
                     <thead>
                         <tr>
                             @if (CanBulk)
                             {
-                                <th><input type="checkbox" aria-label="Select all drivers" checked="@(selected.Count == drivers.Count)" @onchange="ToggleAll" /></th>
+                                <th scope="col"><input type="checkbox" aria-label="Select all drivers" checked="@(selected.Count == drivers.Count)" @onchange="ToggleAll" /></th>
                             }
-                            <th>@(Embedded ? "Name" : "Driver")</th>
+                            <th scope="col">@(Embedded ? "Name" : "Driver")</th>
                             @if (!Embedded)
                             {
-                                <th>Email</th>
+                                <th scope="col">Email</th>
                             }
-                            <th>Points</th>
+                            <th scope="col">Points</th>
                             @if (!Embedded)
                             {
-                                <th>Spent</th>
+                                <th scope="col">Spent</th>
                                 @if (ranged)
                                 {
-                                    <th>Earned @RangeLabel</th>
+                                    <th scope="col">Earned @RangeLabel</th>
                                 }
                             }
                             <th aria-label="Driver actions"></th>

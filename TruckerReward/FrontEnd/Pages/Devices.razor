@@ -25,8 +25,8 @@
     else
     {
         <div class="tr-table-wrap">
-            <table class="tr-table">
-                <thead><tr><th>Device</th><th>IP</th><th>Signed in</th><th>Last active</th><th></th></tr></thead>
+            <table class="tr-table" aria-label="Signed-in devices">
+                <thead><tr><th scope="col">Device</th><th scope="col">IP</th><th scope="col">Signed in</th><th scope="col">Last active</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
                 <tbody>
                     @foreach (var s in sessions)
                     {
@@ -38,7 +38,7 @@
                             <td>
                                 @if (!s.Current && !viewing)
                                 {
-                                    <button type="button" class="tr-btn-outline end" disabled="@busy" @onclick="() => End(s)">Sign out</button>
+                                    <button type="button" class="tr-btn-outline end" disabled="@busy" aria-label="Sign out @s.Device" @onclick="() => End(s)">Sign out</button>
                                 }
                             </td>
                         </tr>

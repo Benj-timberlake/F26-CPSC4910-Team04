@@ -1,6 +1,8 @@
 @namespace FrontEnd.Shared
 
-<nav class="account-bar">
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
+<nav class="account-bar" aria-label="Main">
     <AuthorizeView Context="homeNav">
         @if (!homeNav.User.IsInRole("sponsor"))
         {

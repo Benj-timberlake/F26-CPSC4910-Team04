@@ -94,7 +94,7 @@ a, .btn-link {
 .tr-form input, .tr-form select {
     width: 100%;
     padding: 10px;
-    border: 1px solid #ccc;
+    border: 1px solid #767676;
     border-radius: 6px;
     font-size: 16px;
 }
@@ -267,4 +267,44 @@ form.view-as {
 *::before,
 *::after {
     cursor: url('/images/truck-cursor-32.png') 4 4, auto !important;
+}
+
+/* keyboard focus */
+:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 2px;
+}
+
+.account-bar :focus-visible,
+.view-as-banner :focus-visible {
+    outline-color: #fff;
+}
+
+main:focus {
+    outline: none;
+}
+
+.skip-link {
+    position: absolute;
+    left: 8px;
+    top: -60px;
+    z-index: 2000;
+    padding: 10px 16px;
+    background: #fff;
+    color: #1e3a8a;
+    border: 2px solid #1e3a8a;
+    border-radius: 6px;
+}
+
+.skip-link:focus {
+    top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

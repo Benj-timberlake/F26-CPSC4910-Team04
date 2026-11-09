@@ -43,7 +43,7 @@
                         <span class="tr-muted">Added @p.CreatedAt.ToString("yyyy-MM-dd"), @(p.LastUsedAt is null ? "never used" : "last used " + p.LastUsedAt.Value.ToString("yyyy-MM-dd"))</span>
                         @if (!viewing)
                         {
-                            <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => Remove(p)">Remove</button>
+                            <button type="button" class="tr-btn-outline" disabled="@busy" aria-label="Remove @p.Name" @onclick="() => Remove(p)">Remove</button>
                         }
                     </li>
                 }

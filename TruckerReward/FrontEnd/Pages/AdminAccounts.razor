@@ -105,17 +105,17 @@
     else
     {
         <div class="tr-table-wrap">
-            <table class="tr-table">
+            <table class="tr-table" aria-label="Accounts">
                 <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Username</th>
-                        <th>Email</th>
-                        <th>Type</th>
-                        <th>Created</th>
-                        <th>Last sign-in</th>
-                        <th>Status</th>
-                        <th></th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Username</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Last sign-in</th>
+                        <th scope="col">Status</th>
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -132,14 +132,14 @@
                             <td>
                                 @if (a.Id.ToString() != id)
                                 {
-                                    <button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => Toggle(a)">
+                                    <button type="button" class="tr-btn-outline" disabled="@busy" aria-label="@(a.Status == "active" ? "Deactivate" : "Reactivate") @a.Username" @onclick="() => Toggle(a)">
                                         @(a.Status == "active" ? "Deactivate" : "Reactivate")
                                     </button>
-                                    <button type="button" class="tr-btn-outline edit" disabled="@busy" @onclick="() => StartEdit(a)">Edit</button>
-                                    <button type="button" class="tr-btn-outline sign-out" disabled="@busy" @onclick="() => SignOutEverywhere(a)">Sign out</button>
+                                    <button type="button" class="tr-btn-outline edit" disabled="@busy" aria-label="Edit @a.Username" @onclick="() => StartEdit(a)">Edit</button>
+                                    <button type="button" class="tr-btn-outline sign-out" disabled="@busy" aria-label="Sign out @a.Username everywhere" @onclick="() => SignOutEverywhere(a)">Sign out</button>
                                     @if (a.Status == "active")
                                     {
-                                        <button type="button" class="tr-btn-outline reset-link" disabled="@busy" @onclick="() => SendResetLink(a)">Send reset link</button>
+                                        <button type="button" class="tr-btn-outline reset-link" disabled="@busy" aria-label="Send reset link to @a.Username" @onclick="() => SendResetLink(a)">Send reset link</button>
                                     }
                                     @if (deleting == a.Id)
                                     {
@@ -148,12 +148,12 @@
                                     }
                                     else
                                     {
-                                        <button type="button" class="tr-btn-outline delete" disabled="@busy" @onclick="() => deleting = a.Id">Delete</button>
+                                        <button type="button" class="tr-btn-outline delete" disabled="@busy" aria-label="Delete @a.Username" @onclick="() => deleting = a.Id">Delete</button>
                                     }
                                     @if (a.UserType != "admin" && a.Status == "active")
                                     {
                                         <form class="view-as" method="post" action="account/view-as/@a.Id">
-                                            <button type="submit" class="tr-btn-outline">View as</button>
+                                            <button type="submit" class="tr-btn-outline" aria-label="View as @a.Username">View as</button>
                                         </form>
                                     }
                                 }
