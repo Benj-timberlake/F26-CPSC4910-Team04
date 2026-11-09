@@ -20,7 +20,14 @@ function ensureLibs() {
     return loading;
 }
 
-export async function pdf({ title, subtitle, columns, rows, filename }) {
+const tableStyle = {
+    styles: { fontSize: 9, cellPadding: 4, overflow: "linebreak" },
+    headStyles: { fillColor: [30, 64, 120], textColor: 255 },
+    alternateRowStyles: { fillColor: [244, 246, 250] }
+};
+
+// builds one table, or one per section
+export async function pdf({ title, subtitle, columns, rows, sections, filename }) {
     await ensureLibs();
     const doc = new window.jspdf.jsPDF({ unit: "pt", format: "letter" });
     const margin = 40;
@@ -30,15 +37,25 @@ export async function pdf({ title, subtitle, columns, rows, filename }) {
     doc.setTextColor(100);
     const lines = doc.splitTextToSize(subtitle || "", doc.internal.pageSize.getWidth() - margin * 2);
     doc.text(lines, margin, 68);
-    doc.autoTable({
-        head: [columns],
-        body: rows,
-        startY: 68 + lines.length * 12 + 6,
-        margin: { left: margin, right: margin, bottom: 40 },
-        styles: { fontSize: 9, cellPadding: 4, overflow: "linebreak" },
-        headStyles: { fillColor: [30, 64, 120], textColor: 255 },
-        alternateRowStyles: { fillColor: [244, 246, 250] }
-    });
+    let y = 68 + lines.length * 12 + 6;
+    const tableMargin = { left: margin, right: margin, bottom: 40 };
+    if (!sections) {
+        doc.autoTable({ head: [columns], body: rows, startY: y, margin: tableMargin, ...tableStyle });
+    } else {
+        const bottom = doc.internal.pageSize.getHeight() - 60;
+        for (const { heading, columns, rows } of sections) {
+            y += 14;
+            if (y > bottom) {
+                doc.addPage();
+                y = 50;
+            }
+            doc.setFontSize(13);
+            doc.setTextColor(30);
+            doc.text(heading, margin, y);
+            doc.autoTable({ head: [columns], body: rows, startY: y + 8, margin: tableMargin, ...tableStyle });
+            y = doc.lastAutoTable.finalY + 10;
+        }
+    }
     const pages = doc.getNumberOfPages();
     const { width, height } = doc.internal.pageSize;
     doc.setFontSize(9);

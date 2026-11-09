@@ -1,0 +1,190 @@
+@page "/account/data"
+@attribute [Authorize]
+@inherits BackendPage
+@inject IJSRuntime Js
+
+<PageTitle>Your data</PageTitle>
+
+<div class="tr-page">
+    <h1>Your data</h1>
+    <p class="tr-subtitle">Download everything we keep about you, or delete your account.</p>
+
+    <Alerts Notice="@notice" Error="@(error ?? Error)" />
+
+    @if (viewing)
+    {
+        <p class="tr-alert-warning">Downloads and account deletion aren't available while viewing as someone.</p>
+    }
+    else if (account is null)
+    {
+        @if (error is null)
+        {
+            <p role="status"><em>Loading...</em></p>
+        }
+    }
+    else
+    {
+        <section class="tr-card">
+            <h2>Download my data</h2>
+            <p>Your profile, companies, points, orders, wishlist, notifications, sign-ins, devices and badges.</p>
+            <p>
+                <a class="tr-btn json" href="account/data/export" download>Download JSON</a>
+                <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="DownloadPdf">Download PDF</button>
+            </p>
+        </section>
+
+        <section class="tr-card delete-account">
+            <h2>Delete account</h2>
+            @if (admin)
+            {
+                <p>Admins can't delete their own account. Ask another admin to do it.</p>
+            }
+            else
+            {
+                <p>
+                    This signs you out everywhere and can't be undone. If you have points or orders on record,
+                    those stay with your sponsor under an anonymous name and everything else that identifies you is removed.
+                </p>
+                <form method="post" action="account/delete" class="tr-form">
+                    @if (account.HasPassword)
+                    {
+                        <label for="delete-confirmation">Current password</label>
+                        <input id="delete-confirmation" name="confirmation" type="password" autocomplete="current-password" required />
+                    }
+                    else
+                    {
+                        <label for="delete-confirmation">Type your username (@account.Username) to confirm</label>
+                        <input id="delete-confirmation" name="confirmation" type="text" autocomplete="off" required />
+                    }
+                    <button type="submit" class="tr-btn delete">Delete my account</button>
+                </form>
+            }
+        </section>
+    }
+
+    <p class="back"><a href="profile">Back to your profile</a></p>
+</div>
+
+<style>
+    .delete-account {
+        margin-top: 24px;
+        border-color: var(--danger);
+    }
+
+    .delete-account h2 {
+        color: var(--danger);
+    }
+
+    .tr-btn.delete {
+        background: var(--danger);
+    }
+
+    .back {
+        margin-top: 16px;
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    private Account? account;
+    private bool viewing;
+    private bool admin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await SignedIn();
+        viewing = FrontEnd.Auth.ViewAs.IsViewing(user);
+        admin = user.IsInRole("admin");
+        if (viewing)
+            return;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            account = await client.GetFromJsonAsync<Account>($"users/{id}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load your account right now. Try again in a moment.";
+        }
+    }
+
+    private async Task DownloadPdf()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var data = await client.GetFromJsonAsync<Export>($"users/{id}/export");
+            await PdfReport.Save(Js, "Your TruckerReward data", $"{account!.Username}, {PdfReport.Generated()}", Sections(data!), "truckerreward-data.pdf");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or JSException)
+        {
+            error = "Couldn't build the PDF. Try again in a moment.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static IEnumerable<PdfSection> Sections(Export d)
+    {
+        var p = d.Profile;
+        yield return new("Profile", ["Field", "Value"],
+        [
+            ["Username", p.Username], ["Name", $"{p.FirstName} {p.LastName}"], ["Email", p.Email],
+            ["Phone", p.PhoneNumber], ["Address", p.Address], ["Account type", p.UserType], ["Status", p.Status],
+            ["Points", p.Points.ToString("N0")], ["Email confirmed", When(p.EmailConfirmedAt)],
+            ["Sign-in codes", p.EmailCodes ? "on" : "off"], ["Hidden on leaderboard", p.LeaderboardHidden ? "yes" : "no"],
+            ["Created", When(p.CreatedAt)]
+        ]);
+        yield return Table("Companies", ["Company", "Current"], d.Companies, c => [c.Name, c.CurrentCompanyViewed ? "yes" : ""]);
+        yield return Table("Points history", ["When (UTC)", "Company", "Points", "Reason"], d.Points,
+            h => [When(h.Timestamp), h.Company ?? "", h.Points.ToString("+#,0;-#,0;0"), h.Reason ?? h.RejectionReason ?? ""]);
+        yield return Table("Orders and cart", ["Item", "Price (USD)", "Qty", "Status"], d.Orders,
+            o => [o.Name, o.Price.ToString("0.00"), o.Quantity.ToString(), o.WasOrdered ? "ordered" : o.InCart ? "in cart" : "removed"]);
+        yield return Table("Wishlist", ["Item"], d.Wishlist, w => [w]);
+        yield return Table("Notifications", ["When (UTC)", "Subject", "Read"], d.Notifications, n => [When(n.Timestamp), n.Subject, n.Read ? "yes" : "no"]);
+        yield return Table("Notification settings", ["Category", "Shown", "Emailed"], d.NotificationPreferences,
+            n => [n.Category, n.Enabled ? "yes" : "no", n.Emailed ? "yes" : "no"]);
+        yield return Table("Devices", ["Device", "IP", "Signed in (UTC)", "Last active (UTC)", "Signed out (UTC)"], d.Sessions,
+            s => [s.Device, s.IpAddress ?? "", When(s.CreatedAt), When(s.LastSeenAt), When(s.RevokedAt)]);
+        yield return Table("Sign-in attempts", ["When (UTC)", "Result", "IP"], d.LoginAttempts,
+            a => [When(a.AttemptedAt), a.Succeeded ? "signed in" : "failed", a.IpAddress]);
+        yield return Table("Password changes", ["When (UTC)", "Change", "IP"], d.PasswordChanges, c => [When(c.ChangedAt), c.ChangeType.Replace('_', ' '), c.IpAddress ?? ""]);
+        yield return Table("Passkeys", ["Name", "Added (UTC)", "Last used (UTC)"], d.Passkeys, k => [k.Name, When(k.CreatedAt), When(k.LastUsedAt)]);
+        yield return Table("Badges", ["Badge", "Earned (UTC)"], d.Badges, b => [b.Name, When(b.EarnedAt)]);
+        yield return Table("Applications", ["Company", "Status", "Applied (UTC)", "Answer"], d.Applications,
+            a => [a.Company ?? "", a.Status, When(a.AppliedAt), a.ReviewerReasoning ?? ""]);
+        yield return Table("Announcements you wrote", ["When (UTC)", "Title"], d.Announcements, a => [When(a.CreatedAt), a.Title]);
+    }
+
+    // an empty table still says so in the pdf
+    private static PdfSection Table<T>(string heading, string[] columns, List<T>? items, Func<T, string[]> row) =>
+        new(heading, columns, items is { Count: > 0 } ? items.Select(row).ToArray() : [[ "None", .. Enumerable.Repeat("", columns.Length - 1) ]]);
+
+    private static string When(DateTime? utc) => utc is { } at ? at.ToString("yyyy-MM-dd HH:mm") : "";
+
+    private sealed record Account(string Username, bool HasPassword = true);
+
+    private sealed record Export(Profile Profile, List<CompanyRow>? Companies, List<PointsRow>? Points, List<OrderRow>? Orders, List<string>? Wishlist,
+        List<NotificationRow>? Notifications, List<PreferenceRow>? NotificationPreferences, List<SessionRow>? Sessions, List<AttemptRow>? LoginAttempts,
+        List<PasswordRow>? PasswordChanges, List<PasskeyRow>? Passkeys, List<BadgeRow>? Badges, List<ApplicationRow>? Applications, List<AnnouncementRow>? Announcements);
+
+    private sealed record Profile(string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address,
+        string Status, int Points, DateTime? EmailConfirmedAt, bool EmailCodes, bool LeaderboardHidden, DateTime? CreatedAt);
+
+    private sealed record CompanyRow(string Name, bool CurrentCompanyViewed);
+    private sealed record PointsRow(DateTime? Timestamp, string? Company, int Points, string? Reason, string? RejectionReason);
+    private sealed record OrderRow(string Name, decimal Price, int Quantity, bool InCart, bool WasOrdered);
+    private sealed record NotificationRow(DateTime Timestamp, string Subject, bool Read);
+    private sealed record PreferenceRow(string Category, bool Enabled, bool Emailed);
+    private sealed record SessionRow(DateTime CreatedAt, DateTime LastSeenAt, DateTime? RevokedAt, string? IpAddress, string Device);
+    private sealed record AttemptRow(DateTime AttemptedAt, bool Succeeded, string IpAddress);
+    private sealed record PasswordRow(DateTime ChangedAt, string ChangeType, string? IpAddress);
+    private sealed record PasskeyRow(string Name, DateTime CreatedAt, DateTime? LastUsedAt);
+    private sealed record BadgeRow(string Name, DateTime EarnedAt);
+    private sealed record ApplicationRow(string? Company, string Status, DateTime AppliedAt, string? ReviewerReasoning);
+    private sealed record AnnouncementRow(DateTime CreatedAt, string Title);
+}

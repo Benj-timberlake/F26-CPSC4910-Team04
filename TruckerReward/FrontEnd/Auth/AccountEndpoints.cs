@@ -249,6 +249,19 @@ public static class AccountEndpoints
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.Redirect("/login?signedOut=everywhere");
         }).RequireAuthorization().DisableAntiforgery();
+
+        // the password, or the username for passwordless accounts
+        app.MapPost("/account/delete", async ([FromForm] string? confirmation, HttpContext http, IHttpClientFactory clients, IConfiguration config, ILogger<CdlStorage> logger) =>
+        {
+            var id = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            using var request = new HttpRequestMessage(HttpMethod.Delete, $"users/{id}/account") { Content = JsonContent.Create(new { confirmation }) };
+            using var response = await clients.CreateClient("Backend").SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+                return Results.Redirect("/account/data?error=" + await ErrorParam(response, "Could not delete the account."));
+            await CdlCleanup.DeleteAsync(config, logger, id);
+            await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return Results.Redirect("/login?deleted=1");
+        }).RequireAuthorization().AddEndpointFilter(ViewAs.NotWhileViewing).DisableAntiforgery();
     }
 
     // admins also get a cookie so the dashboard shows the admin image once
