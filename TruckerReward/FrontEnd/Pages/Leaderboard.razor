@@ -51,11 +51,18 @@
             <p class="your-rank">You're #@board.YourRank of @board.Rows.Count.</p>
         }
 
+        @if (driver)
+        {
+            <p>
+                <label><input type="checkbox" class="hide-me" checked="@board.YouHidden" disabled="@busy" @onchange="Hide" /> Hide my name from the leaderboard</label>
+            </p>
+        }
+
         <h2>Top 5</h2>
         <ol class="top5">
             @foreach (var r in board.Rows.Take(5))
             {
-                <li>#@r.Rank @r.FirstName @r.LastName (@r.Username): @r.Points.ToString("N0")@Unit</li>
+                <li>#@r.Rank @Name(r): @r.Points.ToString("N0")@Unit</li>
             }
         </ol>
 
@@ -91,7 +98,7 @@
                     {
                         <tr class="@(r.Id.ToString() == id ? "me" : "")">
                             <td>@r.Rank</td>
-                            <td>@r.FirstName @r.LastName (@r.Username)</td>
+                            <td>@Name(r)</td>
                             <td>@r.Points.ToString("N0")</td>
                         </tr>
                     }
@@ -114,6 +121,7 @@
 @code {
     private bool admin;
     private bool manager;
+    private bool driver;
     private string period = "all";
     private string category = "points";
     // period and category of the loaded board
@@ -127,6 +135,7 @@
     {
         var user = await SignedIn();
         admin = user.IsInRole("admin");
+        driver = user.IsInRole("driver");
         manager = admin || user.IsInRole("sponsor");
         if (admin)
         {
@@ -195,6 +204,18 @@
         _ => shown.Period == "all" ? "Points" : "Points earned"
     };
 
+    private static string Name(Row r) => r.Hidden ? r.Username : $"{r.FirstName} {r.LastName} ({r.Username})";
+
+    private async Task Hide(ChangeEventArgs e)
+    {
+        var hidden = e.Value is true;
+        await Send(c => c.PutAsJsonAsync($"users/{id}/leaderboard/hidden", new { hidden }), async _ =>
+        {
+            await Load();
+            notice = hidden ? "Your name is hidden on the leaderboard." : "Your name shows on the leaderboard.";
+        });
+    }
+
     private string Unit => shown.Category == "orders" ? " orders" : "";
 
     private async Task Award(Row top)
@@ -223,8 +244,8 @@
         busy = false;
     }
 
-    private sealed record Row(int Rank, int Id, string Username, string FirstName, string LastName, long Points);
-    private sealed record Board(string Period, int? YourRank, List<Row> Rows);
+    private sealed record Row(int Rank, int Id, string Username, string FirstName, string LastName, long Points, bool Hidden = false);
+    private sealed record Board(string Period, int? YourRank, List<Row> Rows, bool YouHidden = false);
 
     private sealed class AwardForm
     {

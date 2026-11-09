@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS users (
     email_confirmed_at DATETIME NULL,
     -- sign in also needs an emailed code
     email_codes TINYINT(1) NOT NULL DEFAULT 0,
+    -- driver shows as anonymous on the leaderboard
+    leaderboard_hidden TINYINT(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_username (username),
     UNIQUE KEY uq_users_email (email)

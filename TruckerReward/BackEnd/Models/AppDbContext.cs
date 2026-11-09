@@ -602,6 +602,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.SessionVersion).HasColumnName("session_version");
             entity.Property(e => e.EmailConfirmedAt).HasColumnType("datetime").HasColumnName("email_confirmed_at");
             entity.Property(e => e.EmailCodes).HasColumnName("email_codes");
+            entity.Property(e => e.LeaderboardHidden).HasColumnName("leaderboard_hidden");
 
             // These legacy navigations are not columns or relationships in the users mapping.
             // Ignore them to prevent EF from inferring a shadow ApplicationDriverId column.

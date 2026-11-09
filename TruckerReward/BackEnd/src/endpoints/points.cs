@@ -25,6 +25,7 @@ public static class PointsEndpoints
         app.MapDelete("/users/{id:int}/points/reasons/{reasonId:int}", ForgetReason);
         // period is all, month or week
         app.MapGet("/users/{id:int}/leaderboard", Leaderboard);
+        app.MapPut("/users/{id:int}/leaderboard/hidden", SetHidden);
     }
 
     private static async Task<IResult> Monthly(int id, AppDbContext db)
@@ -348,6 +349,18 @@ public static class PointsEndpoints
         return Results.NoContent();
     }
 
+    private static async Task<IResult> SetHidden(int id, HiddenRequest request, AppDbContext db)
+    {
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null)
+            return Results.NotFound();
+        if (user.UserType != AuthEndpoints.Driver)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        user.LeaderboardHidden = request.Hidden;
+        await db.SaveChangesAsync();
+        return Results.Ok(request);
+    }
+
     private static async Task<IResult> Leaderboard(int id, string? period, string? category, int? companyId, AppDbContext db, TimeProvider clock)
     {
         var viewer = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
@@ -376,22 +389,25 @@ public static class PointsEndpoints
         var history = db.PointsHistory.Where(h => h.CompanyId == company && (start == null || h.Timestamp >= start));
         var totals = await (category switch
         {
-            "spent" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName,
+            "spent" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName, u.LeaderboardHidden,
                 history.Where(h => h.UserId == u.Id && h.PointsDelta < 0 && h.Carts.Any()).Sum(h => -(long)h.PointsDelta))),
-            "orders" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName,
+            "orders" => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName, u.LeaderboardHidden,
                 history.Count(h => h.UserId == u.Id && h.Carts.Any()))),
-            _ => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName, start == null
+            _ => drivers.Select(u => new Total(u.Id, u.Username, u.FirstName, u.LastName, u.LeaderboardHidden, start == null
                 ? history.Where(h => h.UserId == u.Id).Sum(h => (long)h.PointsDelta)
                 : history.Where(h => h.UserId == u.Id && h.PointsDelta > 0).Sum(h => (long)h.PointsDelta)))
         }).ToListAsync();
 
         var ordered = totals.OrderByDescending(t => t.Points).ThenBy(t => t.Username).ToList();
         // ties share a rank
-        var rows = ordered.Select(t => new LeaderboardRow(ordered.FindIndex(o => o.Points == t.Points) + 1, t.Id, t.Username, t.FirstName, t.LastName, t.Points)).ToList();
-        return Results.Ok(new Leaderboard(period, rows.FirstOrDefault(r => r.Id == id)?.Rank, rows));
+        // hidden drivers stay named for sponsors and admins
+        var rows = ordered.Select(t => t.Hidden && t.Id != id && viewer.UserType == AuthEndpoints.Driver
+                ? new LeaderboardRow(ordered.FindIndex(o => o.Points == t.Points) + 1, 0, "Anonymous driver", "", "", t.Points, true)
+                : new LeaderboardRow(ordered.FindIndex(o => o.Points == t.Points) + 1, t.Id, t.Username, t.FirstName, t.LastName, t.Points, t.Hidden)).ToList();
+        return Results.Ok(new Leaderboard(period, rows.FirstOrDefault(r => r.Id == id)?.Rank, rows, viewer.LeaderboardHidden));
     }
 
-    private sealed record Total(int Id, string Username, string FirstName, string LastName, long Points);
+    private sealed record Total(int Id, string Username, string FirstName, string LastName, bool Hidden, long Points);
 
     // admins or sponsors with a company
     internal static async Task<bool> CanManage(AppDbContext db, User actor) =>
@@ -399,10 +415,13 @@ public static class PointsEndpoints
             await CompanyMembershipQueries.FirstCompanyId(db, actor.Id) is not null);
 }
 
-public record LeaderboardRow(int Rank, int Id, string Username, string FirstName, string LastName, long Points);
+// hidden rows come back with id 0 and no real name
+public record LeaderboardRow(int Rank, int Id, string Username, string FirstName, string LastName, long Points, bool Hidden = false);
 
 // your rank is null for viewers off the board
-public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Rows);
+public record Leaderboard(string Period, int? YourRank, List<LeaderboardRow> Rows, bool YouHidden = false);
+
+public record HiddenRequest(bool Hidden);
 
 public record RemoveDriverRequest(string? Reason);
 public record MonthlyPointsRequest(int Points);
