@@ -62,6 +62,48 @@ public sealed class AchievementTests : IAsyncDisposable
     private async Task<List<Badge>> Badges(int user) =>
         (await client.GetFromJsonAsync<List<Badge>>($"/users/{user}/achievements"))!;
 
+    private async Task<List<GoalProgress>> Progress(int user) =>
+        (await client.GetFromJsonAsync<List<GoalProgress>>($"/users/{user}/achievements/progress"))!;
+
+    [Fact]
+    public async Task ProgressListsUnearnedGoalsClosestFirst()
+    {
+        await Start();
+        await Goal(acme, Achievement.OrdersPlaced, 2, "Acme orders");
+        await Points(bob, acme, 950);
+        await Points(bob, acme, -100, order: true);
+
+        var progress = await Progress(bob);
+
+        Assert.DoesNotContain(progress, p => p.Name is "First points" or "First order");
+        Assert.Equal(["1,000 points", "Acme orders", "Regular shopper"], progress.Take(3).Select(p => p.Name));
+        Assert.Equal((950L, 1_000), (progress[0].Current, progress[0].Threshold));
+        Assert.Null(progress[0].Company);
+        Assert.Equal("Acme", progress[1].Company);
+        Assert.Equal(Achievement.BuiltIn.Length + 1 - 2, progress.Count);
+        Assert.Equal(2, await app.Db().EarnedBadges.CountAsync(b => b.UserId == bob));
+    }
+
+    [Fact]
+    public async Task ProgressLeavesOutOtherSponsorsAndSwitchedOffGoals()
+    {
+        await Start();
+        await Goal(other, Achievement.PointsEarned, 10, "Other goal");
+        await Goal(acme, Achievement.PointsEarned, 10, "Off", active: false);
+
+        Assert.DoesNotContain(await Progress(bob), p => p.Name is "Other goal" or "Off");
+        Assert.Contains(await Progress(tom), p => p.Name == "Other goal" && p.Current == 0 && p.Threshold == 10);
+    }
+
+    [Fact]
+    public async Task OnlyDriversHaveProgress()
+    {
+        await Start();
+
+        Assert.Empty(await Progress(sue));
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/users/9999/achievements/progress")).StatusCode);
+    }
+
     [Fact]
     public async Task BuiltInGoalsAreSeeded()
     {

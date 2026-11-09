@@ -10,6 +10,46 @@
 
     <Alerts Error="@error" />
 
+    <section class="tr-card next" aria-labelledby="next-heading">
+        <h2 id="next-heading">Up next</h2>
+        @if (goals is null)
+        {
+            @if (error is null)
+            {
+                <p role="status"><em>Loading...</em></p>
+            }
+        }
+        else if (goals.Count == 0)
+        {
+            <p class="tr-muted">You've earned every badge there is for now.</p>
+        }
+        else
+        {
+            <ul class="goal-list">
+                @foreach (var g in showAll ? goals : goals.Take(Closest))
+                {
+                    var label = $"goal-{g.Id}";
+                    <li class="goal">
+                        <div class="goal-head">
+                            <label for="@label" class="goal-name">@g.Name</label>
+                            <span class="goal-count" id="@(label)-count">@g.Current.ToString("N0") of @g.Threshold.ToString("N0") @Unit(g.Metric)</span>
+                        </div>
+                        <progress id="@label" value="@Math.Min(g.Current, g.Threshold)" max="@g.Threshold"
+                                  aria-valuemin="0" aria-valuemax="@g.Threshold" aria-valuenow="@Math.Min(g.Current, g.Threshold)"
+                                  aria-describedby="@(label)-count"></progress>
+                        <p class="goal-desc tr-muted">@g.Description@(g.Company is null ? "" : $" Set by {g.Company}.") @Left(g)</p>
+                    </li>
+                }
+            </ul>
+            @if (goals.Count > Closest)
+            {
+                <button type="button" class="tr-btn-outline toggle" aria-expanded="@(showAll ? "true" : "false")" @onclick="() => showAll = !showAll">
+                    @(showAll ? "Show the closest only" : $"Show all {goals.Count} goals")
+                </button>
+            }
+        }
+    </section>
+
     <section class="tr-card badges" aria-labelledby="badges-heading">
         <h2 id="badges-heading">Your badges</h2>
         @if (badges is null)
@@ -45,6 +85,48 @@
 </div>
 
 <style>
+    .next {
+        margin-bottom: 20px;
+    }
+
+    .goal-list {
+        list-style: none;
+        margin: 0 0 12px;
+        padding: 0;
+    }
+
+    .goal {
+        padding: 10px 0;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .goal:first-child {
+        border-top: none;
+    }
+
+    .goal-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .goal-name {
+        font-weight: 600;
+    }
+
+    .goal progress {
+        width: 100%;
+        height: 14px;
+        margin-top: 6px;
+        accent-color: var(--brand);
+    }
+
+    .goal-desc {
+        margin: 4px 0 0;
+        font-size: 14px;
+    }
+
     .badge-list {
         list-style: none;
         margin: 0;
@@ -78,7 +160,10 @@
 </style>
 
 @code {
+    private const int Closest = 3;
     private List<Badge>? badges;
+    private List<Goal>? goals;
+    private bool showAll;
 
     protected override async Task OnInitializedAsync()
     {
@@ -86,6 +171,8 @@
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
+            // progress awards new badges first
+            goals = await client.GetFromJsonAsync<List<Goal>>($"users/{id}/achievements/progress");
             badges = await client.GetFromJsonAsync<List<Badge>>($"users/{id}/achievements");
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
@@ -94,5 +181,21 @@
         }
     }
 
+    private static string Unit(string metric) => metric switch
+    {
+        "orders_placed" => "orders",
+        "points_spent" => "points spent",
+        _ => "points earned"
+    };
+
+    private static string Left(Goal g)
+    {
+        var left = g.Threshold - g.Current;
+        return g.Metric == "orders_placed"
+            ? $"{left:N0} more {(left == 1 ? "order" : "orders")} to go."
+            : $"{left:N0} more {(left == 1 ? "point" : "points")} to go.";
+    }
+
+    private sealed record Goal(int Id, string Name, string Description, string? Company, string Metric, long Current, int Threshold);
     private sealed record Badge(int Id, string Name, string Description, string? Company, DateTime EarnedAt);
 }

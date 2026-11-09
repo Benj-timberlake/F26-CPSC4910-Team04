@@ -7,6 +7,8 @@ public static class AchievementEndpoints
     public static void MapAchievementEndpoints(this WebApplication app)
     {
         app.MapGet("/users/{id:int}/achievements", Badges);
+        // unearned goals, closest first
+        app.MapGet("/users/{id:int}/achievements/progress", Progress);
     }
 
     private static async Task<IResult> Badges(int id, AppDbContext db, Notifications notifications, TimeProvider clock)
@@ -23,6 +25,25 @@ public static class AchievementEndpoints
             .Select(x => new Badge(x.a.Id, x.a.Name, x.a.Description,
                 db.Companies.Where(c => c.Id == x.a.SponsorCompanyId).Select(c => c.Name).FirstOrDefault(), x.b.EarnedAt))
             .ToListAsync());
+    }
+
+    private static async Task<IResult> Progress(int id, AppDbContext db, Notifications notifications, TimeProvider clock)
+    {
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null)
+            return Results.NotFound();
+        if (user.UserType != AuthEndpoints.Driver)
+            return Results.Ok(new List<GoalProgress>());
+        var open = (await Check(db, notifications, clock, user)).Where(r => !r.Earned).ToList();
+        var companyIds = open.Select(r => r.Goal.SponsorCompanyId).OfType<int>().Distinct().ToList();
+        var names = await db.Companies.AsNoTracking().Where(c => companyIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name);
+        return Results.Ok(open
+            .OrderByDescending(r => (double)r.Value / r.Goal.Threshold)
+            .ThenBy(r => r.Goal.Threshold - r.Value)
+            .ThenBy(r => r.Goal.Id)
+            .Select(r => new GoalProgress(r.Goal.Id, r.Goal.Name, r.Goal.Description,
+                r.Goal.SponsorCompanyId is int c ? names.GetValueOrDefault(c) : null, r.Goal.Metric, r.Value, r.Goal.Threshold))
+            .ToList());
     }
 
     // works out the driver's totals for each goal that applies and awards the ones just reached
@@ -80,3 +101,5 @@ public static class AchievementEndpoints
 
 // company is null for built-in badges
 public record Badge(int Id, string Name, string Description, string? Company, DateTime EarnedAt);
+
+public record GoalProgress(int Id, string Name, string Description, string? Company, string Metric, long Current, int Threshold);
