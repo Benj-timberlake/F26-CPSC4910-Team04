@@ -1,0 +1,98 @@
+@page "/announcements"
+@attribute [Authorize(Roles = "driver,sponsor")]
+@inherits BackendPage
+
+<PageTitle>Announcements</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Announcements</h1>
+
+        <Alerts Notice="@notice" Error="@error" />
+
+        <AuthorizeView Roles="sponsor" Context="sponsorOnly">
+            <form class="tr-form post" @onsubmit="Post">
+                <h2>Post to your drivers</h2>
+                <label for="announce-title">Title</label>
+                <input id="announce-title" maxlength="100" @bind="title" />
+                <label for="announce-body">Message</label>
+                <textarea id="announce-body" rows="4" maxlength="2000" @bind="body"></textarea>
+                <button type="submit" class="tr-btn" disabled="@busy">Post announcement</button>
+            </form>
+        </AuthorizeView>
+
+        @if (items is null)
+        {
+            @if (error is null)
+            {
+                <p role="status"><em>Loading...</em></p>
+            }
+        }
+        else if (items.Count == 0)
+        {
+            <p class="tr-muted">No announcements yet.</p>
+        }
+        else
+        {
+            <ul class="tr-list">
+                @foreach (var a in items)
+                {
+                    <li class="announcement">
+                        <h3>@a.Title</h3>
+                        <p class="tr-muted">@a.Company, @(a.Author ?? "a former sponsor"), @a.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC</p>
+                        <p class="text">@a.Body</p>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</div>
+
+<style>
+    .post {
+        margin-bottom: 24px;
+    }
+
+    .announcement {
+        padding: 12px 0;
+    }
+
+    .announcement .text {
+        white-space: pre-wrap;
+    }
+</style>
+
+@code {
+    private List<Item>? items;
+    private string title = "";
+    private string body = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignedIn();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            items = await client.GetFromJsonAsync<List<Item>>($"users/{id}/announcements") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load announcements right now. Try again in a moment.";
+        }
+    }
+
+    private Task Post() =>
+        Send(c => c.PostAsJsonAsync($"users/{id}/announcements", new { title, body }), async _ =>
+        {
+            notice = "Your announcement was posted and your drivers were notified.";
+            title = body = "";
+            await Load();
+        });
+
+    private sealed record Item(int Id, string Title, string Body, DateTime CreatedAt, string Company, string? Author);
+}

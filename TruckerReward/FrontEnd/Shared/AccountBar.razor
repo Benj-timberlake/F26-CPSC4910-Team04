@@ -27,6 +27,9 @@
             <AuthorizeView Roles="driver" Context="driver">
                 <a href="points">Points</a>
             </AuthorizeView>
+            <AuthorizeView Roles="driver,sponsor" Context="news">
+                <a href="announcements">Announcements</a>
+            </AuthorizeView>
             <AuthorizeView Roles="sponsor,admin" Context="pointsNav">
                 @if (pointsNav.User.IsInRole("admin"))
                 {
