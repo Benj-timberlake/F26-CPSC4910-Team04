@@ -24,25 +24,27 @@
         else
         {
             <Alerts Notice="@notice" Error="@error" />
-            <table class="tr-table" aria-label="Notification settings">
-                <thead>
-                    <tr>
-                        <th scope="col">Notification</th>
-                        <th scope="col">On</th>
-                        <th scope="col">Also email</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var s in settings)
-                    {
+            <div class="tr-table-wrap">
+                <table class="tr-table" aria-label="Notification settings">
+                    <thead>
                         <tr>
-                            <td>@s.Label</td>
-                            <td><input type="checkbox" aria-label="@s.Label on" @bind="s.Enabled" /></td>
-                            <td><input type="checkbox" aria-label="Email @s.Label" @bind="s.Emailed" disabled="@(!s.Enabled)" /></td>
+                            <th scope="col">Notification</th>
+                            <th scope="col">On</th>
+                            <th scope="col">Also email</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in settings)
+                        {
+                            <tr>
+                                <td>@s.Label</td>
+                                <td><input type="checkbox" aria-label="@s.Label on" @bind="s.Enabled" /></td>
+                                <td><input type="checkbox" aria-label="Email @s.Label" @bind="s.Emailed" disabled="@(!s.Enabled)" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
             <button type="button" class="tr-btn tr-btn-block" disabled="@busy" @onclick="Save">Save</button>
         }
     </div>

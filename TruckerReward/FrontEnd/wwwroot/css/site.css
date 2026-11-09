@@ -366,12 +366,6 @@ main {
         margin-bottom: 8px;
     }
 
-    .tr-table {
-        display: block;
-        max-width: 100%;
-        overflow-x: auto;
-    }
-
     .tr-toolbar > *,
     .tr-toolbar input,
     .tr-toolbar select,

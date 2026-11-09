@@ -1,6 +1,7 @@
 @namespace FrontEnd.Shared
 
-<a class="skip-link" href="#main-content">Skip to main content</a>
+@* <base href> would send a bare #main-content to the home page *@
+<a class="skip-link" href="#main-content" onclick="document.getElementById('main-content').focus(); return false;">Skip to main content</a>
 
 <nav class="account-bar" aria-label="Main">
     <AuthorizeView Context="homeNav">
