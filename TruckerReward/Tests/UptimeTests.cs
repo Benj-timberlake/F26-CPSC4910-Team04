@@ -140,7 +140,7 @@ public sealed class UptimeCardTests : TestContext
 
         page.WaitForAssertion(() => page.Find("td.low"));
         Assert.Contains("93.2%", page.Find("td.low").TextContent);
-        Assert.Equal(1, page.FindAll("td.low").Count);
+        Assert.Single(page.FindAll("td.low"));
         Assert.Contains("2026-09-17 11:00 UTC", page.Markup);
         Assert.Contains("timeout", page.Markup);
     }

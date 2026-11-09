@@ -4,8 +4,10 @@ namespace FrontEnd.Auth;
 public static class HealthCheck
 {
     public static void MapHealthCheck(this WebApplication app) =>
-        app.MapGet("/health", async (IHttpClientFactory clients) =>
+        app.MapGet("/health", async (IHttpClientFactory clients, HttpContext http) =>
         {
+            // cloudfront mustn't hand the deploy check an old answer
+            http.Response.Headers.CacheControl = "no-store";
             try
             {
                 using var response = await clients.CreateClient("Backend").GetAsync("health");

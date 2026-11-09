@@ -18,14 +18,16 @@
     else
     {
         <p class="tr-muted">The backend checks the database every minute. A minute with no check counts as down. Target @report.Target%.</p>
-        <table class="tr-table">
-            <thead><tr><th>Window</th><th>Uptime</th><th>Minutes up</th></tr></thead>
-            <tbody>
-                <tr><td>Last 24 hours</td><td class="@Class(report.Day)">@Percent(report.Day)</td><td>@report.Day.Up of @report.Day.Expected</td></tr>
-                <tr><td>Last 7 days</td><td class="@Class(report.Week)">@Percent(report.Week)</td><td>@report.Week.Up of @report.Week.Expected</td></tr>
-                <tr><td>Last 30 days</td><td class="@Class(report.Month)">@Percent(report.Month)</td><td>@report.Month.Up of @report.Month.Expected</td></tr>
-            </tbody>
-        </table>
+        <div class="tr-table-wrap">
+            <table class="tr-table">
+                <thead><tr><th>Window</th><th>Uptime</th><th>Minutes up</th></tr></thead>
+                <tbody>
+                    <tr><td>Last 24 hours</td><td class="@Class(report.Day)">@Percent(report.Day)</td><td>@report.Day.Up of @report.Day.Expected</td></tr>
+                    <tr><td>Last 7 days</td><td class="@Class(report.Week)">@Percent(report.Week)</td><td>@report.Week.Up of @report.Week.Expected</td></tr>
+                    <tr><td>Last 30 days</td><td class="@Class(report.Month)">@Percent(report.Month)</td><td>@report.Month.Up of @report.Month.Expected</td></tr>
+                </tbody>
+            </table>
+        </div>
         @if (report.Failures.Count > 0)
         {
             <h3>Recent failed checks</h3>

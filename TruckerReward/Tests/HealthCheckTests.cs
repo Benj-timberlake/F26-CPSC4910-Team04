@@ -25,6 +25,7 @@ public sealed class HealthCheckTests : IAsyncDisposable
         backend.Routes["GET /health"] = (HttpStatusCode.OK, "{}");
         var response = await (await Start()).GetAsync("/health");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
     }
 
     [Fact]
