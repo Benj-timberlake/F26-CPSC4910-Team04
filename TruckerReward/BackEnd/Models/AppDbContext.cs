@@ -46,6 +46,7 @@ public partial class AppDbContext : DbContext
     public DbSet<UserSession> UserSessions { get; set; }
 
     public DbSet<UptimeCheck> UptimeChecks { get; set; }
+    public DbSet<SiteBanner> SiteBanners { get; set; }
 
     public DbSet<LockoutReset> LockoutResets { get; set; }
 
@@ -536,6 +537,18 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Error).HasMaxLength(255);
         });
 
+        modelBuilder.Entity<SiteBanner>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("site_banners");
+            entity.HasIndex(e => new { e.ClearedAt, e.CreatedAt }, "ix_site_banners_cleared");
+            entity.Property(e => e.Message).HasMaxLength(500);
+            entity.Property(e => e.Level).HasMaxLength(10);
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.SetBy)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_site_banners_user");
+        });
+
         modelBuilder.Entity<SignInCode>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
@@ -612,7 +625,7 @@ public partial class AppDbContext : DbContext
 
         // these tables name each column after its property in snake_case, and store times as datetime
         foreach (var type in new[] { typeof(NotificationPreference), typeof(Impersonation), typeof(PasskeyCredential), typeof(LockoutReset),
-                     typeof(SavedReason), typeof(UserSession), typeof(UptimeCheck), typeof(SignInCode), typeof(EmailConfirmation) })
+                     typeof(SavedReason), typeof(UserSession), typeof(UptimeCheck), typeof(SignInCode), typeof(EmailConfirmation), typeof(SiteBanner) })
             foreach (var property in modelBuilder.Model.FindEntityType(type)!.GetProperties())
             {
                 property.SetColumnName(System.Text.RegularExpressions.Regex.Replace(property.Name, "(?<=.)([A-Z])", "_$1").ToLowerInvariant());
