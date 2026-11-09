@@ -58,6 +58,8 @@ public sealed class AccountDataTests : IAsyncDisposable
         db.WishlistItems.Add(new WishlistItem { UserId = id, ItemId = name + "-item" });
         db.NotificationPreferences.Add(new NotificationPreference { UserId = id, Category = "points", Enabled = false });
         db.NotificationsHistories.Add(new NotificationsHistory { UserId = id, Subject = name + " note", Body = "hello", Timestamp = t0 });
+        db.PasswordChanges.Add(new PasswordChange { UserId = id, ChangeType = PasswordChange.Changed, IpAddress = "10.0.0.2", ChangedAt = t0 });
+        db.LoginAttempts.Add(new LoginAttempt { UserId = id, Username = name, IpAddress = "10.0.0.3", Succeeded = true, AttemptedAt = t0 });
         await db.SaveChangesAsync();
     }
 
@@ -143,6 +145,8 @@ public sealed class AccountDataTests : IAsyncDisposable
         Assert.Null((await after.Achievements.SingleAsync(a => a.Id == achievement)).CreatedBy);
         Assert.Null((await after.Announcements.SingleAsync(a => a.Id == announcement)).AuthorId);
         Assert.Null((await after.SiteBanners.SingleAsync(b => b.Id == banner)).SetBy);
+        // no sign in row should still name bob
+        Assert.DoesNotContain(await after.LoginAttempts.ToListAsync(), a => a.Username == "bob" || a.IpAddress == "10.0.0.3");
     }
 
     [Fact]
@@ -185,6 +189,9 @@ public sealed class AccountDataTests : IAsyncDisposable
         var snapshot = await after.AccountsHistories.SingleAsync(h => h.UserId == bob);
         Assert.Equal(($"deleted-{bob}", "", null), (snapshot.Username, snapshot.Password, snapshot.PhoneNumber));
         Assert.DoesNotContain(await after.LoginAttempts.Where(a => a.UserId == bob).Select(a => a.Username).ToListAsync(), n => n == "bob");
+        Assert.All(await after.LoginAttempts.Where(a => a.UserId == bob).ToListAsync(), a => Assert.Equal("", a.IpAddress));
+        Assert.All(await after.UserSessions.Where(s => s.UserId == bob).ToListAsync(), s => Assert.Null(s.IpAddress ?? s.UserAgent));
+        Assert.All(await after.PasswordChanges.Where(c => c.UserId == bob).ToListAsync(), c => Assert.Null(c.IpAddress));
     }
 
     [Fact]

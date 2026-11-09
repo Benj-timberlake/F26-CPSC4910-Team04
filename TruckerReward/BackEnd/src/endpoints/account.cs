@@ -126,6 +126,8 @@ public static class AccountDataEndpoints
             return Results.Json(new { message = user.Password is not null ? "Current password is wrong." : "Type your username exactly to confirm." },
                 statusCode: StatusCodes.Status401Unauthorized);
 
+        // these rows outlive a hard delete
+        await ScrubSignInLog(db, id, $"deleted-{id}");
         if (!await AdminEndpoints.HasHistory(db, id) && await AdminEndpoints.HardDelete(db, id))
             return Results.Ok(new { anonymized = false });
         await Anonymize(db, user, clock.GetUtcNow().UtcDateTime);
@@ -173,9 +175,21 @@ public static class AccountDataEndpoints
             .SetProperty(x => x.LastName, user.LastName)
             .SetProperty(x => x.PhoneNumber, (string?)null)
             .SetProperty(x => x.Address, (string?)null));
-        await db.LoginAttempts.Where(a => a.UserId == id).ExecuteUpdateAsync(a => a.SetProperty(x => x.Username, username));
-        await db.LockoutResets.Where(r => r.UserId == id).ExecuteUpdateAsync(r => r.SetProperty(x => x.Username, username));
+        await db.UserSessions.Where(s => s.UserId == id).ExecuteUpdateAsync(s => s
+            .SetProperty(x => x.IpAddress, (string?)null)
+            .SetProperty(x => x.UserAgent, (string?)null));
+        await db.PasswordChanges.Where(c => c.UserId == id).ExecuteUpdateAsync(c => c.SetProperty(x => x.IpAddress, (string?)null));
+        await db.Applications.Where(a => a.ApplicantId == id).ExecuteUpdateAsync(a => a.SetProperty(x => x.ApplicantExtraInfo, (string?)null));
+        await ScrubSignInLog(db, id, username);
         await transaction.CommitAsync();
+    }
+
+    private static async Task ScrubSignInLog(AppDbContext db, int id, string username)
+    {
+        await db.LoginAttempts.Where(a => a.UserId == id).ExecuteUpdateAsync(a => a
+            .SetProperty(x => x.Username, username)
+            .SetProperty(x => x.IpAddress, ""));
+        await db.LockoutResets.Where(r => r.UserId == id).ExecuteUpdateAsync(r => r.SetProperty(x => x.Username, username));
     }
 }
 
