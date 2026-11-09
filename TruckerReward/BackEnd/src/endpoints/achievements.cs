@@ -4,11 +4,20 @@ using Microsoft.EntityFrameworkCore;
 // badges drivers earn for reaching goals. goals are checked whenever a driver's badges are read
 public static class AchievementEndpoints
 {
+    public const int MaxNameLength = 100;
+    public const int MaxDescriptionLength = 255;
+    public const int MaxThreshold = 10_000_000;
+    public const int MaxGoals = 50;
+
     public static void MapAchievementEndpoints(this WebApplication app)
     {
         app.MapGet("/users/{id:int}/achievements", Badges);
         // unearned goals, closest first
         app.MapGet("/users/{id:int}/achievements/progress", Progress);
+        // id is the sponsor managing its company's goals
+        app.MapGet("/users/{id:int}/achievements/goals", Goals);
+        app.MapPost("/users/{id:int}/achievements/goals", CreateGoal);
+        app.MapPut("/users/{id:int}/achievements/goals/{goalId:int}", EditGoal);
     }
 
     private static async Task<IResult> Badges(int id, AppDbContext db, Notifications notifications, TimeProvider clock)
@@ -45,6 +54,79 @@ public static class AchievementEndpoints
                 r.Goal.SponsorCompanyId is int c ? names.GetValueOrDefault(c) : null, r.Goal.Metric, r.Value, r.Goal.Threshold))
             .ToList());
     }
+
+    private static async Task<IResult> Goals(int id, AppDbContext db)
+    {
+        if (await SponsorCompany(db, id) is not int companyId)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        return Results.Ok(await db.Achievements.AsNoTracking()
+            .Where(a => a.SponsorCompanyId == companyId)
+            .OrderByDescending(a => a.Active).ThenBy(a => a.Name).ThenBy(a => a.Id)
+            .Select(a => new SponsorGoal(a.Id, a.Name, a.Description, a.Metric, a.Threshold, a.Active,
+                db.EarnedBadges.Count(b => b.AchievementId == a.Id)))
+            .ToListAsync());
+    }
+
+    private static async Task<IResult> CreateGoal(int id, GoalRequest req, AppDbContext db)
+    {
+        if (Invalid(req) is { } bad)
+            return bad;
+        if (await SponsorCompany(db, id) is not int companyId)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        if (await db.Achievements.CountAsync(a => a.SponsorCompanyId == companyId) >= MaxGoals)
+            return Results.Conflict(new { message = $"You can have up to {MaxGoals} goals. Edit or reuse one instead." });
+
+        var goal = new Achievement { SponsorCompanyId = companyId, CreatedBy = id };
+        Fill(goal, req);
+        db.Achievements.Add(goal);
+        await db.SaveChangesAsync();
+        return Results.Ok(new SponsorGoal(goal.Id, goal.Name, goal.Description, goal.Metric, goal.Threshold, goal.Active, 0));
+    }
+
+    // also how goals are switched off and back on. badges already earned stay
+    private static async Task<IResult> EditGoal(int id, int goalId, GoalRequest req, AppDbContext db)
+    {
+        if (Invalid(req) is { } bad)
+            return bad;
+        if (await SponsorCompany(db, id) is not int companyId)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        // built-in goals never match a company
+        var goal = await db.Achievements.FirstOrDefaultAsync(a => a.Id == goalId && a.SponsorCompanyId == companyId);
+        if (goal is null)
+            return Results.NotFound(new { message = "That goal isn't one of yours." });
+        Fill(goal, req);
+        await db.SaveChangesAsync();
+        return Results.Ok(new SponsorGoal(goal.Id, goal.Name, goal.Description, goal.Metric, goal.Threshold, goal.Active,
+            await db.EarnedBadges.CountAsync(b => b.AchievementId == goal.Id)));
+    }
+
+    private static IResult? Invalid(GoalRequest req)
+    {
+        var name = req.Name?.Trim() ?? "";
+        if (name.Length is 0 or > MaxNameLength)
+            return Results.BadRequest(new { message = $"Give the goal a name of up to {MaxNameLength} characters." });
+        if ((req.Description?.Trim().Length ?? 0) > MaxDescriptionLength)
+            return Results.BadRequest(new { message = $"Keep the description to {MaxDescriptionLength} characters." });
+        if (req.Metric is null || !Achievement.Metrics.Contains(req.Metric))
+            return Results.BadRequest(new { message = "Pick what the goal counts: points earned, points spent or orders placed." });
+        if (req.Threshold is < 1 or > MaxThreshold)
+            return Results.BadRequest(new { message = $"The target has to be 1 to {MaxThreshold:N0}." });
+        return null;
+    }
+
+    private static void Fill(Achievement goal, GoalRequest req)
+    {
+        goal.Name = req.Name!.Trim();
+        goal.Description = req.Description?.Trim() ?? "";
+        goal.Metric = req.Metric!;
+        goal.Threshold = req.Threshold;
+        goal.Active = req.Active;
+    }
+
+    private static async Task<int?> SponsorCompany(AppDbContext db, int id) =>
+        await db.Users.AnyAsync(u => u.Id == id && u.UserType == AuthEndpoints.Sponsor)
+            ? await CompanyMembershipQueries.FirstCompanyId(db, id)
+            : null;
 
     // works out the driver's totals for each goal that applies and awards the ones just reached
     internal static async Task<List<(Achievement Goal, long Value, bool Earned)>> Check(AppDbContext db, Notifications notifications, TimeProvider clock, User driver)
@@ -103,3 +185,8 @@ public static class AchievementEndpoints
 public record Badge(int Id, string Name, string Description, string? Company, DateTime EarnedAt);
 
 public record GoalProgress(int Id, string Name, string Description, string? Company, string Metric, long Current, int Threshold);
+
+public record GoalRequest(string? Name, string? Description, string? Metric, int Threshold, bool Active = true);
+
+// earned is how many drivers have the badge
+public record SponsorGoal(int Id, string Name, string Description, string Metric, int Threshold, bool Active, int Earned);

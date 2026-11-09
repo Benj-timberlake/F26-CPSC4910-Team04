@@ -104,6 +104,117 @@ public sealed class AchievementTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/users/9999/achievements/progress")).StatusCode);
     }
 
+    private Task<HttpResponseMessage> Create(int sponsor, object goal) =>
+        client.PostAsJsonAsync($"/users/{sponsor}/achievements/goals", goal);
+
+    private Task<HttpResponseMessage> Edit(int sponsor, int goalId, object goal) =>
+        client.PutAsJsonAsync($"/users/{sponsor}/achievements/goals/{goalId}", goal);
+
+    [Fact]
+    public async Task SponsorCreatesAGoalForTheirDriversOnly()
+    {
+        await Start();
+
+        var response = await Create(sue, new { name = " Acme regular ", description = "Three orders with us.", metric = "orders_placed", threshold = 3 });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var created = (await response.Content.ReadFromJsonAsync<SponsorGoal>())!;
+        Assert.Equal(("Acme regular", "orders_placed", 3, true), (created.Name, created.Metric, created.Threshold, created.Active));
+        var saved = await app.Db().Achievements.SingleAsync(a => a.Id == created.Id);
+        Assert.Equal((acme, sue), (saved.SponsorCompanyId, saved.CreatedBy));
+        Assert.Contains(await Progress(bob), p => p.Id == created.Id && p.Company == "Acme");
+        Assert.DoesNotContain(await Progress(tom), p => p.Id == created.Id);
+        Assert.Equal([created.Id], (await client.GetFromJsonAsync<List<SponsorGoal>>($"/users/{sue}/achievements/goals"))!.Select(g => g.Id));
+        Assert.Empty((await client.GetFromJsonAsync<List<SponsorGoal>>($"/users/{zed}/achievements/goals"))!);
+    }
+
+    [Fact]
+    public async Task SponsorEditsAndSwitchesOffTheirGoal()
+    {
+        await Start();
+        var goal = await Goal(acme, Achievement.PointsEarned, 100);
+        await Points(bob, acme, 150);
+        await Badges(bob);
+
+        var edited = await Edit(sue, goal, new { name = "Acme 200", description = "", metric = "points_earned", threshold = 200, active = false });
+
+        Assert.Equal(HttpStatusCode.OK, edited.StatusCode);
+        var body = (await edited.Content.ReadFromJsonAsync<SponsorGoal>())!;
+        Assert.Equal(("Acme 200", 200, false, 1), (body.Name, body.Threshold, body.Active, body.Earned));
+        Assert.DoesNotContain(await Progress(bob), p => p.Id == goal);
+        Assert.Contains(await Badges(bob), b => b.Id == goal && b.Name == "Acme 200");
+        var listed = Assert.Single((await client.GetFromJsonAsync<List<SponsorGoal>>($"/users/{sue}/achievements/goals"))!);
+        Assert.False(listed.Active);
+    }
+
+    [Fact]
+    public async Task OtherSponsorsCannotTouchAGoal()
+    {
+        await Start();
+        var goal = await Goal(acme, Achievement.PointsEarned, 100);
+        var change = new { name = "Mine now", description = "", metric = "points_earned", threshold = 1, active = true };
+
+        Assert.Equal(HttpStatusCode.NotFound, (await Edit(zed, goal, change)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Edit(sue, 1, change)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Edit(ann, goal, change)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Edit(bob, goal, change)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Create(ann, change)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Create(bob, change)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/users/{bob}/achievements/goals")).StatusCode);
+        Assert.Equal("Acme regular", (await app.Db().Achievements.SingleAsync(a => a.Id == goal)).Name);
+        Assert.Equal("First points", (await app.Db().Achievements.SingleAsync(a => a.Id == 1)).Name);
+    }
+
+    [Theory]
+    [InlineData("", "points_earned", 10)]
+    [InlineData("   ", "points_earned", 10)]
+    [InlineData("Goal", "miles_driven", 10)]
+    [InlineData("Goal", null, 10)]
+    [InlineData("Goal", "points_earned", 0)]
+    [InlineData("Goal", "points_earned", 10_000_001)]
+    public async Task BadGoalsAreRefused(string name, string? metric, int threshold)
+    {
+        await Start();
+
+        var response = await Create(sue, new { name, description = "", metric, threshold });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(Achievement.BuiltIn.Length, await app.Db().Achievements.CountAsync());
+    }
+
+    [Fact]
+    public async Task LongNamesAndDescriptionsAreRefused()
+    {
+        await Start();
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await Create(sue, new { name = new string('a', 101), metric = "points_earned", threshold = 1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Create(sue, new { name = "Goal", description = new string('a', 256), metric = "points_earned", threshold = 1 })).StatusCode);
+    }
+
+    [Fact]
+    public async Task GoalsPerCompanyAreCapped()
+    {
+        await Start();
+        for (var i = 0; i < AchievementEndpoints.MaxGoals; i++)
+            await Goal(acme, Achievement.PointsEarned, i + 1, $"Goal {i}");
+
+        Assert.Equal(HttpStatusCode.Conflict, (await Create(sue, new { name = "One more", metric = "points_earned", threshold = 1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Create(zed, new { name = "One more", metric = "points_earned", threshold = 1 })).StatusCode);
+    }
+
+    [Fact]
+    public async Task DeletingTheSponsorKeepsTheirGoals()
+    {
+        await Start();
+        var created = (await (await Create(sue, new { name = "Kept", metric = "points_earned", threshold = 1 })).Content.ReadFromJsonAsync<SponsorGoal>())!;
+        using var db = app.Db();
+        await db.AccountsCompanies.Where(m => m.AccountId == sue).ExecuteDeleteAsync();
+
+        await db.Users.Where(u => u.Id == sue).ExecuteDeleteAsync();
+
+        Assert.Null((await db.Achievements.SingleAsync(a => a.Id == created.Id)).CreatedBy);
+    }
+
     [Fact]
     public async Task BuiltInGoalsAreSeeded()
     {

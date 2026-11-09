@@ -1,0 +1,212 @@
+@page "/achievement-goals"
+@attribute [Authorize(Roles = "sponsor")]
+@using System.Net.Http.Json
+@inherits BackendPage
+
+<PageTitle>Achievement goals</PageTitle>
+
+<div class="tr-page">
+    <h1>Achievement goals</h1>
+    <p class="tr-subtitle">Goals your drivers earn a badge for. They only count points and orders with your company, and your drivers see them next to the built-in ones.</p>
+
+    <Alerts Notice="@notice" Error="@error" />
+
+    <div class="tr-cards">
+        <section class="tr-card goal-form" aria-labelledby="form-heading">
+            <h2 id="form-heading">@(editing is null ? "New goal" : $"Edit {editing.Name}")</h2>
+            <form class="tr-form" @onsubmit="Save">
+                <label for="goal-name">Name</label>
+                <input id="goal-name" required maxlength="100" @bind="name" />
+
+                <label for="goal-description">Description</label>
+                <input id="goal-description" maxlength="255" @bind="description" aria-describedby="goal-description-help" />
+                <p id="goal-description-help" class="help">What drivers see under the badge, like "Five safe weeks in a row."</p>
+
+                <label for="goal-metric">Counts</label>
+                <select id="goal-metric" @bind="metric">
+                    @foreach (var (key, label) in MetricNames)
+                    {
+                        <option value="@key">@label</option>
+                    }
+                </select>
+
+                <label for="goal-threshold">Target</label>
+                <input id="goal-threshold" type="number" min="1" max="10000000" step="1" required @bind="threshold" />
+
+                <div class="actions">
+                    <button type="submit" class="tr-btn" disabled="@busy">@(editing is null ? "Add goal" : "Save changes")</button>
+                    @if (editing is not null)
+                    {
+                        <button type="button" class="tr-btn-outline cancel" disabled="@busy" @onclick="Clear">Cancel</button>
+                    }
+                </div>
+            </form>
+        </section>
+
+        <section class="tr-card" aria-labelledby="list-heading">
+            <h2 id="list-heading">Your goals</h2>
+            @if (goals is null)
+            {
+                @if (error is null)
+                {
+                    <p role="status"><em>Loading...</em></p>
+                }
+            }
+            else if (goals.Count == 0)
+            {
+                <p class="tr-muted">No goals yet. Your drivers still get the built-in badges.</p>
+            }
+            else
+            {
+                <ul class="tr-list goals">
+                    @foreach (var g in goals)
+                    {
+                        <li class="@(g.Active ? "goal" : "goal off")">
+                            <div class="goal-head">
+                                <strong>@g.Name</strong>
+                                @if (!g.Active)
+                                {
+                                    <span class="state">Off</span>
+                                }
+                            </div>
+                            @if (g.Description.Length > 0)
+                            {
+                                <p class="tr-muted">@g.Description</p>
+                            }
+                            <p class="target">@g.Threshold.ToString("N0") @Unit(g.Metric). Earned by @g.Earned.ToString("N0") @(g.Earned == 1 ? "driver" : "drivers").</p>
+                            <div class="actions">
+                                <button type="button" class="tr-btn-outline edit" disabled="@busy" aria-label="Edit @g.Name" @onclick="() => Edit(g)">Edit</button>
+                                <button type="button" class="tr-btn-outline toggle" disabled="@busy" aria-label="@(g.Active ? "Turn off" : "Turn on") @g.Name" @onclick="() => Toggle(g)">
+                                    @(g.Active ? "Turn off" : "Turn on")
+                                </button>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
+</div>
+
+<style>
+    .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .goal-head {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .goals p {
+        margin: 4px 0 0;
+    }
+
+    .goal.off strong, .goal.off .target {
+        color: var(--muted);
+    }
+
+    .state {
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: #f1f1f1;
+        font-size: 12px;
+        font-weight: 600;
+    }
+</style>
+
+@code {
+    private static readonly (string Key, string Label)[] MetricNames =
+    [
+        ("points_earned", "Points earned"),
+        ("points_spent", "Points spent on orders"),
+        ("orders_placed", "Orders placed")
+    ];
+
+    private List<Goal>? goals;
+    private Goal? editing;
+    private string? name;
+    private string? description;
+    private string metric = "points_earned";
+    private int threshold = 1000;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignedIn();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.GetAsync($"users/{id}/achievements/goals");
+            if (response.IsSuccessStatusCode)
+                goals = await response.Content.ReadFromJsonAsync<List<Goal>>();
+            else
+                error = response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "Join a sponsor company to set goals."
+                    : "Couldn't load your goals right now. Try again in a moment.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load your goals right now. Try again in a moment.";
+        }
+    }
+
+    private Task Save()
+    {
+        var body = new { name, description, metric, threshold, active = editing?.Active ?? true };
+        var wasEditing = editing;
+        return Send(c => wasEditing is null
+                ? c.PostAsJsonAsync($"users/{id}/achievements/goals", body)
+                : c.PutAsJsonAsync($"users/{id}/achievements/goals/{wasEditing.Id}", body),
+            async r =>
+            {
+                var saved = await r.Content.ReadFromJsonAsync<Goal>();
+                Clear();
+                await Load();
+                notice = wasEditing is null ? $"Added {saved?.Name}." : $"Saved {saved?.Name}.";
+            });
+    }
+
+    private Task Toggle(Goal g) =>
+        Send(c => c.PutAsJsonAsync($"users/{id}/achievements/goals/{g.Id}",
+                new { g.Name, g.Description, g.Metric, g.Threshold, active = !g.Active }),
+            async _ =>
+            {
+                await Load();
+                notice = g.Active ? $"Turned off {g.Name}. Badges already earned stay." : $"Turned on {g.Name}.";
+            });
+
+    private void Edit(Goal g)
+    {
+        editing = g;
+        name = g.Name;
+        description = g.Description;
+        metric = g.Metric;
+        threshold = g.Threshold;
+        error = notice = null;
+    }
+
+    private void Clear()
+    {
+        editing = null;
+        name = description = null;
+        metric = "points_earned";
+        threshold = 1000;
+    }
+
+    private static string Unit(string metric) => metric switch
+    {
+        "orders_placed" => "orders placed",
+        "points_spent" => "points spent on orders",
+        _ => "points earned"
+    };
+
+    private sealed record Goal(int Id, string Name, string Description, string Metric, int Threshold, bool Active, int Earned);
+}
