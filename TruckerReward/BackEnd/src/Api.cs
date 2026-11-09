@@ -8,6 +8,7 @@ public static class Api
         app.MapEmailConfirmEndpoints();
         app.MapSignInCodeEndpoints();
         app.MapSessionEndpoints();
+        app.MapUptimeEndpoints();
         app.MapUserEndpoints();
         app.MapAdminEndpoints();
         app.MapNotificationEndpoints();

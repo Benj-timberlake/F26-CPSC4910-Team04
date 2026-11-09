@@ -57,6 +57,7 @@ app.MapAuditExport();
 app.MapCdlReview();
 app.MapViewAs();
 app.MapPasskeyProxy();
+app.MapHealthCheck();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 

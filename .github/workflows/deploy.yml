@@ -19,6 +19,9 @@ jobs:
   deploy:
     name: Build and Deploy
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
 
     steps:
 
@@ -155,3 +158,102 @@ jobs:
           create-environment-if-not-exists: false
           wait-for-deployment: true
           wait-for-environment-recovery: true
+
+
+      # ---------------------------------------------------
+      # 13. CHECK THE SITE ANSWERS AFTER THE DEPLOY
+      # ---------------------------------------------------
+
+      - name: Check site health
+        run: |
+          url=https://team04.cpsc4911.com/health
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /tmp/health.txt -w '%{http_code}' --max-time 20 "$url" || true)
+            echo "attempt $attempt: $url returned ${code:-no response}"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::$url did not return 200 after 6 tries (last: ${code:-no response}). The deploy finished but the app is not healthy, check the Beanstalk events and the backend log."
+          cat /tmp/health.txt || true
+          exit 1
+
+
+      # ---------------------------------------------------
+      # 14. EXPLAIN A FAILED DEPLOY
+      # ---------------------------------------------------
+
+      - name: Explain failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## Deploy failed"
+            echo
+            echo "Commit ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}, environment $ENVIRONMENT_NAME in $AWS_REGION."
+            echo
+            echo "### Failed step"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failed=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
+            --jq '.jobs[].steps[] | select(.conclusion == "failure") | "\(.number). \(.name)"' 2>/dev/null || true)
+          if [ -z "$failed" ]; then
+            failed="could not read the step list, look for the red step in this log"
+          fi
+          echo "Failed step: $failed"
+          echo "$failed" >> "$GITHUB_STEP_SUMMARY"
+
+          case "$failed" in
+            *"Restore"*)   hint="NuGet restore failed. Check package versions and network access." ;;
+            *"Build"*)     hint="The solution does not compile. Run dotnet build TruckerReward/TruckerReward.sln locally." ;;
+            *"Publish"*)   hint="dotnet publish failed for that project. Run it locally with --configuration Release." ;;
+            *"AWS cred"*)  hint="AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY is missing or wrong in the repository secrets." ;;
+            *"Verify AWS"*) hint="The AWS keys were rejected. They may be expired or deactivated." ;;
+            *"Deploy to"*) hint="Beanstalk rejected or rolled back the deployment. See the events below." ;;
+            *"health"*)    hint="The deploy finished but /health did not answer 200. The backend may not have started or the database is unreachable. See the events below." ;;
+            *)             hint="" ;;
+          esac
+          if [ -n "$hint" ]; then
+            echo "$hint"
+            { echo; echo "$hint"; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if ! aws sts get-caller-identity > /dev/null 2>&1; then
+            echo "No working AWS credentials, so Beanstalk events cannot be read."
+            { echo; echo "No working AWS credentials, so Beanstalk events were not read."; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "Latest events"
+          events=$(aws elasticbeanstalk describe-events \
+            --application-name "$APPLICATION_NAME" \
+            --environment-name "$ENVIRONMENT_NAME" \
+            --max-items 20 \
+            --query 'Events[].[EventDate,Severity,Message]' \
+            --output text 2>&1 || true)
+          echo "$events"
+
+          echo "Environment health"
+          health=$(aws elasticbeanstalk describe-environment-health \
+            --environment-name "$ENVIRONMENT_NAME" \
+            --attribute-names All \
+            --output text 2>&1) || health=$(aws elasticbeanstalk describe-environments \
+            --environment-names "$ENVIRONMENT_NAME" \
+            --query 'Environments[].[Status,Health,HealthStatus]' \
+            --output text 2>&1 || true)
+          echo "$health"
+
+          {
+            echo
+            echo "### Latest Elastic Beanstalk events"
+            echo '```'
+            echo "$events"
+            echo '```'
+            echo
+            echo "### Environment health"
+            echo '```'
+            echo "$health"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
