@@ -164,6 +164,8 @@
     private DateOnly? from;
     private DateOnly? to;
     private string applied = "";
+    // the filters the rows were fetched with
+    private string appliedSummary = "no filters";
 
     protected override async Task OnInitializedAsync()
     {
@@ -205,6 +207,7 @@
         {
             using var client = HttpClientFactory.CreateClient("Backend");
             applied = string.Join("&", query);
+            appliedSummary = FilterSummary();
             rows = await client.GetFromJsonAsync<List<Row>>($"users/{id}/audit" + (applied == "" ? "" : "?" + applied)) ?? [];
             if (madeBy == "" && driverId == 0)
             {
@@ -238,7 +241,7 @@
         busy = true;
         try
         {
-            await PdfReport.Save(Js, "Audit log", $"{FilterSummary()}, {PdfReport.Generated()}",
+            await PdfReport.Save(Js, "Audit log", $"{appliedSummary}, {PdfReport.Generated()}",
                 ["When (UTC)", "Category", "Account", "What happened", "By"],
                 rows!.Select(r => new[] { r.At.ToString("yyyy-MM-dd HH:mm"), Label(r.Category), r.Username, r.Detail, r.By ?? "" }),
                 "audit-log.pdf");

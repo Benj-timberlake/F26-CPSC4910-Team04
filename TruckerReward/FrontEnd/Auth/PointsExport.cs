@@ -13,5 +13,5 @@ public static class PointsExport
             if (!response.IsSuccessStatusCode)
                 return Results.StatusCode((int)response.StatusCode);
             return Results.File(await response.Content.ReadAsByteArrayAsync(), "text/csv", "points-history.csv");
-        }).RequireAuthorization(policy => policy.RequireRole("driver"));
+        }).RequireAuthorization(policy => policy.RequireRole("driver")).AddEndpointFilter(ViewAs.NotWhileViewing);
 }
