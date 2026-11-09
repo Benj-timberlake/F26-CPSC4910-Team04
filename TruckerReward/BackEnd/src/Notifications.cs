@@ -164,6 +164,11 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
     public Task AnnouncementPosted(User driver, string companyName, string title, string body, string author) =>
         Send(driver, $"{companyName}: {title}", $"{body}\n\nPosted by {author} at {companyName}.", NotificationCategory.Announcements);
 
+    public Task BadgeEarned(User driver, string name, string description) =>
+        Send(driver, $"Badge earned: {name}",
+            $"{description} You can see all your badges on the achievements page.",
+            null, emailed: false);
+
     public Task AccountViewed(User user, User viewer) =>
         Send(user, "Someone viewed the site as you",
             $"{viewer.FirstName} {viewer.LastName} ({viewer.Username}), {(viewer.UserType == AuthEndpoints.Admin ? "an administrator" : "your sponsor")}, viewed the site as you.",

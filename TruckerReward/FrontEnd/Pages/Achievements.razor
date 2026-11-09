@@ -1,0 +1,98 @@
+@page "/achievements"
+@attribute [Authorize(Roles = "driver")]
+@inherits BackendPage
+
+<PageTitle>Achievements</PageTitle>
+
+<div class="tr-page">
+    <h1>Achievements</h1>
+    <p class="tr-subtitle">Badges you've earned for reaching goals. Some goals are set by your sponsor and only count points from them.</p>
+
+    <Alerts Error="@error" />
+
+    <section class="tr-card badges" aria-labelledby="badges-heading">
+        <h2 id="badges-heading">Your badges</h2>
+        @if (badges is null)
+        {
+            @if (error is null)
+            {
+                <p role="status"><em>Loading...</em></p>
+            }
+        }
+        else if (badges.Count == 0)
+        {
+            <p class="tr-muted">No badges yet. Earn points or place an order to get your first one.</p>
+        }
+        else
+        {
+            <ul class="badge-list">
+                @foreach (var b in badges)
+                {
+                    <li class="badge-item">
+                        <span class="badge-icon" aria-hidden="true">&#9733;</span>
+                        <div>
+                            <strong class="badge-name">@b.Name</strong>
+                            <p class="badge-desc">@b.Description</p>
+                            <p class="badge-meta tr-muted">
+                                Earned @(b.EarnedAt.ToString("yyyy-MM-dd HH:mm")) UTC@(b.Company is null ? "" : $" from {b.Company}")
+                            </p>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+</div>
+
+<style>
+    .badge-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 12px;
+    }
+
+    .badge-item {
+        display: flex;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+    }
+
+    .badge-icon {
+        font-size: 28px;
+        line-height: 1;
+        color: #b45309;
+    }
+
+    .badge-desc, .badge-meta {
+        margin: 2px 0 0;
+    }
+
+    .badge-meta {
+        font-size: 13px;
+    }
+</style>
+
+@code {
+    private List<Badge>? badges;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignedIn();
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            badges = await client.GetFromJsonAsync<List<Badge>>($"users/{id}/achievements");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load your achievements right now. Try again in a moment.";
+        }
+    }
+
+    private sealed record Badge(int Id, string Name, string Description, string? Company, DateTime EarnedAt);
+}

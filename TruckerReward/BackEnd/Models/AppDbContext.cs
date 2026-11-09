@@ -50,6 +50,11 @@ public partial class AppDbContext : DbContext
 
     public DbSet<Announcement> Announcements { get; set; }
 
+
+    public DbSet<Achievement> Achievements { get; set; }
+
+    public DbSet<EarnedBadge> EarnedBadges { get; set; }
+
     public DbSet<LockoutReset> LockoutResets { get; set; }
 
     public DbSet<SavedReason> SavedReasons { get; set; }
@@ -591,6 +596,37 @@ public partial class AppDbContext : DbContext
                 .HasConstraintName("fk_email_confirmations_user");
         });
 
+        modelBuilder.Entity<Achievement>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("achievements");
+            entity.HasIndex(e => new { e.SponsorCompanyId, e.Active }, "ix_achievements_company");
+            entity.Property(e => e.Name).HasMaxLength(100);
+            entity.Property(e => e.Description).HasMaxLength(255);
+            entity.Property(e => e.Metric).HasMaxLength(30);
+            entity.HasOne<Company>().WithMany().HasForeignKey(e => e.SponsorCompanyId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_achievements_company");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.CreatedBy)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_achievements_created_by");
+            entity.HasData(Achievement.BuiltIn);
+        });
+
+        modelBuilder.Entity<EarnedBadge>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("earned_badges");
+            entity.HasIndex(e => new { e.UserId, e.AchievementId }, "uq_earned_badges_user_achievement").IsUnique();
+            entity.HasIndex(e => e.AchievementId, "ix_earned_badges_achievement");
+            entity.HasOne<User>().WithMany().HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_earned_badges_user");
+            entity.HasOne<Achievement>().WithMany().HasForeignKey(e => e.AchievementId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_earned_badges_achievement");
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.Property(e => e.BudgetResetMonth)
@@ -642,7 +678,7 @@ public partial class AppDbContext : DbContext
 
         // these tables name each column after its property in snake_case, and store times as datetime
         foreach (var type in new[] { typeof(NotificationPreference), typeof(Impersonation), typeof(PasskeyCredential), typeof(LockoutReset),
-                     typeof(SavedReason), typeof(UserSession), typeof(UptimeCheck), typeof(SignInCode), typeof(EmailConfirmation), typeof(SiteBanner), typeof(Announcement) })
+                     typeof(SavedReason), typeof(UserSession), typeof(UptimeCheck), typeof(SignInCode), typeof(EmailConfirmation), typeof(SiteBanner), typeof(Announcement), typeof(Achievement), typeof(EarnedBadge) })
             foreach (var property in modelBuilder.Model.FindEntityType(type)!.GetProperties())
             {
                 property.SetColumnName(System.Text.RegularExpressions.Regex.Replace(property.Name, "(?<=.)([A-Z])", "_$1").ToLowerInvariant());
