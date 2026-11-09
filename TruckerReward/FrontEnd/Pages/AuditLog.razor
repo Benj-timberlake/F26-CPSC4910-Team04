@@ -80,14 +80,14 @@
             <p class="tr-muted">Showing the newest @rows.Count entries. <a class="export" href="@ExportUrl">Download CSV</a>
                 <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="DownloadPdf">Download PDF</button></p>
             <div class="tr-table-wrap">
-                <table class="tr-table">
+                <table class="tr-table" aria-label="Audit log entries">
                     <thead>
                         <tr>
-                            <th>When (UTC)</th>
-                            <th>Category</th>
-                            <th>Account</th>
-                            <th>What happened</th>
-                            <th>By</th>
+                            <th scope="col">When (UTC)</th>
+                            <th scope="col">Category</th>
+                            <th scope="col">Account</th>
+                            <th scope="col">What happened</th>
+                            <th scope="col">By</th>
                         </tr>
                     </thead>
                     <tbody>

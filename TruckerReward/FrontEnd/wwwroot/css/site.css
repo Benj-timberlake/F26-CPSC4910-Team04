@@ -94,7 +94,7 @@ a, .btn-link {
 .tr-form input, .tr-form select {
     width: 100%;
     padding: 10px;
-    border: 1px solid #ccc;
+    border: 1px solid #767676;
     border-radius: 6px;
     font-size: 16px;
 }
@@ -267,4 +267,125 @@ form.view-as {
 *::before,
 *::after {
     cursor: url('/images/truck-cursor-32.png') 4 4, auto !important;
+}
+
+/* keyboard focus */
+:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 2px;
+}
+
+.account-bar :focus-visible,
+.view-as-banner :focus-visible {
+    outline-color: #fff;
+}
+
+main:focus {
+    outline: none;
+}
+
+.skip-link {
+    position: absolute;
+    left: 8px;
+    top: -60px;
+    z-index: 2000;
+    padding: 10px 16px;
+    background: #fff;
+    color: #1e3a8a;
+    border: 2px solid #1e3a8a;
+    border-radius: 6px;
+}
+
+.skip-link:focus {
+    top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* small screens */
+img, video {
+    max-width: 100%;
+    height: auto;
+}
+
+main {
+    overflow-wrap: break-word;
+}
+
+@media (max-width: 640px) {
+    .tr-cards {
+        grid-template-columns: 1fr;
+    }
+
+    nav.account-bar {
+        padding: 10px 12px;
+        gap: 8px 12px;
+    }
+
+    nav.account-bar .spacer {
+        display: none;
+    }
+
+    nav.account-bar a,
+    nav.account-bar button {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .view-as-banner {
+        padding: 8px 12px;
+    }
+
+    .tr-page {
+        padding: 16px 12px;
+    }
+
+    .tr-page-narrow {
+        margin: 24px auto;
+        padding: 0 12px;
+    }
+
+    .tr-card {
+        padding: 16px;
+    }
+
+    .tr-kv {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+
+    .tr-kv dd {
+        margin-bottom: 8px;
+    }
+
+    .tr-toolbar > *,
+    .tr-toolbar input,
+    .tr-toolbar select,
+    .tr-toolbar .filter-field {
+        width: 100%;
+        max-width: 100%;
+        font-size: 16px;
+    }
+
+    .tr-btn,
+    .tr-btn-outline {
+        min-height: 44px;
+    }
+
+    .tr-toolbar .tr-btn,
+    .tr-toolbar .tr-btn-outline {
+        width: 100%;
+    }
+
+    .tr-alt {
+        line-height: 2;
+    }
 }
