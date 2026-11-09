@@ -18,5 +18,7 @@ public static class Api
         app.MapPasskeyEndpoints();
         app.MapSponsorTeamEndpoints();
         app.MapMassAccountCreationEndpoints();
+        app.MapBannerEndpoints();
+        app.MapAnnouncementEndpoints();
     }
 }

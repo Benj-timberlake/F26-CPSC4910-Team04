@@ -22,9 +22,13 @@
             <AuthorizeView Roles="admin" Context="admin">
                 <a href="admin/security">Security</a>
                 <a href="admin/accounts">Accounts</a>
+                <a href="admin/banner">Banner</a>
             </AuthorizeView>
             <AuthorizeView Roles="driver" Context="driver">
                 <a href="points">Points</a>
+            </AuthorizeView>
+            <AuthorizeView Roles="driver,sponsor" Context="news">
+                <a href="announcements">Announcements</a>
             </AuthorizeView>
             <AuthorizeView Roles="sponsor,admin" Context="pointsNav">
                 @if (pointsNav.User.IsInRole("admin"))
@@ -61,6 +65,7 @@
         </NotAuthorized>
     </AuthorizeView>
 </nav>
+<SiteBanner />
 <AuthorizeView Context="viewing">
     @if (viewing.User.FindFirst(FrontEnd.Auth.ViewAs.ViewerNameClaim) is { } viewer)
     {

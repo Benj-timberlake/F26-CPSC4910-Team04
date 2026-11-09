@@ -1,0 +1,90 @@
+@page "/admin/banner"
+@attribute [Authorize(Roles = "admin")]
+@using Microsoft.Extensions.Caching.Memory
+@inherits BackendPage
+@inject IServiceProvider Services
+
+<PageTitle>Site banner</PageTitle>
+
+<div class="tr-page-narrow">
+    <div class="tr-card">
+        <h1>Site banner</h1>
+        <p class="tr-muted">Shown at the top of every page until you clear it. It can take up to a minute to reach people already on the site.</p>
+
+        <Alerts Notice="@notice" Error="@error" />
+
+        @if (current is not null)
+        {
+            <p>Showing now: <strong>@current.Message</strong> (@current.Level, set @current.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC)</p>
+            <button type="button" class="tr-btn-outline clear" disabled="@busy" @onclick="Clear">Clear banner</button>
+        }
+        else if (loaded)
+        {
+            <p class="tr-muted">No banner is showing.</p>
+        }
+
+        <form class="tr-form" @onsubmit="Set">
+            <label for="banner-message">Message</label>
+            <input id="banner-message" maxlength="500" @bind="message" />
+            <label for="banner-level">Level</label>
+            <select id="banner-level" @bind="level">
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+            </select>
+            <button type="submit" class="tr-btn" disabled="@busy">Show banner</button>
+        </form>
+    </div>
+</div>
+
+@code {
+    private Entry? current;
+    private bool loaded;
+    private string message = "";
+    private string level = "info";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignedIn();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.GetAsync("site-banner");
+            current = response.StatusCode == System.Net.HttpStatusCode.OK ? await response.Content.ReadFromJsonAsync<Entry>() : null;
+            loaded = response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load the banner right now. Try again in a moment.";
+        }
+    }
+
+    private async Task Set()
+    {
+        await Send(c => c.PutAsJsonAsync("admin/site-banner", new { adminId = int.Parse(id!), message, level }), async _ =>
+        {
+            notice = "The banner is showing.";
+            message = "";
+            await Changed();
+        });
+    }
+
+    private Task Clear() =>
+        Send(c => c.PostAsJsonAsync("admin/site-banner/clear", new { adminId = int.Parse(id!) }), async _ =>
+        {
+            notice = "The banner was cleared.";
+            await Changed();
+        });
+
+    private async Task Changed()
+    {
+        Services.GetService<IMemoryCache>()?.Remove(FrontEnd.Shared.SiteBanner.CacheKey);
+        await Load();
+    }
+
+    private sealed record Entry(string Message, string Level, DateTime CreatedAt);
+}

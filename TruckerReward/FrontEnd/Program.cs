@@ -8,6 +8,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.AddTruckerAuthentication();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<CdlStorage>();
 builder.Services.AddSingleton<ICdlReader>(sp => sp.GetRequiredService<CdlStorage>());
 

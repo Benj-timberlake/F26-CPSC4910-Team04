@@ -161,6 +161,9 @@ public sealed class Notifications(AppDbContext db, IEmailSender email, TimeProvi
             NotificationCategory.Purchases);
     }
 
+    public Task AnnouncementPosted(User driver, string companyName, string title, string body, string author) =>
+        Send(driver, $"{companyName}: {title}", $"{body}\n\nPosted by {author} at {companyName}.", NotificationCategory.Announcements);
+
     public Task AccountViewed(User user, User viewer) =>
         Send(user, "Someone viewed the site as you",
             $"{viewer.FirstName} {viewer.LastName} ({viewer.Username}), {(viewer.UserType == AuthEndpoints.Admin ? "an administrator" : "your sponsor")}, viewed the site as you.",

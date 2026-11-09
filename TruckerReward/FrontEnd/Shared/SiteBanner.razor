@@ -1,0 +1,79 @@
+@namespace FrontEnd.Shared
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.Extensions.Caching.Memory
+@implements IDisposable
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Nav
+@inject IServiceProvider Services
+
+@if (banner is not null)
+{
+    <div class="site-banner @banner.Level" role="status">@banner.Message</div>
+}
+
+<style>
+    .site-banner {
+        padding: 10px 24px;
+        background: #dbeafe;
+        color: #1e3a8a;
+    }
+
+    .site-banner.warning {
+        background: #fee2e2;
+        color: #7f1d1d;
+    }
+</style>
+
+@code {
+    public const string CacheKey = "site-banner";
+    private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(45);
+
+    private Banner? banner;
+    private IMemoryCache? Cache => Services.GetService<IMemoryCache>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        await Load();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Load();
+                StateHasChanged();
+            }
+            catch (ObjectDisposedException)
+            {
+                // the circuit went away mid-load
+            }
+        });
+
+    private async Task Load()
+    {
+        if (Cache is { } cache && cache.TryGetValue(CacheKey, out Banner? cached))
+        {
+            banner = cached;
+            return;
+        }
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.GetAsync("site-banner");
+            if (!response.IsSuccessStatusCode)
+                return;
+            banner = response.StatusCode == System.Net.HttpStatusCode.OK ? await response.Content.ReadFromJsonAsync<Banner>() : null;
+            Cache?.Set(CacheKey, banner, Ttl);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            // keeps what it had until the next page
+        }
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+
+    private sealed record Banner(string Message, string Level);
+}

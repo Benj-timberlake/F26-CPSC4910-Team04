@@ -10,7 +10,9 @@ public sealed record NotificationCategory(string Key, string Label, bool Emailed
     public static readonly NotificationCategory SecurityAlerts = new("security-alerts", "Lockouts and password reset requests", true, AuthEndpoints.Admin);
     public static readonly NotificationCategory AccountStatus = new("account-status", "Accounts deactivated or reactivated", false, AuthEndpoints.Admin);
 
-    public static readonly IReadOnlyList<NotificationCategory> All = [Points, Orders, Applications, Purchases, NegativeBalances, NewAccounts, SecurityAlerts, AccountStatus];
+    public static readonly NotificationCategory Announcements = new("announcements", "Sponsor announcements", false, AuthEndpoints.Driver);
+
+    public static readonly IReadOnlyList<NotificationCategory> All = [Points, Orders, Applications, Purchases, NegativeBalances, NewAccounts, SecurityAlerts, AccountStatus, Announcements];
 
     public static IEnumerable<NotificationCategory> For(string userType) => All.Where(c => c.Roles.Contains(userType));
 }

@@ -189,3 +189,30 @@ CREATE TABLE IF NOT EXISTS uptime_checks (
     PRIMARY KEY (id),
     KEY ix_uptime_checks_checked (checked_at)
 );
+
+-- the site-wide banner. the active one is the row with no cleared_at
+CREATE TABLE IF NOT EXISTS site_banners (
+    id INT NOT NULL AUTO_INCREMENT,
+    message VARCHAR(500) NOT NULL,
+    level VARCHAR(10) NOT NULL,
+    created_at DATETIME NOT NULL,
+    set_by INT NULL,
+    cleared_at DATETIME NULL,
+    PRIMARY KEY (id),
+    KEY ix_site_banners_cleared (cleared_at, created_at),
+    CONSTRAINT fk_site_banners_user FOREIGN KEY (set_by) REFERENCES users (id) ON DELETE SET NULL
+);
+
+-- sponsor announcements. they stay when the author's account is deleted
+CREATE TABLE IF NOT EXISTS announcements (
+    id INT NOT NULL AUTO_INCREMENT,
+    company_id INT NOT NULL,
+    author_id INT NULL,
+    title VARCHAR(100) NOT NULL,
+    body VARCHAR(2000) NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    KEY ix_announcements_company (company_id, created_at),
+    CONSTRAINT fk_announcements_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE CASCADE,
+    CONSTRAINT fk_announcements_author FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE SET NULL
+);
