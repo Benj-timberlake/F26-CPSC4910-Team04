@@ -12,6 +12,7 @@ public static class PointsEndpoints
     public static void MapPointsEndpoints(this WebApplication app)
     {
         app.MapGet("/users/{id:int}/points", Summary);
+        app.MapGet("/users/{id:int}/points.csv", HistoryCsv);
         app.MapGet("/users/{id:int}/points/monthly", Monthly);
         app.MapPost("/users/{id:int}/points/monthly", SaveMonthly);
         // id is the sponsor or admin who is looking
@@ -80,6 +81,40 @@ public static class PointsEndpoints
             rows.Where(r => r.PointsDelta < 0 && r.Order).Sum(r => -(long)r.PointsDelta),
             rows.Where(r => r.PointsDelta < 0 && !r.Order).Sum(r => -(long)r.PointsDelta),
             entries));
+    }
+
+    private static async Task<IResult> HistoryCsv(int id, AppDbContext db)
+    {
+        if (!await db.Users.AnyAsync(u => u.Id == id))
+            return Results.NotFound();
+        var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+        var company = await db.Companies.AsNoTracking().Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync() ?? "";
+        var rows = await db.PointsHistory.AsNoTracking()
+            .Where(h => h.UserId == id && companyId != null && h.CompanyId == companyId)
+            .OrderBy(h => h.Timestamp).ThenBy(h => h.Id)
+            .Select(h => new
+            {
+                h.Timestamp,
+                h.PointsDelta,
+                Order = h.Carts.Any(),
+                Reason = h.AuditHistories.Select(a => a.Resoning).FirstOrDefault()
+            })
+            .ToListAsync();
+        var csv = new System.Text.StringBuilder("When (UTC),Points,Reason,Sponsor,Balance\r\n");
+        long balance = 0;
+        var lines = new List<string>();
+        foreach (var r in rows)
+        {
+            balance += r.PointsDelta;
+            // bare numbers keep negatives from reading as formulas
+            lines.Add(string.Join(",",
+                AuditEndpoints.Cell(r.Timestamp?.ToString("yyyy-MM-dd HH:mm:ss") ?? ""), r.PointsDelta,
+                AuditEndpoints.Cell(r.Order ? "Order" : r.Reason ?? ""), AuditEndpoints.Cell(company), balance));
+        }
+        lines.Reverse();
+        foreach (var line in lines)
+            csv.Append(line).Append("\r\n");
+        return Results.File(System.Text.Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", "points-history.csv");
     }
 
     // sort is name, points, spent or earned
