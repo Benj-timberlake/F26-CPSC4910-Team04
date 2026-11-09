@@ -6,7 +6,7 @@
 
 <div class="tr-page">
     <h1>Achievements</h1>
-    <p class="tr-subtitle">Badges you've earned for reaching goals. Some goals are set by your sponsor and only count points from them.</p>
+    <p class="tr-subtitle">Badges you've earned for reaching goals. Some goals are set by your sponsor and only count points from them. Orders count once the 24 hour refund window has passed.</p>
 
     <Alerts Error="@error" />
 
@@ -167,13 +167,14 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await SignedIn();
+        // viewing as a driver shouldn't hand them badges
+        var award = ViewAs.IsViewing(await SignedIn()) ? "?award=false" : "";
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
             // progress awards new badges first
-            goals = await client.GetFromJsonAsync<List<Goal>>($"users/{id}/achievements/progress");
-            badges = await client.GetFromJsonAsync<List<Badge>>($"users/{id}/achievements");
+            goals = await client.GetFromJsonAsync<List<Goal>>($"users/{id}/achievements/progress{award}");
+            badges = await client.GetFromJsonAsync<List<Badge>>($"users/{id}/achievements{award}");
         }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
         {

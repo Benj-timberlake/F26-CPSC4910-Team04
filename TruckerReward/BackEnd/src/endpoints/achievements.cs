@@ -20,12 +20,12 @@ public static class AchievementEndpoints
         app.MapPut("/users/{id:int}/achievements/goals/{goalId:int}", EditGoal);
     }
 
-    private static async Task<IResult> Badges(int id, AppDbContext db, Notifications notifications, TimeProvider clock)
+    private static async Task<IResult> Badges(int id, AppDbContext db, Notifications notifications, TimeProvider clock, bool award = true)
     {
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (user is null)
             return Results.NotFound();
-        if (user.UserType == AuthEndpoints.Driver)
+        if (user.UserType == AuthEndpoints.Driver && award)
             await Check(db, notifications, clock, user);
         return Results.Ok(await db.EarnedBadges.AsNoTracking()
             .Where(b => b.UserId == id)
@@ -36,14 +36,14 @@ public static class AchievementEndpoints
             .ToListAsync());
     }
 
-    private static async Task<IResult> Progress(int id, AppDbContext db, Notifications notifications, TimeProvider clock)
+    private static async Task<IResult> Progress(int id, AppDbContext db, Notifications notifications, TimeProvider clock, bool award = true)
     {
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (user is null)
             return Results.NotFound();
         if (user.UserType != AuthEndpoints.Driver)
             return Results.Ok(new List<GoalProgress>());
-        var open = (await Check(db, notifications, clock, user)).Where(r => !r.Earned).ToList();
+        var open = (await Check(db, notifications, clock, user, award)).Where(r => !r.Earned).ToList();
         var companyIds = open.Select(r => r.Goal.SponsorCompanyId).OfType<int>().Distinct().ToList();
         var names = await db.Companies.AsNoTracking().Where(c => companyIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name);
         return Results.Ok(open
@@ -129,56 +129,65 @@ public static class AchievementEndpoints
             : null;
 
     // works out the driver's totals for each goal that applies and awards the ones just reached
-    internal static async Task<List<(Achievement Goal, long Value, bool Earned)>> Check(AppDbContext db, Notifications notifications, TimeProvider clock, User driver)
+    internal static async Task<List<(Achievement Goal, long Value, bool Earned)>> Check(AppDbContext db, Notifications notifications, TimeProvider clock, User driver, bool award = true)
     {
         var companies = await db.AccountsCompanies.Where(m => m.AccountId == driver.Id).Select(m => m.CompanyId).ToListAsync();
         var goals = await db.Achievements.AsNoTracking()
             .Where(a => a.Active && (a.SponsorCompanyId == null || companies.Contains(a.SponsorCompanyId.Value)))
             .OrderBy(a => a.Id)
             .ToListAsync();
-        var history = await db.PointsHistory.AsNoTracking().Where(h => h.UserId == driver.Id)
-            .Select(h => new Row(h.CompanyId, h.PointsDelta, h.Carts.Any()))
-            .ToListAsync();
-        var earned = (await db.EarnedBadges.Where(b => b.UserId == driver.Id).Select(b => b.AchievementId).ToListAsync()).ToHashSet();
-
-        var results = goals.Select(g => (Goal: g, Value: Value(g, history), Earned: earned.Contains(g.Id))).ToList();
-        var reached = results.Where(r => !r.Earned && r.Value >= r.Goal.Threshold).Select(r => r.Goal).ToList();
-        if (reached.Count == 0)
-            return results;
-
         var now = clock.GetUtcNow().UtcDateTime;
-        var rows = reached.Select(g => new EarnedBadge { UserId = driver.Id, AchievementId = g.Id, EarnedAt = now }).ToList();
-        db.EarnedBadges.AddRange(rows);
-        try
+        // orders count only after the refund window
+        var settled = now.AddHours(-24);
+        var history = await db.PointsHistory.AsNoTracking().Where(h => h.UserId == driver.Id)
+            .Select(h => new Row(h.CompanyId, h.PointsDelta, h.Carts.Any(), h.RejectionReason != null,
+                h.Timestamp == null || h.Timestamp <= settled || h.Carts.Any(c => c.WasOrdered)))
+            .ToListAsync();
+        var results = goals.Select(g => (Goal: g, Value: Value(g, history), Earned: false)).ToList();
+        // a second try covers a request that awarded some of the same badges at the same time
+        for (var attempt = 0; ; attempt++)
         {
-            await db.SaveChangesAsync();
+            var earned = (await db.EarnedBadges.Where(b => b.UserId == driver.Id).Select(b => b.AchievementId).ToListAsync()).ToHashSet();
+            results = results.Select(r => r with { Earned = earned.Contains(r.Goal.Id) }).ToList();
+            var reached = results.Where(r => !r.Earned && r.Value >= r.Goal.Threshold).Select(r => r.Goal).ToList();
+            if (reached.Count == 0 || !award)
+                return results;
+
+            var rows = reached.Select(g => new EarnedBadge { UserId = driver.Id, AchievementId = g.Id, EarnedAt = now }).ToList();
+            db.EarnedBadges.AddRange(rows);
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException) when (attempt == 0)
+            {
+                foreach (var row in rows)
+                    db.Entry(row).State = EntityState.Detached;
+                continue;
+            }
+            foreach (var goal in reached)
+                await notifications.BadgeEarned(driver, goal.Name, goal.Description);
+            return results.Select(r => r with { Earned = r.Earned || reached.Contains(r.Goal) }).ToList();
         }
-        catch (DbUpdateException)
-        {
-            // another request awarded them first and already sent the notification
-            foreach (var row in rows)
-                db.Entry(row).State = EntityState.Detached;
-            return results;
-        }
-        foreach (var goal in reached)
-            await notifications.BadgeEarned(driver, goal.Name, goal.Description);
-        return results.Select(r => r with { Earned = r.Earned || reached.Contains(r.Goal) }).ToList();
     }
 
     // sponsor goals only count points from that sponsor
     private static long Value(Achievement goal, List<Row> history)
     {
         var rows = goal.SponsorCompanyId is int company ? history.Where(h => h.CompanyId == company) : history;
+        var orders = rows.Where(h => h.Order && h.Delta < 0 && !h.Rejected && h.Settled).ToList();
         return goal.Metric switch
         {
-            Achievement.PointsEarned => rows.Where(h => h.Delta > 0).Sum(h => (long)h.Delta),
-            Achievement.PointsSpent => rows.Where(h => h.Delta < 0 && h.Order).Sum(h => -(long)h.Delta),
-            Achievement.OrdersPlaced => rows.Count(h => h.Order),
+            // rejection refunds aren't earned points
+            Achievement.PointsEarned => Math.Max(0, rows.Where(h => h.Delta > 0).Sum(h => (long)h.Delta)
+                - rows.Where(h => h.Order && h.Rejected && h.Delta < 0).Sum(h => -(long)h.Delta)),
+            Achievement.PointsSpent => orders.Sum(h => -(long)h.Delta),
+            Achievement.OrdersPlaced => orders.Count,
             _ => 0
         };
     }
 
-    private sealed record Row(int CompanyId, int Delta, bool Order);
+    private sealed record Row(int CompanyId, int Delta, bool Order, bool Rejected, bool Settled);
 }
 
 // company is null for built-in badges

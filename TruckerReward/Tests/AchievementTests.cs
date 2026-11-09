@@ -40,10 +40,12 @@ public sealed class AchievementTests : IAsyncDisposable
         AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
-    private async Task Points(int driver, int company, int delta, bool order = false)
+    // orders default to past the refund window
+    private async Task Points(int driver, int company, int delta, bool order = false, bool settled = true, string? rejected = null)
     {
         using var db = app.Db();
-        var history = new PointsHistory { UserId = driver, CompanyId = company, PointsDelta = delta, Timestamp = app.Clock.GetUtcNow().UtcDateTime };
+        var at = app.Clock.GetUtcNow().UtcDateTime.AddDays(order && settled ? -2 : 0);
+        var history = new PointsHistory { UserId = driver, CompanyId = company, PointsDelta = delta, Timestamp = at, RejectionReason = rejected };
         db.PointsHistory.Add(history);
         if (order)
             db.CartItems.Add(new CartItem { UserId = driver, Name = "Mug", Price = -delta / 100m, InCart = false, PointsHistory = history });
@@ -276,6 +278,50 @@ public sealed class AchievementTests : IAsyncDisposable
         Assert.Contains("Big spender", names);
         Assert.Contains("5,000 points", names);
         Assert.DoesNotContain("10,000 points", names);
+    }
+
+    [Fact]
+    public async Task OrdersCountOnceTheyCanNoLongerBeRefunded()
+    {
+        await Start();
+        await Points(bob, acme, 500);
+        await Points(bob, acme, -100, order: true, settled: false);
+
+        Assert.DoesNotContain(await Badges(bob), b => b.Name == "First order");
+
+        app.Clock.Advance(TimeSpan.FromHours(25));
+        Assert.Contains(await Badges(bob), b => b.Name == "First order");
+    }
+
+    [Fact]
+    public async Task RejectedOrdersAndTheirRefundsDoNotCount()
+    {
+        await Start();
+        for (var i = 0; i < 5; i++)
+        {
+            await Points(bob, acme, -1_000, order: true, rejected: "out of stock");
+            await Points(bob, acme, 1_000);
+        }
+
+        var names = (await Badges(bob)).Select(b => b.Name).ToList();
+
+        Assert.DoesNotContain("First order", names);
+        Assert.DoesNotContain("Big spender", names);
+        Assert.DoesNotContain("First points", names);
+    }
+
+    [Fact]
+    public async Task ReadingWithoutAwardLeavesBadgesAlone()
+    {
+        await Start();
+        await Points(bob, acme, 1_000);
+
+        var progress = (await client.GetFromJsonAsync<List<GoalProgress>>($"/users/{bob}/achievements/progress?award=false"))!;
+        var badges = (await client.GetFromJsonAsync<List<Badge>>($"/users/{bob}/achievements?award=false"))!;
+
+        Assert.Contains(progress, p => p.Name == "First points");
+        Assert.Empty(badges);
+        Assert.False(await app.Db().EarnedBadges.AnyAsync(b => b.UserId == bob));
     }
 
     [Fact]
