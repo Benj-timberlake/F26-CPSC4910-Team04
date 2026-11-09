@@ -37,11 +37,19 @@
         await Load();
     }
 
-    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
-    {
-        await Load();
-        await InvokeAsync(StateHasChanged);
-    }
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Load();
+                StateHasChanged();
+            }
+            catch (ObjectDisposedException)
+            {
+                // the circuit went away mid-load
+            }
+        });
 
     private async Task Load()
     {
@@ -53,7 +61,7 @@
         try
         {
             using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.GetAsync("site-banner");
+            using var response = await client.GetAsync("site-banner");
             if (!response.IsSuccessStatusCode)
                 return;
             banner = response.StatusCode == System.Net.HttpStatusCode.OK ? await response.Content.ReadFromJsonAsync<Banner>() : null;
