@@ -84,6 +84,10 @@ step, a hint for it, the latest Beanstalk events and the environment health.
 The BackEnd checks the database every minute and keeps 90 days of results in `uptime_checks`.
 Admins see uptime for the last day, week and month on the security page; the target is 95%.
 
+`uptime.yml` checks the site's `/health` from GitHub about every 5 minutes and emails
+TruckerRewards@gmail.com once when it goes down and once when it's back. It sends through the same
+Gmail settings the site uses, read from Beanstalk.
+
 Environment properties on the Beanstalk environment:
 
 | Name | Value |

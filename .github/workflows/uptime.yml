@@ -1,0 +1,106 @@
+name: Uptime alert
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  APPLICATION_NAME: BEANSTALK-04
+  ENVIRONMENT_NAME: BEANSTALK-04-env
+  SITE: https://team04.cpsc4911.com
+  ALERT_TO: TruckerRewards@gmail.com
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # five tries over two minutes ride out a deploy restart
+      - name: Check the site
+        id: site
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o body.txt -w '%{http_code}' --max-time 20 "$SITE/health" || true)
+            if [ "$code" = "200" ]; then
+              echo "state=up" >> "$GITHUB_OUTPUT"
+              echo "Site is up"
+              exit 0
+            fi
+            echo "Try $i: HTTP $code $(head -c 200 body.txt 2>/dev/null | tr -d '\r\n')"
+            [ "$i" -lt 5 ] && sleep 30
+          done
+          echo "state=down" >> "$GITHUB_OUTPUT"
+          echo "detail=HTTP $code $(head -c 200 body.txt 2>/dev/null | tr -d '\r\n')" >> "$GITHUB_OUTPUT"
+
+      # a failed run means the site was down at that check
+      - name: Compare with the last check
+        id: last
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh api "repos/${{ github.repository }}/actions/workflows/uptime.yml/runs?status=completed&per_page=20" \
+            --jq '[.workflow_runs[] | select(.id != ${{ github.run_id }} and (.conclusion == "success" or .conclusion == "failure"))][0].conclusion // "success"')
+          [ "$last" = "failure" ] && was=down || was=up
+          echo "Last check: $was, now: ${{ steps.site.outputs.state }}"
+          [ "$was" != "${{ steps.site.outputs.state }}" ] && echo "changed=true" >> "$GITHUB_OUTPUT" || true
+
+      - name: Configure AWS credentials
+        if: steps.last.outputs.changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # the site's own gmail settings, masked
+      - name: Email the team
+        if: steps.last.outputs.changed == 'true'
+        env:
+          STATE: ${{ steps.site.outputs.state }}
+          DETAIL: ${{ steps.site.outputs.detail }}
+        run: |
+          setting() {
+            aws elasticbeanstalk describe-configuration-settings \
+              --application-name "$APPLICATION_NAME" --environment-name "$ENVIRONMENT_NAME" \
+              --query "ConfigurationSettings[0].OptionSettings[?OptionName=='$1'].Value | [0]" --output text
+          }
+          for name in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD EMAIL_FROM; do
+            value=$(setting "$name")
+            echo "::add-mask::$value"
+            export "$name=$value"
+          done
+          python3 - <<'EOF'
+          import os, smtplib
+          from email.message import EmailMessage
+          down = os.environ["STATE"] == "down"
+          msg = EmailMessage()
+          msg["From"] = os.environ["EMAIL_FROM"] if os.environ["EMAIL_FROM"] != "None" else os.environ["SMTP_USER"]
+          msg["To"] = os.environ["ALERT_TO"]
+          msg["Subject"] = "TruckerReward is down" if down else "TruckerReward is back up"
+          run = f'{os.environ["GITHUB_SERVER_URL"]}/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{os.environ["GITHUB_RUN_ID"]}'
+          msg.set_content(
+              f'{os.environ["SITE"]}/health failed five checks over two minutes ({os.environ["DETAIL"]}).\n\nRun: {run}\n'
+              if down else f'{os.environ["SITE"]}/health is answering again.\n\nRun: {run}\n')
+          with smtplib.SMTP(os.environ["SMTP_HOST"], int(os.environ["SMTP_PORT"] or 587), timeout=30) as smtp:
+              smtp.starttls()
+              smtp.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
+              smtp.send_message(msg)
+          print("Sent", msg["Subject"])
+          EOF
+
+      - name: Fail while the site is down
+        if: steps.site.outputs.state == 'down'
+        env:
+          DETAIL: ${{ steps.site.outputs.detail }}
+        run: |
+          echo "::error::$SITE/health is down: $DETAIL"
+          exit 1
