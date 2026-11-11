@@ -3,29 +3,38 @@
 
 <PageTitle>TruckerReward</PageTitle>
 
+
 @if (!isSponsor)
 {
-<div class="tr-page-narrow home">
-    <h1>TruckerReward</h1>
+    <div class="tr-page-narrow home home-center">
+        <div class="home-intro">
+            <h1>TruckerReward</h1>
+            <div class="home-accent"></div>
 
-    <AuthorizeView>
-        <Authorized>
-            <p>Signed in as <strong>@context.User.Identity?.Name</strong>.</p>
-            <p>
-                <a class="tr-btn" href="dashboard">Go to your dashboard</a>
-                <a class="tr-btn-outline" href="products">Browse products</a>
-            </p>
-        </Authorized>
-        <NotAuthorized>
-            <p>Welcome to TruckerReward.</p>
-            <p>
-                <a class="tr-btn" href="login">Log in</a>
-                <a class="tr-btn-outline" href="register">Create an account</a>
-            </p>
-        </NotAuthorized>
-    </AuthorizeView>
-</div>
+            <AuthorizeView>
+                <Authorized>
+                    <p class="home-welcome">
+                        Welcome back, <strong>@context.User.Identity?.Name</strong>!
+                    </p>
+                    <div class="home-actions">
+                        <a class="tr-btn" href="dashboard">Go to your dashboard</a>
+                        <a class="tr-btn-outline" href="products">Browse products</a>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <p class="home-welcome">
+                        Welcome to TruckerReward!
+                    </p>
+                    <div class="home-actions">
+                        <a class="tr-btn" href="login">Log in</a>
+                        <a class="tr-btn-outline" href="register">Create an account</a>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </div>
 }
+
 
 @code {
     [CascadingParameter]
