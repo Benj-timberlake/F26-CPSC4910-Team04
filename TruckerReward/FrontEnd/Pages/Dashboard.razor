@@ -19,15 +19,211 @@
     }
     else
     {
-        <h1>My TruckerReward Dashboard</h1>
-        @if (account.UserType == "sponsor")
-        {
-            <p><a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a></p>
-        }
-        else
-        {
-            <p><a class="tr-btn" href="pastorders">Past Orders</a></p>
-        }
+        
+@if (account.UserType == "admin")
+{
+    <div class="admin-dashboard">
+
+        <!-- Admin Header -->
+        <header class="admin-header">
+            <div>
+                <span class="admin-eyebrow">
+                    TRUCKERREWARD / ADMINISTRATION
+                </span>
+
+                <h1>Admin Dashboard</h1>
+
+                <p>
+                    Welcome back, @account.FirstName.
+                    Manage your platform from one place.
+                </p>
+            </div>
+
+            <div class="admin-header-actions">
+                <a href="audit" class="admin-button-secondary">
+                    View Audit Log
+                </a>
+
+                <a href="admin/accounts" class="admin-button-primary">
+                    Manage Accounts
+                </a>
+            </div>
+        </header>
+
+        <!-- Management Overview -->
+        <section class="admin-section">
+            <div class="admin-section-heading">
+                <div>
+                    <h2>Platform Overview</h2>
+                    <p>Access your core management tools.</p>
+                </div>
+            </div>
+
+            <div class="admin-stat-grid">
+
+                <a href="admin/accounts" class="admin-stat-card">
+                    <div class="admin-stat-top">
+                        <span class="admin-stat-icon">👥</span>
+                        <span class="admin-card-arrow">↗</span>
+                    </div>
+
+                    <h3>Accounts</h3>
+                    <p>Manage users and administrative access.</p>
+                    <span class="admin-stat-link">
+                        Open Accounts →
+                    </span>
+                </a>
+
+                <a href="manage-points" class="admin-stat-card">
+                    <div class="admin-stat-top">
+                        <span class="admin-stat-icon">🏆</span>
+                        <span class="admin-card-arrow">↗</span>
+                    </div>
+
+                    <h3>Driver Points</h3>
+                    <p>Review drivers and manage reward points.</p>
+                    <span class="admin-stat-link">
+                        Manage Points →
+                    </span>
+                </a>
+
+                <a href="pastorders" class="admin-stat-card">
+                    <div class="admin-stat-top">
+                        <span class="admin-stat-icon">📦</span>
+                        <span class="admin-card-arrow">↗</span>
+                    </div>
+
+                    <h3>Past Orders</h3>
+                    <p>Access the existing order history page.</p>
+                    <span class="admin-stat-link">
+                        View Orders →
+                    </span>
+                </a>
+
+                <a href="admin/security" class="admin-stat-card">
+                    <div class="admin-stat-top">
+                        <span class="admin-stat-icon">🛡️</span>
+                        <span class="admin-card-arrow">↗</span>
+                    </div>
+
+                    <h3>Security</h3>
+                    <p>Review platform security controls.</p>
+                    <span class="admin-stat-link">
+                        Open Security →
+                    </span>
+                </a>
+
+            </div>
+        </section>
+
+        <!-- Lower Dashboard -->
+        <div class="admin-content-grid">
+
+            <!-- Quick Actions -->
+            <section class="admin-panel">
+                <div class="admin-panel-header">
+                    <div>
+                        <h2>Quick Actions</h2>
+                        <p>Frequently used admin tools</p>
+                    </div>
+                </div>
+
+                <div class="admin-action-list">
+
+                    <a href="admin/accounts" class="admin-action">
+                        <span class="admin-action-icon">👤</span>
+                        <span class="admin-action-text">
+                            <strong>Manage Users</strong>
+                            <small>View and manage accounts</small>
+                        </span>
+                        <span class="admin-action-arrow">→</span>
+                    </a>
+
+                    <a href="manage-points" class="admin-action">
+                        <span class="admin-action-icon">⭐</span>
+                        <span class="admin-action-text">
+                            <strong>Manage Driver Points</strong>
+                            <small>Review and assign rewards</small>
+                        </span>
+                        <span class="admin-action-arrow">→</span>
+                    </a>
+
+                    <a href="admin/banner" class="admin-action">
+                        <span class="admin-action-icon">📢</span>
+                        <span class="admin-action-text">
+                            <strong>Manage Banners</strong>
+                            <small>Update site announcements</small>
+                        </span>
+                        <span class="admin-action-arrow">→</span>
+                    </a>
+
+                </div>
+            </section>
+
+            <!-- Administration -->
+            <section class="admin-panel">
+                <div class="admin-panel-header">
+                    <div>
+                        <h2>Platform Management</h2>
+                        <p>Monitoring and administration</p>
+                    </div>
+                </div>
+
+                <div class="admin-action-list">
+
+                    <a href="audit" class="admin-action">
+                        <span class="admin-action-icon">📋</span>
+                        <span class="admin-action-text">
+                            <strong>Audit Log</strong>
+                            <small>Review recorded activity</small>
+                        </span>
+                        <span class="admin-action-arrow">→</span>
+                    </a>
+
+                    <a href="admin/security" class="admin-action">
+                        <span class="admin-action-icon">🔐</span>
+                        <span class="admin-action-text">
+                            <strong>Security Settings</strong>
+                            <small>Access security management</small>
+                        </span>
+                        <span class="admin-action-arrow">→</span>
+                    </a>
+
+                    <a href="products" class="admin-action">
+                        <span class="admin-action-icon">🛍️</span>
+                        <span class="admin-action-text">
+                            <strong>Product Catalog</strong>
+                            <small>Browse available products</small>
+                        </span>
+                        <span class="admin-action-arrow">→</span>
+                    </a>
+
+                </div>
+            </section>
+
+        </div>
+    </div>
+}
+else
+{
+    <h1>My TruckerReward Dashboard</h1>
+}
+
+        
+@if (account.UserType == "sponsor")
+{
+    <p>
+        <a class="tr-btn" href="catalog">Catalog</a>
+        <a class="tr-btn" href="sponsor/orders">Order</a>
+    </p>
+}
+else if (account.UserType == "driver")
+{
+    <p>
+        <a class="tr-btn" href="pastorders">Past Orders</a>
+    </p>
+}
+
         @if (notice is not null)
         {
             <p role="status" class="tr-alert-success">@notice</p>
@@ -207,130 +403,320 @@
 </div>
 
 <style>
-    .points {
-        background: var(--brand);
-        border-color: var(--brand);
-        color: white;
+ 
+/* ===========================================
+   ADMIN DASHBOARD - TRUCKERREWARD
+   =========================================== */
+
+.admin-dashboard {
+    --admin-bg: #0b1120;
+    --admin-card: #151e2f;
+    --admin-border: #263449;
+    --admin-text: #f1f5f9;
+    --admin-muted: #94a3b8;
+    --admin-accent: #3b82f6;
+
+    background: var(--admin-bg);
+    color: var(--admin-text);
+    border-radius: 16px;
+    padding: 32px;
+    min-height: 75vh;
+    font-family: Inter, system-ui, sans-serif;
+}
+
+/* Header */
+
+.admin-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 38px;
+}
+
+.admin-eyebrow {
+    color: var(--admin-accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+}
+
+.admin-header h1 {
+    color: var(--admin-text);
+    font-size: clamp(28px, 3vw, 38px);
+    font-weight: 750;
+    margin: 10px 0;
+}
+
+.admin-header p {
+    color: var(--admin-muted);
+    margin: 0;
+}
+
+.admin-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+/* Buttons */
+
+.admin-button-primary,
+.admin-button-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 18px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all .2s ease;
+}
+
+.admin-button-primary {
+    background: #2563eb;
+    color: #fff;
+}
+
+.admin-button-primary:hover {
+    background: #1d4ed8;
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.admin-button-secondary {
+    background: #1e293b;
+    border: 1px solid var(--admin-border);
+    color: var(--admin-text);
+}
+
+.admin-button-secondary:hover {
+    background: #334155;
+    color: #fff;
+}
+
+/* Section Headers */
+
+.admin-section {
+    margin-bottom: 30px;
+}
+
+.admin-section-heading {
+    margin-bottom: 18px;
+}
+
+.admin-section-heading h2,
+.admin-panel-header h2 {
+    color: var(--admin-text);
+    font-size: 19px;
+    margin: 0 0 7px;
+}
+
+.admin-section-heading p,
+.admin-panel-header p {
+    color: var(--admin-muted);
+    font-size: 13px;
+    margin: 0;
+}
+
+/* Overview Cards */
+
+.admin-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.admin-stat-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 205px;
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
+    border-radius: 14px;
+    padding: 22px;
+    color: var(--admin-text);
+    text-decoration: none;
+    transition: all .2s ease;
+}
+
+.admin-stat-card:hover {
+    border-color: var(--admin-accent);
+    background: #1b2940;
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px #0003;
+    color: var(--admin-text);
+}
+
+.admin-stat-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 18px;
+}
+
+.admin-stat-icon {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 11px;
+    background: #233555;
+    font-size: 23px;
+}
+
+.admin-card-arrow {
+    color: var(--admin-muted);
+    font-size: 21px;
+}
+
+.admin-stat-card h3 {
+    color: var(--admin-text);
+    margin: 0 0 8px;
+    font-size: 19px;
+    font-weight: 650;
+}
+
+.admin-stat-card p {
+    color: var(--admin-muted);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0 0 18px;
+}
+
+.admin-stat-link {
+    color: #60a5fa;
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: auto;
+}
+
+/* Lower Panels */
+
+.admin-content-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.admin-panel {
+    min-width: 0;
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
+    border-radius: 14px;
+    padding: 24px;
+}
+
+.admin-panel-header {
+    margin-bottom: 24px;
+}
+
+.admin-action-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-action {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: var(--admin-text);
+    text-decoration: none;
+    transition: all .2s ease;
+}
+
+.admin-action:hover {
+    background: #1e2d46;
+    border-color: var(--admin-border);
+    color: var(--admin-text);
+}
+
+.admin-action-icon {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: #233555;
+    font-size: 21px;
+}
+
+.admin-action-text {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.admin-action-text strong {
+    color: var(--admin-text);
+    font-size: 14px;
+}
+
+.admin-action-text small {
+    color: var(--admin-muted);
+    font-size: 12px;
+}
+
+.admin-action-arrow {
+    margin-left: auto;
+    color: #60a5fa;
+    font-size: 20px;
+}
+
+/* Keyboard Accessibility */
+
+.admin-dashboard a:focus-visible {
+    outline: 2px solid #60a5fa;
+    outline-offset: 3px;
+}
+
+/* Responsive Layout */
+
+@@media (max-width: 1100px) {
+    .admin-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+}
 
-    .points a {
-        color: white;
-    }
-
-    .balance {
-        font-size: 44px;
-        font-weight: 700;
-        line-height: 1.1;
-        margin: 0;
-    }
-
-    .hint {
-        margin: 8px 0 0;
-        opacity: 0.9;
-    }
-
-    .pending-company-name { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 18px; font-weight: 600; margin: 0; }
-    .pending-help { color: #725a2b; margin: 8px 0 0; }
-    .pending-badge { display: inline-block; padding: 4px 9px; border-radius: 20px; background: #fbf0cf; color: #8a641e; font-size: 12px; font-weight: 700; vertical-align: middle; }
-    .company-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-    .company-card-heading h2 { margin: 0 0 12px; }
-    .cancel-application-button, .cancel-submit-button { border: 1px solid #b42318; border-radius: 6px; background: #b42318; color: white; padding: 6px 11px; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .cancel-submit-button { display: block; margin-left: auto; padding: 9px 14px; }
-    .cancel-application-button:disabled, .cancel-submit-button:disabled { opacity: .65; cursor: wait; }
-
-    .company-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 1050;
-        background: #0009;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+@@media (max-width: 760px) {
+    .admin-dashboard {
         padding: 20px;
     }
 
-    .company-dialog {
-        position: relative;
-        background: white;
-        color: #222;
-        border-radius: 12px;
-        padding: 24px;
+    .admin-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .admin-content-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@@media (max-width: 480px) {
+    .admin-stat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-header-actions {
         width: 100%;
-        max-width: 520px;
-        max-height: 90vh;
-        overflow: auto;
-        box-shadow: 0 12px 40px #0005;
     }
 
-    .company-close-button {
-        position: absolute;
-        top: 12px;
-        right: 12px;
-        width: 34px;
-        height: 34px;
-        display: grid;
-        place-items: center;
-        border: 1px solid #b8bec7;
-        border-radius: 9px;
-        background: #f1f2f4;
-        color: #666;
-        font-size: 24px;
-        line-height: 1;
-        cursor: pointer;
+    .admin-button-primary,
+    .admin-button-secondary {
+        flex: 1;
     }
+}
 
-    .company-close-button:hover { background: #e5e7eb; color: #444; }
-
-    .company-options {
-        display: grid;
-        gap: 10px;
-        margin: 0 0 20px;
-        border: 0;
-        padding: 0;
-    }
-
-    .company-option-group { display: grid; gap: 0; }
-
-    .company-option {
-        display: grid;
-        gap: 5px;
-        width: 100%;
-        padding: 12px 14px;
-        text-align: left;
-        color: #222;
-        background: white;
-        border: 1px solid #b8c0cc;
-        border-radius: 8px;
-    }
-
-    .company-option.selected {
-        border-color: var(--brand);
-        box-shadow: 0 0 0 2px var(--brand);
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
-    }
-
-    .selected-company-application {
-        padding: 14px;
-        border: 1px solid var(--brand);
-        border-top: 0;
-        border-bottom-left-radius: 8px;
-        border-bottom-right-radius: 8px;
-        background: #f8faff;
-    }
-
-    .company-option-name {
-        font-weight: 700;
-    }
-
-    .company-option-description {
-        color: #555;
-        font-weight: 400;
-    }
-
-    .extra-info-label { display: block; font-weight: 600; margin: 0 0 6px; }
-    .extra-info-label span { color: #687385; font-size: 13px; font-weight: 400; }
-    .extra-info-input { display: block; width: 100%; resize: vertical; padding: 10px; border: 1px solid #b8c0cc; border-radius: 8px; margin-bottom: 14px; font: inherit; }
 </style>
 
 @code {
