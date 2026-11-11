@@ -1,0 +1,276 @@
+
+@* MeetOurCeo.razor *@
+
+<div class="ceo-easter-egg">
+    <button type="button" class="ceo-trigger" @onclick="OpenCeo">
+        🦝 Meet Our Leadership
+    </button>
+</div>
+
+@if (showCeo)
+{
+    <div class="ceo-overlay" @onclick="CloseCeo">
+        <div class="ceo-modal"
+             role="dialog"
+             aria-modal="true"
+             aria-label="Meet Our CEO"
+             @onclick:stopPropagation="true">
+
+            <button type="button"
+                    class="ceo-close"
+                    aria-label="Close CEO profile"
+                    @onclick="CloseCeo">
+                ✕
+            </button>
+
+            <div class="ceo-label">
+                TRUCKERREWARD EXECUTIVE LEADERSHIP
+            </div>
+
+            <div class="ceo-photo-container">
+                <img src="images/professor-ceo.png"
+                     alt="Professor wearing a raccoon hat, playing a banjo in a rocking chair"
+                     class="ceo-photo" />
+            </div>
+
+            <div class="ceo-profile">
+                <h2>Professor Trashington III</h2>
+                <h3>Chief Exhaust Officer</h3>
+                <p>Founder • Visionary • Banjo Logistics Specialist</p>
+            </div>
+
+            <div class="ceo-divider"></div>
+
+            <p class="ceo-bio">
+                With over 30 years of experience in
+                transportation innovation, banjo-based
+                logistics, and front-porch leadership,
+                our CEO continues to revolutionize
+                the trucking industry.
+            </p>
+
+            <p class="ceo-specialties">
+                <strong>Areas of Expertise:</strong>
+                Advanced raccoon-hat technology,
+                supply chain banjo optimization,
+                and executive rocking-chair operations.
+            </p>
+
+            @if (meetingRequested)
+            {
+                <div class="ceo-message" role="status">
+                    🗑️ Unfortunately, the CEO is currently
+                    digging through a dumpster.
+
+                    <p>
+                        His secretary says he will return
+                        after his afternoon banjo solo.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <button type="button"
+                        class="ceo-meeting"
+                        @onclick="RequestMeeting">
+                    📅 Schedule a Meeting
+                </button>
+            }
+
+            <div class="ceo-footer">
+                TRUCKERREWARD CORPORATE HEADQUARTERS
+                <br />
+                "Moving freight. Picking strings."
+            </div>
+
+        </div>
+    </div>
+}
+
+<style>
+    .ceo-easter-egg {
+        display: flex;
+        justify-content: center;
+        padding: 18px;
+    }
+
+    .ceo-trigger {
+        background: #192d49;
+        border: 1px solid #395779;
+        border-radius: 10px;
+        color: #b7d4f5;
+        padding: 12px 20px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.2s, transform 0.2s;
+    }
+
+    .ceo-trigger:hover {
+        background: #284a75;
+        transform: translateY(-2px);
+    }
+
+    .ceo-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.82);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        overflow-y: auto;
+    }
+
+    .ceo-modal {
+        position: relative;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+        background: #101d35;
+        border: 1px solid #344762;
+        border-radius: 18px;
+        padding: 28px;
+        box-shadow: 0 24px 80px #000a;
+        color: #d8e4f5;
+        text-align: center;
+    }
+
+    .ceo-close {
+        position: absolute;
+        right: 18px;
+        top: 14px;
+        background: transparent;
+        border: none;
+        color: #b5c9e2;
+        font-size: 23px;
+        cursor: pointer;
+        z-index: 1;
+    }
+
+    .ceo-close:hover {
+        color: white;
+    }
+
+    .ceo-label {
+        color: #91b3df;
+        font-size: 11px;
+        letter-spacing: 1.5px;
+        margin-bottom: 18px;
+        padding-right: 12px;
+    }
+
+    .ceo-photo-container {
+        width: 100%;
+        max-height: 270px;
+        overflow: hidden;
+        border-radius: 12px;
+        border: 1px solid #395779;
+        margin-bottom: 18px;
+    }
+
+    .ceo-photo {
+        width: 100%;
+        height: 260px;
+        object-fit: cover;
+        object-position: center 35%;
+        display: block;
+    }
+
+    .ceo-profile h2 {
+        color: white;
+        font-size: 24px;
+        margin: 8px 0;
+    }
+
+    .ceo-profile h3 {
+        color: #8ec5ff;
+        font-size: 17px;
+        margin: 6px 0;
+    }
+
+    .ceo-profile p {
+        color: #a4b8d5;
+        font-size: 12px;
+        margin-top: 8px;
+    }
+
+    .ceo-divider {
+        height: 1px;
+        background: #344762;
+        margin: 22px 0;
+    }
+
+    .ceo-bio {
+        font-size: 14px;
+        line-height: 1.7;
+        color: #d8e4f5;
+    }
+
+    .ceo-specialties {
+        font-size: 13px;
+        color: #a4b8d5;
+        line-height: 1.6;
+        margin: 20px 0;
+    }
+
+    .ceo-meeting {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 9px;
+        background: #2967b2;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .ceo-meeting:hover {
+        background: #3683dd;
+    }
+
+    .ceo-message {
+        background: #243a59;
+        border: 1px solid #48648a;
+        padding: 16px;
+        border-radius: 10px;
+        color: #f4cd83;
+        line-height: 1.6;
+        font-size: 14px;
+    }
+
+    .ceo-message p {
+        margin: 8px 0 0;
+    }
+
+    .ceo-footer {
+        margin-top: 25px;
+        color: #718ba8;
+        font-size: 10px;
+        letter-spacing: 1px;
+        line-height: 1.8;
+    }
+</style>
+
+@code {
+    private bool showCeo = false;
+    private bool meetingRequested = false;
+
+    private void OpenCeo()
+    {
+        meetingRequested = false;
+        showCeo = true;
+    }
+
+    private void CloseCeo()
+    {
+        showCeo = false;
+    }
+
+    private void RequestMeeting()
+    {
+        meetingRequested = true;
+    }
+}
