@@ -1,3 +1,7 @@
+.home {
+    max-width: 640px;
+}
+
 .home-center {
     min-height: calc(100vh - 65px);
     display: flex;
@@ -5,4 +9,10 @@
     justify-content: center;
     align-items: center;
     text-align: center;
+    margin: 0 auto;
+}
+
+.home .tr-btn,
+.home .tr-btn-outline {
+    margin: 8px 12px 0 0;
 }
