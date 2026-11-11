@@ -211,18 +211,45 @@
                             Keep track of what needs to get done.
                         </p>
 
-                        <div class="admin-task-list">
-                            @foreach (var task in adminTasks)
-                            {
-                                <label class="admin-task-row" @key="task">
-                                    <input type="checkbox"
-                                        @bind="task.Completed" />
-                                    <span class="@(task.Completed ? "task-complete" : "")">
-                                        @task.Title
-                                    </span>
-                                </label>
-                            }
-                        </div>
+                        
+<div class="admin-task-list">
+    @foreach (var task in adminTasks)
+    {
+        <div class="admin-task-item" @key="task">
+
+            <label class="admin-task-row">
+                <input type="checkbox"
+                       @bind="task.Completed" />
+
+                <span class="@(task.Completed ? "task-complete" : "")">
+                    @task.Title
+                </span>
+            </label>
+
+            @if (task.Completed)
+            {
+                <div class="admin-task-confirmation">
+                    <span>Mark this task as finished?</span>
+
+                    <div class="admin-task-buttons">
+                        <button type="button"
+                                class="admin-confirm-button"
+                                @onclick="() => ConfirmAdminTask(task)">
+                            Confirm Completion
+                        </button>
+
+                        <button type="button"
+                                class="admin-cancel-button"
+                                @onclick="() => task.Completed = false">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
 
                         <div class="admin-add-task">
                             <input @bind="newAdminTask"
@@ -950,6 +977,63 @@
 }
 
 
+/* Admin Task Completion */
+
+.admin-task-item {
+    background: #26364e;
+    border: 1px solid #40516b;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.admin-task-item .admin-task-row {
+    margin: 0;
+    border-radius: 0;
+}
+
+.admin-task-confirmation {
+    padding: 12px 16px 16px;
+    border-top: 1px solid #40516b;
+    color: #cbd5e1;
+    font-size: 13px;
+}
+
+.admin-task-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.admin-confirm-button {
+    background: #2563eb;
+    border: none;
+    border-radius: 7px;
+    color: white;
+    padding: 9px 14px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.admin-confirm-button:hover {
+    background: #1d4ed8;
+}
+
+.admin-cancel-button {
+    background: transparent;
+    border: 1px solid #64748b;
+    border-radius: 7px;
+    color: #e2e8f0;
+    padding: 9px 14px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.admin-cancel-button:hover {
+    background: #334155;
+}
+
 
 </style>
 
@@ -1030,6 +1114,15 @@ private void AddAdminTask()
 
     newAdminTask = "";
 }
+
+private void ConfirmAdminTask(AdminTask task)
+{
+    if (!task.Completed)
+        return;
+
+    adminTasks.Remove(task);
+}
+
 
 private void HandleAdminTaskKeyDown(
     Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
