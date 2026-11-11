@@ -1,0 +1,77 @@
+
+:root {
+    color-scheme: dark;
+
+    --bg-main: #0c111b;
+    --bg-sidebar: #101724;
+    --bg-card: #171f2d;
+    --bg-hover: #232e40;
+
+    --border: #2a3547;
+
+    --text-primary: #f3f6fc;
+    --text-secondary: #9baac0;
+
+    --accent: #60a5fa;
+    --accent-hover: #3b82f6;
+
+    --radius: 12px;
+}
+
+body {
+    background: var(--bg-main);
+    color: var(--text-primary);
+    font-family: Inter, system-ui, sans-serif;
+}
+
+.app-shell {
+    display: flex;
+    min-height: 100vh;
+}
+
+.app-sidebar {
+    width: 250px;
+    flex-shrink: 0;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+}
+
+.app-main {
+    flex: 1;
+    min-width: 0;
+    padding: 32px;
+}
+
+.ui-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+}
+
+.ui-button-primary {
+    background: var(--accent-hover);
+    color: white;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 18px;
+    cursor: pointer;
+}
+
+.ui-button-primary:hover {
+    background: var(--accent);
+}
+
+@media (max-width: 768px) {
+    .app-shell {
+        flex-direction: column;
+    }
+
+    .app-sidebar {
+        width: 100%;
+    }
+
+    .app-main {
+        padding: 16px;
+    }
+}
