@@ -7,7 +7,13 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<PageTitle>Dashboard</PageTitle>
+
+<PageTitle>
+    @(account?.UserType == "admin"
+        ? "Admin Command Center | TruckerReward"
+        : "Dashboard | TruckerReward")
+</PageTitle>
+
 
 <div class="tr-page">
     @if (loadError != null)
@@ -22,7 +28,19 @@
     }
     else
     {
-        <h1>My TruckerReward Dashboard</h1>
+        
+        @if (account.UserType == "admin")
+        {
+            <h1 class="admin-command-title">Admin Command Center</h1>
+            <p class="admin-command-subtitle">
+                Manage your platform. Keep the wheels turning.
+            </p>
+        }
+        else
+        {
+            <h1>My TruckerReward Dashboard</h1>
+        }
+
         @if (account.UserType == "driver" && System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["cdlUpload"] == "failed")
         {
             <p role="alert" class="tr-alert-error">Your account was created, but your CDL upload failed. Please retry below.</p>
@@ -32,13 +50,194 @@
         {
             <p><a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a> <button type="button" class="tr-btn" @onclick="OpenMonthlyPoints">Montly Points</button></p>
         }
-        else
+
+        else if (account.UserType == "driver")
         {
             <p><a class="tr-btn" href="pastorders">Past Orders</a></p>
         }
+
         @if (notice is not null)
         {
             <p role="status" class="tr-alert-success">@notice</p>
+        }
+
+        @if (account.UserType == "admin")
+        {
+            <div class="admin-command-center">
+
+                <!-- QUICK ACTIONS -->
+                <section class="admin-command-panel">
+                    <div class="admin-panel-heading">
+                        <span class="admin-panel-symbol">⚡</span>
+                        <h2>Quick Actions</h2>
+                    </div>
+
+                    <div class="admin-quick-grid">
+                        <a href="admin/accounts" class="admin-action-card">
+                            <span class="admin-action-icon">👥</span>
+                            <strong>Manage Accounts</strong>
+                            <small>Users and profiles</small>
+                        </a>
+
+                        <a href="manage-points" class="admin-action-card">
+                            <span class="admin-action-icon">🏅</span>
+                            <strong>Driver Points</strong>
+                            <small>Manage rewards</small>
+                        </a>
+
+                        <a href="admin/banner" class="admin-action-card">
+                            <span class="admin-action-icon">📢</span>
+                            <strong>Edit Banners</strong>
+                            <small>Site announcements</small>
+                        </a>
+
+                        <a href="admin/security" class="admin-action-card">
+                            <span class="admin-action-icon">🛡️</span>
+                            <strong>Security</strong>
+                            <small>Protect the platform</small>
+                        </a>
+
+                        <a href="audit" class="admin-action-card">
+                            <span class="admin-action-icon">📋</span>
+                            <strong>Audit Logs</strong>
+                            <small>Review site activity</small>
+                        </a>
+
+                        <button type="button"
+                                class="admin-action-card admin-secret-action"
+                                @onclick="() => showClassified = !showClassified"
+                                aria-expanded="@showClassified"
+                                aria-controls="classified-archive">
+                            <span class="admin-action-icon">🥚</span>
+                            <strong>Classified</strong>
+                            <small>Authorized personnel only</small>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- CLASSIFIED FILES -->
+                @if (showClassified)
+                {
+                    <section id="classified-archive"
+                            class="admin-command-panel classified-panel">
+                        <div class="admin-panel-heading">
+                            <span class="admin-panel-symbol">🔒</span>
+                            <h2>Secret Archives</h2>
+                        </div>
+
+                        <p class="admin-panel-description">
+                            The following incidents have been documented.
+                            Their origins remain unexplained.
+                        </p>
+
+                        <div class="classified-files">
+                            <button type="button" @onclick="() => selectedSecret = 1">
+                                📁 FILE 001 — THE GHOST TRUCK
+                            </button>
+                            <button type="button" @onclick="() => selectedSecret = 2">
+                                📁 FILE 002 — THE DANCING ADMIN
+                            </button>
+                            <button type="button" @onclick="() => selectedSecret = 3">
+                                🔒 FILE 003 — ???
+                            </button>
+                        </div>
+
+                        @if (selectedSecret == 1)
+                        {
+                            <div class="classified-report">
+                                <strong>FILE 001 — THE GHOST TRUCK</strong>
+                                <p>
+                                    Some say it only appears when you stop moving.
+                                    Patience is your only clue.
+                                </p>
+                            </div>
+                        }
+                        else if (selectedSecret == 2)
+                        {
+                            <div class="classified-report">
+                                <strong>FILE 002 — THE DANCING ADMIN</strong>
+                                <p>
+                                    Classified footage suggests that certain
+                                    administrators have unusual dance moves.
+                                </p>
+                            </div>
+                        }
+                        else if (selectedSecret == 3)
+                        {
+                            <div class="classified-report">
+                                <strong>FILE 003 — REDACTED</strong>
+                                <p>
+                                    This file has been sealed by the Department
+                                    of Extremely Suspicious Trucking Activity.
+                                </p>
+                            </div>
+                        }
+                    </section>
+                }
+
+                <!-- SECOND ROW -->
+                <div class="admin-bottom-grid">
+
+                    <!-- RECENT ACTIVITY -->
+                    <section class="admin-command-panel">
+                        <div class="admin-panel-heading">
+                            <span class="admin-panel-symbol">📈</span>
+                            <h2>Recent Activity</h2>
+                        </div>
+
+                        <p class="admin-panel-description">
+                            Monitor account changes, driver point updates,
+                            and administrative activity.
+                        </p>
+
+                        <div class="admin-empty-content">
+                            <span>📋</span>
+                            <p>Review the latest recorded activity.</p>
+                        </div>
+
+                        <a href="audit" class="admin-secondary-button">
+                            View Audit Log →
+                        </a>
+                    </section>
+
+                    <!-- ADMIN TASKS -->
+                    <section class="admin-command-panel">
+                        <div class="admin-panel-heading">
+                            <span class="admin-panel-symbol">✅</span>
+                            <h2>Admin Tasks</h2>
+                        </div>
+
+                        <p class="admin-panel-description">
+                            Keep track of what needs to get done.
+                        </p>
+
+                        <div class="admin-task-list">
+                            @foreach (var task in adminTasks)
+                            {
+                                <label class="admin-task-row" @key="task">
+                                    <input type="checkbox"
+                                        @bind="task.Completed" />
+                                    <span class="@(task.Completed ? "task-complete" : "")">
+                                        @task.Title
+                                    </span>
+                                </label>
+                            }
+                        </div>
+
+                        <div class="admin-add-task">
+                            <input @bind="newAdminTask"
+                                @bind:event="oninput"
+                                @onkeydown="HandleAdminTaskKeyDown"
+                                maxlength="100"
+                                placeholder="Add an admin task..." />
+                            <button type="button" @onclick="AddAdminTask">
+                                Add
+                            </button>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
         }
 
         <div class="tr-cards">
@@ -459,6 +658,296 @@
         from { transform: translateX(-120px); }
         to { transform: translateX(calc(100vw + 120px)); }
     }
+
+/* ADMIN COMMAND CENTER */
+
+.admin-command-title {
+    margin: 0 0 8px;
+    color: #f5f8ff;
+    font-size: clamp(32px, 4vw, 44px);
+    font-weight: 750;
+    letter-spacing: -1px;
+}
+
+.admin-command-subtitle {
+    margin: 0 0 26px;
+    color: #a5b4cb;
+    font-size: 15px;
+}
+
+.admin-command-center {
+    width: 100%;
+    max-width: 1250px;
+    margin: 0 auto;
+    padding-bottom: 40px;
+    color: #f5f8ff;
+}
+
+.admin-command-panel {
+    background: #1b2a42;
+    border: 1px solid #30415c;
+    border-radius: 16px;
+    padding: 26px;
+    box-shadow: 0 8px 24px #00000020;
+}
+
+.admin-panel-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.admin-panel-heading h2 {
+    margin: 0;
+    color: #f5f8ff;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.admin-panel-symbol {
+    font-size: 22px;
+}
+
+.admin-panel-description {
+    color: #a9b8cf;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0 0 20px;
+}
+
+/* QUICK ACTIONS */
+
+.admin-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.admin-action-card {
+    min-height: 140px;
+    padding: 22px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+    background: #29466b;
+    border: 1px solid #3b5b82;
+    border-radius: 12px;
+    color: #fff;
+    text-decoration: none;
+    font: inherit;
+    cursor: pointer;
+    transition: transform .2s ease,
+                background .2s ease,
+                box-shadow .2s ease;
+}
+
+.admin-action-card:hover {
+    transform: translateY(-4px);
+    background: #365c8a;
+    box-shadow: 0 10px 25px #00000030;
+    color: white;
+    text-decoration: none;
+}
+
+.admin-action-card:focus-visible,
+.classified-files button:focus-visible,
+.admin-add-task button:focus-visible {
+    outline: 3px solid #93c5fd;
+    outline-offset: 3px;
+}
+
+.admin-action-icon {
+    font-size: 32px;
+    line-height: 1.2;
+}
+
+.admin-action-card strong {
+    color: white;
+    font-size: 15px;
+}
+
+.admin-action-card small {
+    color: #c0cfe2;
+    font-size: 12px;
+}
+
+.admin-secret-action {
+    background: #35405f;
+    border-color: #8d754e;
+}
+
+.admin-secret-action:hover {
+    background: #48476c;
+}
+
+/* CLASSIFIED ARCHIVES */
+
+.classified-panel {
+    margin-top: 20px;
+    border-color: #8d754e;
+}
+
+.classified-files {
+    display: grid;
+    gap: 10px;
+}
+
+.classified-files button {
+    width: 100%;
+    padding: 15px;
+    background: #26364e;
+    border: 1px solid #40516b;
+    border-radius: 9px;
+    color: #f2f5fa;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.classified-files button:hover {
+    background: #344b6d;
+}
+
+.classified-report {
+    margin-top: 18px;
+    padding: 20px;
+    border-radius: 10px;
+    background: #101827;
+    border-left: 4px solid #f4bd55;
+    color: #d9e3f0;
+}
+
+.classified-report strong {
+    color: #f4bd55;
+}
+
+.classified-report p {
+    margin: 10px 0 0;
+}
+
+/* ACTIVITY AND TASKS */
+
+.admin-bottom-grid {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.admin-empty-content {
+    padding: 20px;
+    min-height: 110px;
+    text-align: center;
+    color: #bac9dc;
+}
+
+.admin-empty-content span {
+    font-size: 28px;
+}
+
+.admin-secondary-button {
+    display: inline-block;
+    background: #29466b;
+    color: white;
+    text-decoration: none;
+    padding: 11px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+.admin-secondary-button:hover {
+    background: #365c8a;
+    color: white;
+}
+
+.admin-task-list {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.admin-task-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #26364e;
+    color: #e2e9f3;
+    cursor: pointer;
+}
+
+.admin-task-row input {
+    width: 17px;
+    height: 17px;
+    accent-color: #60a5fa;
+}
+
+.task-complete {
+    text-decoration: line-through;
+    opacity: .55;
+}
+
+.admin-add-task {
+    display: flex;
+    gap: 8px;
+}
+
+.admin-add-task input {
+    flex: 1;
+    min-width: 0;
+    background: #101827;
+    border: 1px solid #40516b;
+    border-radius: 8px;
+    padding: 11px;
+    color: white;
+    font: inherit;
+}
+
+.admin-add-task button {
+    background: #2455a4;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 18px;
+    color: white;
+    font: inherit;
+    cursor: pointer;
+}
+
+/* RESPONSIVE LAYOUT */
+
+@@media (max-width: 800px) {
+    .admin-quick-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-bottom-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@@media (max-width: 480px) {
+    .admin-quick-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-command-panel {
+        padding: 18px;
+    }
+}
+
+.tr-page:has(.admin-command-center) {
+    background: #0e1626;
+    color: #f5f8ff;
+    min-height: calc(100vh - 76px);
+    padding-top: 30px;
+}
+
+
 </style>
 
 @code {
@@ -508,6 +997,44 @@
 
     private Account? account;
     private bool driversCollapsed;
+
+private bool showClassified = false;
+private int selectedSecret = 0;
+
+private sealed class AdminTask
+{
+    public string Title { get; set; } = "";
+    public bool Completed { get; set; }
+}
+
+private List<AdminTask> adminTasks = new()
+{
+    new() { Title = "Review accounts" },
+    new() { Title = "Check audit log" }
+};
+
+private string newAdminTask = "";
+
+private void AddAdminTask()
+{
+    if (string.IsNullOrWhiteSpace(newAdminTask))
+        return;
+
+    adminTasks.Add(new AdminTask
+    {
+        Title = newAdminTask.Trim()
+    });
+
+    newAdminTask = "";
+}
+
+private void HandleAdminTaskKeyDown(
+    Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
+{
+    if (args.Key == "Enter")
+        AddAdminTask();
+}
+
     private FrontEnd.Pages.ManagePoints? driverManagement;
 
     private void OpenDriverFilters()
