@@ -32,8 +32,10 @@
                 @foreach (var section in sections)
                 {
                     <article class="tr-card">
-                        <h2>@section.Title</h2>
-                        <p>@section.Body</p>
+                        
+                        <h2>@(section.Title)</h2>
+                        <p>@(section.Body)</p>
+
                     </article>
                 }
             </section>
