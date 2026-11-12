@@ -12,7 +12,7 @@
             You can't escape me!
         </div>
 
-        <img src="images/professor-door.png"
+        <img src="/images/professor-door.png"
              class="professor-popup"
              alt="Professor Easter Egg" />
     </div>
@@ -134,11 +134,14 @@ private async Task ToggleChat()
 
     if (wasOpen)
     {
-        // Show professor when chatbot closes
-        showProfessor = true;
-        int version = ++professorPopupVersion;
+        professorPopupVersion++;
+        int version = professorPopupVersion;
 
-        // Keep professor visible for 1.5 seconds
+        showProfessor = true;
+
+        // Immediately update the interface
+        StateHasChanged();
+
         await Task.Delay(1500);
 
         if (version == professorPopupVersion)
@@ -149,9 +152,9 @@ private async Task ToggleChat()
     }
     else
     {
-        // Hide professor if chatbot reopens
         professorPopupVersion++;
         showProfessor = false;
+        StateHasChanged();
     }
 }
 
