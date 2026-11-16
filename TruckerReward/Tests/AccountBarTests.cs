@@ -36,6 +36,39 @@ public sealed class AccountBarTests : TestContext
         }
     }
 
+    [Theory]
+    [InlineData("driver")]
+    [InlineData("sponsor")]
+    [InlineData("admin")]
+    public void ProfileMenuContainsThreeOptionsAndCloses(string role)
+    {
+        var backend = new JsonBackend();
+        backend.Routes["GET /users/7/notifications/unread"] = (HttpStatusCode.OK, """{"count":0}""");
+        this.SignInAs("bob", role, "7");
+        this.UseBackend(backend);
+        var bar = RenderComponent<AccountBar>();
+        Assert.Empty(bar.FindAll("form[action='account/logout']"));
+        var trigger = bar.Find("button.profile-link");
+        Assert.Equal("false", trigger.GetAttribute("aria-expanded"));
+        trigger.Click();
+        Assert.Equal("true", bar.Find("button.profile-link").GetAttribute("aria-expanded"));
+        var options = bar.Find("#profile-options");
+        Assert.Equal(new[] { "Profile", "Settings", "Logout" }, options.QuerySelectorAll("a, button").Select(e => e.TextContent.Trim()));
+        Assert.Equal("profile", options.QuerySelector("a")!.GetAttribute("href"));
+        Assert.Equal("settings", options.QuerySelectorAll("a")[1].GetAttribute("href"));
+        Assert.Equal("post", options.QuerySelector("form")!.GetAttribute("method"));
+        Assert.Equal("account/logout", options.QuerySelector("form")!.GetAttribute("action"));
+        Assert.Single(bar.FindAll("form[action='account/logout']"));
+        bar.Find(".profile-backdrop").Click();
+        Assert.Empty(bar.FindAll("#profile-options"));
+        bar.Find("button.profile-link").Click();
+        bar.Find(".profile-menu").KeyDown("Escape");
+        Assert.Empty(bar.FindAll("#profile-options"));
+        bar.Find("button.profile-link").Click();
+        bar.Find("#profile-options a").Click();
+        Assert.Empty(bar.FindAll("#profile-options"));
+    }
+
     [Fact]
     public void CartIconIsAnSvgThatFollowsTheBarColor()
     {

@@ -1,0 +1,28 @@
+@page "/settings"
+@attribute [Authorize]
+
+<PageTitle>Settings</PageTitle>
+
+<div class="tr-page">
+    <h1>Settings</h1>
+    <div class="tr-cards">
+        <section class="tr-card">
+            <h2>Account</h2>
+            <p>Update your personal details and account information.</p>
+            <a href="account/profile">Edit account</a>
+        </section>
+        <section class="tr-card">
+            <h2>Notifications</h2>
+            <p>Choose which notifications you receive and how they reach you.</p>
+            <a href="notifications/settings">Notification settings</a>
+        </section>
+        <section class="tr-card">
+            <h2>Security and privacy</h2>
+            <p>Manage your sign-in methods, devices, and personal data.</p>
+            <p><a href="account/passkeys">Face ID and passkeys</a></p>
+            <p><a href="account/sign-in-codes">Sign-in codes</a></p>
+            <p><a href="account/devices">Devices</a></p>
+            <p><a href="account/data">Your data</a></p>
+        </section>
+    </div>
+</div>

@@ -58,10 +58,27 @@
                     <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                 </svg>
             </a>
-            <a href="profile" class="profile-link">@context.User.Identity?.Name</a>
-            <form method="post" action="account/logout">
-                <button type="submit">Log out</button>
-            </form>
+            <div class="profile-menu" @onkeydown="HandleProfileKey">
+                <button type="button" class="profile-link" aria-label="Profile menu"
+                        aria-expanded="@(profileOpen ? "true" : "false")" aria-controls="profile-options"
+                        @onclick="() => profileOpen = !profileOpen">
+                    @context.User.Identity?.Name <span aria-hidden="true">▾</span>
+                </button>
+                @if (profileOpen)
+                {
+                    <div id="profile-options" class="profile-options" aria-label="Account options">
+                        <a href="profile" @onclick="CloseProfile">Profile</a>
+                        <a href="settings" @onclick="CloseProfile">Settings</a>
+                        <form method="post" action="account/logout">
+                            <button type="submit">Logout</button>
+                        </form>
+                    </div>
+                }
+            </div>
+            @if (profileOpen)
+            {
+                <button type="button" class="profile-backdrop" tabindex="-1" aria-label="Close profile menu" @onclick="CloseProfile"></button>
+            }
         </Authorized>
         <NotAuthorized>
             <span class="spacer"></span>
@@ -108,6 +125,62 @@
         flex: 1;
     }
 
+    .profile-menu {
+        position: relative;
+        z-index: 101;
+    }
+
+    .profile-options {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        min-width: 180px;
+        padding: 6px;
+        background: white;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px #0003;
+    }
+
+    .account-bar .profile-options a,
+    .account-bar .profile-options button {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        padding: 10px 12px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: #1f2937;
+        font: inherit;
+        text-align: left;
+        text-decoration: none;
+    }
+
+    .profile-options form { margin: 0; }
+
+    .account-bar .profile-options a:hover,
+    .account-bar .profile-options button:hover,
+    .account-bar .profile-options a:focus-visible,
+    .account-bar .profile-options button:focus-visible {
+        background: #f3f4f6;
+        outline: 2px solid var(--brand);
+        outline-offset: -2px;
+    }
+
+    .account-bar .profile-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        cursor: default;
+    }
+
     .view-as-banner {
         display: flex;
         flex-wrap: wrap;
@@ -138,3 +211,14 @@
         white-space: nowrap;
     }
 </style>
+
+@code {
+    private bool profileOpen;
+
+    private void CloseProfile() => profileOpen = false;
+
+    private void HandleProfileKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") CloseProfile();
+    }
+}
