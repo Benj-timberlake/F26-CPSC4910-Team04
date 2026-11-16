@@ -4,7 +4,7 @@
     bottom: 24px;
     right: 24px;
     z-index: 9999;
-    font-family: Arial, sans-serif;
+    font-family: inherit;
 }
 
 .chat-toggle {
@@ -155,7 +155,7 @@
 
     font-size: 16px;
     font-weight: bold;
-    font-family: Arial, sans-serif;
+    font-family: inherit;
 
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
 

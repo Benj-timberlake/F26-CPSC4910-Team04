@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 @import url('open-iconic/font/css/open-iconic-bootstrap.min.css');
 
 :root {
@@ -8,7 +9,11 @@
 }
 
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Poppins', sans-serif;
+}
+
+button, input, select, textarea {
+    font-family: inherit;
 }
 
 h1:focus {

@@ -1,0 +1,139 @@
+/* Theme overrides also cover component styles with fixed light colors. */
+html[data-theme="dark"] {
+    color-scheme: dark;
+    --brand: #34d399;
+    --muted: #bcbcbc;
+    --line: #454545;
+    --danger: #ff9d95;
+    --theme-background: #0b0b0b;
+    --theme-surface: #1c1c1c;
+    --theme-raised: #292929;
+    --theme-text: #f2f2f2;
+}
+
+html[data-theme="dark"] body {
+    background: var(--theme-background);
+    color: var(--theme-text);
+}
+
+html[data-theme="dark"] .mouse-gradient-background {
+    background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), #34d39918, transparent 40%), var(--theme-background);
+}
+
+html[data-theme="dark"] :is(.tr-card, .product-card, .catalog-controls, .profile-options,
+    .company-dialog, .sponsor-invite-dialog, .change-modal, .driver-filter-modal,
+    .review-dialog, .admin-command-panel, .admin-action-card, .admin-task-item,
+    .admin-dashboard, .admin-dashboard-shell, .classified-report, .chat-window,
+    .professor-speech, .cart-item, .order-card, .application-card, .detail-photo,
+    .no-image, .selected-company-application, .refund-dialog, .mass-account-dialog,
+    .application-panel, .review-applicant-info, .change-summary, .application-switch,
+    .chat-message.bot, .admin-task-actions, .ceo-modal) {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] :is(h1, h2, h3, h4, h5, h6, legend, label, dt,
+    .product-price, .detail-price, .balance, .figure, .admin-panel-description,
+    .admin-panel-heading, .admin-task-row, .company-name) {
+    color: var(--theme-text) !important;
+}
+
+html[data-theme="dark"] :is(.tr-muted, .tr-subtitle, .hint, .help, .pending-help,
+    .admin-subtitle, .admin-action-card small, .extra-info-label span) {
+    color: var(--muted) !important;
+}
+
+html[data-theme="dark"] :is(a, .btn-link) { color: var(--brand); }
+html[data-theme="dark"] a:hover { color: #a7f3d0; }
+
+html[data-theme="dark"] :is(input:not([type=checkbox]):not([type=radio]), select, textarea) {
+    background: var(--theme-background) !important;
+    color: var(--theme-text) !important;
+    border-color: #666 !important;
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder { color: #aaa; opacity: 1; }
+html[data-theme="dark"] :is(input[type=checkbox], input[type=radio]) { accent-color: var(--brand); }
+
+html[data-theme="dark"] button {
+    background-color: var(--theme-raised);
+    color: var(--brand);
+    border-color: var(--line);
+}
+html[data-theme="dark"] :is(.tr-btn, .btn-primary, .buy-button, .search-bar button,
+    .admin-primary-button, .admin-add-task button, .admin-confirm-button, .chat-toggle) {
+    background: var(--brand) !important;
+    color: #111 !important;
+    border-color: var(--brand) !important;
+}
+html[data-theme="dark"] :is(.tr-btn-outline, .drivers-filter, .drivers-toggle,
+    .admin-secondary-button, .admin-cancel-button, .wishlist-button, .driver-view-eye) {
+    background: var(--theme-raised) !important;
+    color: var(--brand) !important;
+    border-color: var(--line) !important;
+}
+html[data-theme="dark"] :is(.tr-btn, .btn-primary, .buy-button):hover { background: #6ee7b7 !important; }
+html[data-theme="dark"] :is(.tr-btn-outline, .drivers-filter, .drivers-toggle, .driver-view-eye):hover {
+    background: #383838 !important;
+}
+html[data-theme="dark"] :is(button, input, select):disabled { opacity: .6; }
+
+html[data-theme="dark"] nav.account-bar {
+    background: #101010;
+    border-bottom: 1px solid var(--brand);
+}
+html[data-theme="dark"] .account-bar :is(a, button) { color: var(--brand); border-color: var(--line); }
+html[data-theme="dark"] .account-bar .profile-options :is(a, button) {
+    background: transparent;
+    color: var(--theme-text);
+}
+html[data-theme="dark"] .account-bar .profile-options :is(a, button):hover,
+html[data-theme="dark"] .account-bar .profile-options :is(a, button):focus-visible {
+    background: var(--theme-raised);
+    color: var(--brand);
+}
+html[data-theme="dark"] .account-bar .profile-backdrop { background: transparent; }
+
+html[data-theme="dark"] :is(.tr-table, table) {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--theme-text);
+    --bs-table-striped-bg: #242424;
+    --bs-table-striped-color: var(--theme-text);
+    --bs-table-hover-bg: #303030;
+    --bs-table-hover-color: var(--theme-text);
+    color: var(--theme-text);
+}
+html[data-theme="dark"] :is(th, td) { border-color: var(--line) !important; }
+html[data-theme="dark"] th { background: var(--theme-raised) !important; color: var(--muted) !important; }
+html[data-theme="dark"] tbody tr:hover { background: #262626; }
+html[data-theme="dark"] :is(.tr-list li, fieldset, hr) { border-color: var(--line); }
+
+html[data-theme="dark"] :is(.tr-alert-error, .error, .minus, .tr-table tr.failed td) { color: var(--danger) !important; }
+html[data-theme="dark"] :is(.tr-alert-success, .plus, .earned, .current-company-badge) { color: #a6d8ab !important; }
+html[data-theme="dark"] :is(.tr-alert-warning, .pending-badge, .view-as-banner) {
+    background: #12352a !important;
+    color: #a7f3d0 !important;
+}
+html[data-theme="dark"] :is(.modal-backdrop, .company-backdrop, .sponsor-invite-backdrop) { background: #000b; }
+html[data-theme="dark"] :focus-visible { outline-color: var(--brand) !important; }
+html[data-theme="dark"] .skip-link { background: var(--theme-surface); color: var(--brand); border-color: var(--brand); }
+html[data-theme="dark"] #blazor-error-ui { background: var(--theme-raised); color: var(--theme-text); }
+
+html[data-theme="dark"] :is(.chat-header, .chat-message.user, .chat-input button) {
+    background: var(--brand) !important;
+    color: #111 !important;
+}
+html[data-theme="dark"] .professor-speech::after { border-top-color: var(--theme-surface); }
+html[data-theme="dark"] :is(.application-card p, .application-card small, .application-card strong,
+    .review-applicant-info p, .review-applicant-info strong, .chat-message.bot) { color: var(--theme-text) !important; }
+html[data-theme="dark"] :is(.application-tab.selected, .active-count, .approved-count, .denied-count,
+    .expand-toggle, .close-button, .review-close, .company-close-button, .mass-account-creation-button) {
+    background: var(--theme-raised) !important;
+    color: var(--brand) !important;
+}
+html[data-theme="dark"] :is(.admin-action-card:hover, .admin-secondary-button:hover,
+    .admin-task-item, .admin-cancel-button:hover, .ceo-card) {
+    background: var(--theme-raised) !important;
+    border-color: var(--line) !important;
+}
