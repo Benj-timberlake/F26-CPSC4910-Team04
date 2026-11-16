@@ -24,6 +24,23 @@ public sealed class AuditLogPageTests : TestContext
     }
 
     [Fact]
+    public void ShowsApplicationDecisionAndCategory()
+    {
+        backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);
+        backend.Routes["GET /users/5/audit"] = (HttpStatusCode.OK,
+            """[{"at":"2026-09-15T12:00:00","category":"applications","userId":8,"username":"bob","detail":"Application to Acme: Reject. Reason: Missing experience","by":"sue"}]""");
+        backend.Routes["GET /users/5/audit?category=applications"] = backend.Routes["GET /users/5/audit"];
+        var page = Render("sponsor", 5);
+        page.WaitForAssertion(() => Assert.Contains("Reject. Reason: Missing experience", page.Find("tbody").TextContent));
+        Assert.Contains("bob", page.Find("tbody").TextContent);
+        Assert.Contains("sue", page.Find("tbody").TextContent);
+        Assert.Contains("2026-09-15 12:00", page.Find("tbody").TextContent);
+        page.Find("select[aria-label=Category]").Change("applications");
+        page.Find("form").Submit();
+        page.WaitForAssertion(() => Assert.Equal("audit/export?category=applications", page.Find("a.export").GetAttribute("href")));
+    }
+
+    [Fact]
     public void SponsorSeesTheirDriversLog()
     {
         backend.Routes["GET /users/5/points/drivers"] = (HttpStatusCode.OK, Drivers);

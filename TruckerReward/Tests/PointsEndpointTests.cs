@@ -41,6 +41,38 @@ public sealed class PointsEndpointTests : IAsyncDisposable
         AccountsCompanies = companyId is int company ? [new AccountsCompany { CompanyId = company }] : []
     };
 
+    [Fact]
+    public async Task SponsorReportFiltersChangesButKeepsCompanyBalance()
+    {
+        await Start();
+        using (var db = app.Db())
+        {
+            var otherCompany = await db.Companies.Where(c => c.Id != acme).Select(c => c.Id).FirstAsync();
+            var day = new DateTime(2026, 9, 15, 23, 59, 59, DateTimeKind.Utc);
+            foreach (var (at, delta, company) in new[] { (day.AddDays(-1), 100, acme), (day, -20, acme), (day.AddDays(1), 50, acme), (day, 999, otherCompany) })
+            {
+                var history = new PointsHistory { UserId = amy, CompanyId = company, Timestamp = at, PointsDelta = delta };
+                db.AuditHistories.Add(new AuditHistory { UserId = sue, PointsHistory = history, Resoning = "Safety review" });
+            }
+            await db.SaveChangesAsync();
+        }
+        var report = (await client.GetFromJsonAsync<List<DriverPointReport>>($"/users/{sue}/reports/driver-points?from=2026-09-15&to=2026-09-15"))!;
+        Assert.Equal(2, report.Count);
+        var driver = Assert.Single(report, r => r.DriverId == amy);
+        Assert.Equal("Amy Zane", driver.DriverName);
+        Assert.Equal(130, driver.TotalPoints);
+        var change = Assert.Single(driver.Changes);
+        Assert.Equal(-20, change.Points);
+        Assert.Equal("sue Test", change.SponsorName);
+        Assert.Equal("Safety review", change.Reason);
+        Assert.Empty(Assert.Single(report, r => r.DriverId == bob).Changes);
+        var single = (await client.GetFromJsonAsync<List<DriverPointReport>>($"/users/{sue}/reports/driver-points?driverId={amy}"))!;
+        Assert.Equal(3, Assert.Single(single).Changes.Count);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/users/{zed}/reports/driver-points?driverId={amy}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/users/{amy}/reports/driver-points")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"/users/{sue}/reports/driver-points?from=2026-09-16&to=2026-09-15")).StatusCode);
+    }
+
     private Task<HttpResponseMessage> Change(int actor, int driver, int points, string? reason) =>
         client.PostAsJsonAsync($"/users/{actor}/points/drivers/{driver}", new { points, reason });
 

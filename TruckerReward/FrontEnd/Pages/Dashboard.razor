@@ -48,7 +48,7 @@
         }
         @if (account.UserType == "sponsor")
         {
-            <p><a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a> <button type="button" class="tr-btn" @onclick="OpenMonthlyPoints">Montly Points</button></p>
+            <p><a class="tr-btn" href="sponsor-report">Report</a> <a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a> <button type="button" class="tr-btn" @onclick="OpenMonthlyPoints">Montly Points</button></p>
         }
 
         else if (account.UserType == "driver")

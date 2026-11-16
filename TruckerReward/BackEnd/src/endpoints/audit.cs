@@ -1,13 +1,14 @@
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
 
-// one audit log over sign-ins, password changes, point changes and view-as sessions
+// one audit log over sign-ins, password changes, point changes, view-as sessions and applications
 public static class AuditEndpoints
 {
     public const string Logins = "logins";
     public const string Passwords = "passwords";
     public const string Points = "points";
     public const string Views = "views";
+    public const string Applications = "applications";
     public const int MaxRows = 500;
 
     public static void MapAuditEndpoints(this WebApplication app)
@@ -30,8 +31,8 @@ public static class AuditEndpoints
         var actor = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
         if (actor is null)
             return (Results.NotFound(), null);
-        if (category is not (null or "" or Logins or Passwords or Points or Views))
-            return (Results.BadRequest(new { message = "Category must be logins, passwords, points or views." }), null);
+        if (category is not (null or "" or Logins or Passwords or Points or Views or Applications))
+            return (Results.BadRequest(new { message = "Category must be logins, passwords, points, views or applications." }), null);
         if (!await PointsEndpoints.CanManage(db, actor))
             return (Results.StatusCode(StatusCodes.Status403Forbidden), null);
 
@@ -51,6 +52,8 @@ public static class AuditEndpoints
             rows.AddRange(await PointRows(db, ids, start, end));
         if (all || category == Views)
             rows.AddRange(await ViewRows(db, ids, start, end));
+        if (all || category == Applications)
+            rows.AddRange(await ApplicationRows(db, actor, companyId, driverId, start, end));
         if (!string.IsNullOrWhiteSpace(by))
             rows = rows.Where(row => row.By?.Contains(by.Trim(), StringComparison.OrdinalIgnoreCase) == true).ToList();
         return (null, rows.OrderByDescending(r => r.At).Take(MaxRows).ToList());
@@ -156,6 +159,31 @@ public static class AuditEndpoints
             .Join(db.Users, x => x.v.ViewerId, u => u.Id, (x, viewer) => new AuditEntry(x.v.StartedAt, Views, x.v.UserId, x.Username,
                 "Site viewed as this account" + (x.v.IpAddress == null || x.v.IpAddress == "" ? "" : " from " + x.v.IpAddress), viewer.Username))
             .ToListAsync();
+    }
+
+    private static async Task<IEnumerable<AuditEntry>> ApplicationRows(AppDbContext db, User actor, int? companyId, int? driverId, DateTime start, DateTime end)
+    {
+        var applications = db.Applications.AsNoTracking().Where(a =>
+            (a.Status == "active" || a.Status == "approved" || a.Status == "rejected") &&
+            (a.ResponseTimestamp ?? a.ApplicationTimestamp) >= start &&
+            (a.ResponseTimestamp ?? a.ApplicationTimestamp) < end);
+        // Scope by the application company: rejected applicants have no membership.
+        if (actor.UserType == AuthEndpoints.Sponsor)
+            applications = applications.Where(a => db.AccountsCompanies.Any(m => m.AccountId == actor.Id && m.CompanyId == a.CompanyId));
+        else if (companyId is not null)
+            applications = applications.Where(a => a.CompanyId == companyId);
+        if (driverId is not null)
+            applications = applications.Where(a => a.ApplicantId == driverId);
+        var rows = await applications
+            .Join(db.Users.Where(u => u.UserType == AuthEndpoints.Driver), a => a.ApplicantId, u => u.Id, (a, driver) => new
+            {
+                At = a.ResponseTimestamp ?? a.ApplicationTimestamp, a.Status, a.ReviewerReasoning, a.ApplicantId, driver.Username,
+                Company = db.Companies.Where(c => c.Id == a.CompanyId).Select(c => c.Name).FirstOrDefault(),
+                Sponsor = db.Users.Where(u => u.Id == a.ReviewerId).Select(u => u.Username).FirstOrDefault()
+            })
+            .OrderByDescending(a => a.At).Take(MaxRows).ToListAsync();
+        return rows.Select(a => new AuditEntry(a.At, Applications, a.ApplicantId, a.Username,
+            $"Application to {a.Company}: {(a.Status == "approved" ? "Accept" : a.Status == "rejected" ? "Reject" : "Pending")}. Reason: {(a.Status == "active" ? "Awaiting review" : a.ReviewerReasoning)}", a.Sponsor));
     }
 
     private static string PasswordText(string changeType) => changeType switch

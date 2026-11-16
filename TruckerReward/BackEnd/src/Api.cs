@@ -13,6 +13,7 @@ public static class Api
         app.MapAdminEndpoints();
         app.MapNotificationEndpoints();
         app.MapPointsEndpoints();
+        app.MapSponsorReportEndpoints();
         app.MapAchievementEndpoints();
         app.MapAuditEndpoints();
         app.MapViewAsEndpoints();

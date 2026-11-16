@@ -23,6 +23,7 @@
                     <option value="passwords">Password changes</option>
                     <option value="points">Point changes</option>
                     <option value="views">Viewed as</option>
+                    <option value="applications">Applications</option>
                 </select>
             </label>
             @if (admin)
@@ -85,9 +86,9 @@
                         <tr>
                             <th scope="col">When (UTC)</th>
                             <th scope="col">Category</th>
-                            <th scope="col">Account</th>
+                            <th scope="col">Account / Driver</th>
                             <th scope="col">What happened</th>
-                            <th scope="col">By</th>
+                            <th scope="col">By / Sponsor</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -242,7 +243,7 @@
         try
         {
             await PdfReport.Save(Js, "Audit log", $"{appliedSummary}, {PdfReport.Generated()}",
-                ["When (UTC)", "Category", "Account", "What happened", "By"],
+                ["When (UTC)", "Category", "Account / Driver", "What happened", "By / Sponsor"],
                 rows!.Select(r => new[] { r.At.ToString("yyyy-MM-dd HH:mm"), Label(r.Category), r.Username, r.Detail, r.By ?? "" }),
                 "audit-log.pdf");
         }
@@ -264,6 +265,7 @@
         "passwords" => "Password",
         "points" => "Points",
         "views" => "Viewed as",
+        "applications" => "Application",
         _ => category
     };
 

@@ -1,0 +1,133 @@
+@page "/sponsor-report"
+@attribute [Authorize(Roles = "sponsor")]
+@inherits BackendPage
+
+<PageTitle>Sponsor Report</PageTitle>
+
+<div class="tr-page">
+    <h1>Sponsor Report</h1>
+    <h2>Driver Point Tracking</h2>
+    <p class="tr-muted">Total points is the driver's current balance with your company. Date filters apply to point changes. Dates are in UTC.</p>
+    <form class="tr-toolbar" @onsubmit="Load" @onsubmit:preventDefault="true">
+        <label for="report-driver">Driver</label>
+        <select id="report-driver" @bind="driverId">
+            <option value="0">All Drivers</option>
+            @foreach (var driver in drivers)
+            {
+                <option value="@driver.DriverId">@driver.DriverName (@driver.Username)</option>
+            }
+        </select>
+        <label for="report-from">From</label>
+        <input id="report-from" type="date" @bind="from" />
+        <label for="report-to">To</label>
+        <input id="report-to" type="date" @bind="to" />
+        <button class="tr-btn" type="submit" disabled="@loading">View report</button>
+    </form>
+    @if (error is not null)
+    {
+        <p class="tr-alert-error" role="alert">@error</p>
+    }
+    else if (loading)
+    {
+        <p role="status">Loading report...</p>
+    }
+    else if (rows.Count == 0)
+    {
+        <p class="tr-muted">No drivers found for your company.</p>
+    }
+    else
+    {
+        <div class="tr-table-wrap">
+            <table class="tr-table" aria-label="Driver point tracking report">
+                <thead>
+                    <tr>
+                        <th scope="col">Driver name</th>
+                        <th scope="col">Total points (current)</th>
+                        <th scope="col">Point change</th>
+                        <th scope="col">Date of point change (UTC)</th>
+                        <th scope="col">Sponsor making change</th>
+                        <th scope="col">Reason for point change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var driver in rows)
+                    {
+                        @if (driver.Changes.Count == 0)
+                        {
+                            <tr>
+                                <td>@driver.DriverName (@driver.Username)</td>
+                                <td>@driver.TotalPoints.ToString("N0")</td>
+                                <td colspan="4">No point changes in this date range.</td>
+                            </tr>
+                        }
+                        @foreach (var change in driver.Changes)
+                        {
+                            <tr>
+                                <td>@driver.DriverName (@driver.Username)</td>
+                                <td>@driver.TotalPoints.ToString("N0")</td>
+                                <td>@change.Points.ToString("+#,0;-#,0;0")</td>
+                                <td>@(change.At?.ToString("yyyy-MM-dd HH:mm") ?? "Not recorded")</td>
+                                <td>@(change.SponsorName ?? "Not recorded")</td>
+                                <td>@change.Reason</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ReportDriver> drivers = [];
+    private List<ReportDriver> rows = [];
+    private int driverId;
+    private DateOnly? from;
+    private DateOnly? to;
+    private bool loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignedIn();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        if (from > to)
+        {
+            error = "The start date must be on or before the end date.";
+            return;
+        }
+        loading = true;
+        try
+        {
+            var query = new List<string>();
+            if (driverId != 0) query.Add("driverId=" + driverId);
+            if (from is not null) query.Add("from=" + from.Value.ToString("yyyy-MM-dd"));
+            if (to is not null) query.Add("to=" + to.Value.ToString("yyyy-MM-dd"));
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.GetAsync($"users/{id}/reports/driver-points" + (query.Count == 0 ? "" : "?" + string.Join("&", query)));
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                error = "You need to belong to a sponsor company to view this report.";
+                return;
+            }
+            response.EnsureSuccessStatusCode();
+            rows = await response.Content.ReadFromJsonAsync<List<ReportDriver>>() ?? [];
+            if (driverId == 0) drivers = rows;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load the sponsor report. Please try again.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private sealed record ReportDriver(int DriverId, string DriverName, string Username, long TotalPoints, List<ReportChange> Changes);
+    private sealed record ReportChange(DateTime? At, int Points, string? SponsorName, string Reason);
+}

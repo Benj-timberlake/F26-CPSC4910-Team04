@@ -142,5 +142,30 @@ public sealed class AuditEndpointTests : IAsyncDisposable
         Assert.Contains("," + cell + ",", csv);
     }
 
+    [Fact]
+    public async Task ApplicationDecisionsUseCompanyScopeAndReviewDate()
+    {
+        await Start();
+        using (var db = app.Db())
+        {
+            db.Applications.AddRange(
+                new Application { ApplicantId = tom, CompanyId = acme, ReviewerId = sue, Status = "rejected", ApplicationTimestamp = day.AddDays(-10), ResponseTimestamp = day, ReviewerReasoning = "Missing experience" },
+                new Application { ApplicantId = bob, CompanyId = acme, ReviewerId = sue, Status = "approved", ApplicationTimestamp = day.AddDays(-10), ResponseTimestamp = day.AddDays(1), ReviewerReasoning = "Qualified" },
+                new Application { ApplicantId = bob, CompanyId = acme, Status = "active", ApplicationTimestamp = day });
+            await db.SaveChangesAsync();
+        }
+        var rows = await Audit(sue, "?category=applications");
+        Assert.Equal(3, rows.Count);
+        Assert.Contains(rows, r => r.Username == "bob" && r.By == null && r.At == day && r.Detail == "Application to Acme: Pending. Reason: Awaiting review");
+        Assert.Contains(rows, r => r.Username == "tom" && r.By == "sue" && r.At == day && r.Detail == "Application to Acme: Reject. Reason: Missing experience");
+        Assert.Contains(rows, r => r.Username == "bob" && r.Detail.Contains("Accept. Reason: Qualified"));
+        Assert.Single(await Audit(ann, $"?category=applications&companyId={acme}&driverId={tom}&from=2026-09-10&to=2026-09-10&by=sue"));
+        Assert.Empty(await Audit(sue, "?category=applications&from=2026-09-12"));
+        Assert.Contains(await Audit(sue), r => r.Category == "applications" && r.Detail.Contains("Pending"));
+        var csv = await client.GetStringAsync($"/users/{sue}/audit.csv?category=applications");
+        Assert.Contains("Missing experience", csv);
+        Assert.Contains("Pending. Reason: Awaiting review", csv);
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 }
