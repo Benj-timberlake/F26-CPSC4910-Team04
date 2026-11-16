@@ -147,10 +147,8 @@
                 await LoadDriverCatalog(client, query);
                 return;
             }
-            if (query.Length == 0)
-            {
-                return;
-            }
+            // Browse an initial selection without requiring a search first.
+            if (query.Length == 0) query = "truck";
             var url = "api/products?q=" + Uri.EscapeDataString(query);
             if (sort.Length > 0) url += "&sort=" + Uri.EscapeDataString(sort);
             if (availableOnly) url += "&availableOnly=true";

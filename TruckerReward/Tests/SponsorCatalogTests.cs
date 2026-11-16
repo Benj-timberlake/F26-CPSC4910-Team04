@@ -11,6 +11,22 @@ namespace TruckerReward.Tests;
 public sealed class SponsorCatalogTests : TestContext
 {
     [Fact]
+    public void OpeningCatalogLoadsSavedProductsWithoutInteraction()
+    {
+        this.SignInAs("sponsor", "sponsor", "7");
+        var backend = new JsonBackend();
+        backend.Routes["GET /users/7/catalog"] = (HttpStatusCode.OK, """["gps"]""");
+        backend.Routes["GET /api/products/detail?itemId=gps"] = (HttpStatusCode.OK,
+            """{"itemId":"gps","title":"Truck GPS","price":{"value":"10","currency":"USD"}}""");
+        this.UseBackend(backend);
+        var page = RenderComponent<SponsorCatalog>();
+        page.WaitForAssertion(() => Assert.Equal("Truck GPS", page.Find(".catalog-grid h2").TextContent));
+        Assert.Contains("1,000 points", page.Find(".catalog-grid").TextContent);
+        Assert.Empty(page.FindAll("[role=status]"));
+        Assert.DoesNotContain(backend.Requests, request => request.StartsWith("POST"));
+    }
+
+    [Fact]
     public void UnavailableItemCanStillBeRemovedFromCatalog()
     {
         var auth = this.AddTestAuthorization();

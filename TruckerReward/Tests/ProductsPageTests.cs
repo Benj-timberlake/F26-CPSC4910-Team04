@@ -16,7 +16,9 @@ public sealed class ProductsPageTests : TestContext
         var auth = this.AddTestAuthorization();
         auth.SetAuthorized("test-user");
         auth.SetRoles(role);
-        Services.AddHttpClient("Backend");
+        var backend = new JsonBackend();
+        backend.Routes["GET /api/products?q=truck"] = (System.Net.HttpStatusCode.OK, """{"itemSummaries":[]}""");
+        this.UseBackend(backend);
 
         var page = RenderComponent<ProductsPage>();
 

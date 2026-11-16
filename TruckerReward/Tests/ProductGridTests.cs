@@ -27,6 +27,21 @@ public sealed class ProductGridTests : TestContext
         return component;
     }
     [Fact]
+    public void OpeningProductsLoadsResultsAndClearingSearchRestoresDefaults()
+    {
+        handler.Body = """{"itemSummaries":[{"title":"Truck GPS"}]}""";
+        var page = RenderComponent<Products>();
+        page.WaitForAssertion(() => Assert.Equal("Truck GPS", page.Find(".product-card h2").TextContent));
+        Assert.Equal("http://backend/api/products?q=truck", handler.Url);
+        page.Find(".search-bar > input").Change("boots");
+        page.Find("form").Submit();
+        page.WaitForAssertion(() => Assert.Equal("http://backend/api/products?q=boots", handler.Url));
+        page.Find(".search-bar > input").Change("   ");
+        page.Find("form").Submit();
+        page.WaitForAssertion(() => Assert.Equal("http://backend/api/products?q=truck", handler.Url));
+    }
+
+    [Fact]
     public void GridRendersTitlesImagesAndMissingImageFallbacks()
     {
         var component = RenderCatalog("""
