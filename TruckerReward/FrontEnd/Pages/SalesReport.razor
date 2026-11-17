@@ -1,0 +1,284 @@
+@page "/admin/reports"
+@attribute [Authorize(Roles = "admin")]
+@inherits BackendPage
+@inject IJSRuntime Js
+
+<PageTitle>Sales Report</PageTitle>
+
+<div class="tr-page">
+    <h1>Sales Report</h1>
+    <p class="tr-muted">Points and dollars spent on driver orders, by sponsor. Rejected and refunded orders are left out. Dates are in UTC.</p>
+
+    <form class="sales-filters" @onsubmit="Load" @onsubmit:preventDefault="true">
+        <fieldset class="sales-sponsors">
+            <legend>Sponsors</legend>
+            <label class="tr-check"><input id="sales-all" type="checkbox" checked="@allSponsors" @onchange="ToggleAll" /> All sponsors</label>
+            @foreach (var c in companies)
+            {
+                <label class="tr-check"><input id="@($"sales-company-{c.Id}")" type="checkbox" checked="@picked.Contains(c.Id)" disabled="@allSponsors"
+                    @onchange="e => Toggle(c.Id, (bool)e.Value!)" /> @c.Name</label>
+            }
+        </fieldset>
+        <div class="sales-options">
+            <label class="filter-field"><span>From</span><input id="sales-from" type="date" @bind="from" /></label>
+            <label class="filter-field"><span>To</span><input id="sales-to" type="date" @bind="to" /></label>
+            <label class="filter-field">
+                <span>View</span>
+                <select id="sales-view" @bind="view">
+                    <option value="summary">Summary</option>
+                    <option value="detailed">Detailed</option>
+                </select>
+            </label>
+            <button class="tr-btn" type="submit" disabled="@busy">View report</button>
+        </div>
+    </form>
+
+    @if (error is not null)
+    {
+        <p class="tr-alert-error" role="alert">@error</p>
+    }
+    else if (busy && rows.Count == 0)
+    {
+        <p role="status">Loading report...</p>
+    }
+    else if (rows.Count > 0)
+    {
+        <p class="tr-muted">@shown
+            <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="DownloadPdf">Download PDF</button></p>
+        <div class="tr-table-wrap">
+            <table class="tr-table" aria-label="Sales by sponsor">
+                <thead>
+                    <tr>
+                        <th scope="col">Sponsor</th>
+                        <th scope="col">Orders</th>
+                        <th scope="col">Items</th>
+                        <th scope="col">Points</th>
+                        <th scope="col">Dollars</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in rows)
+                    {
+                        <tr>
+                            <td>@s.Name</td>
+                            <td>@s.Orders.ToString("N0")</td>
+                            <td>@s.Items.ToString("N0")</td>
+                            <td>@s.Points.ToString("N0")</td>
+                            <td>@Usd(s.Dollars)</td>
+                        </tr>
+                    }
+                </tbody>
+                @if (rows.Count > 1)
+                {
+                    <tfoot>
+                        <tr>
+                            <th scope="row">Total</th>
+                            <td>@rows.Sum(s => s.Orders).ToString("N0")</td>
+                            <td>@rows.Sum(s => s.Items).ToString("N0")</td>
+                            <td>@rows.Sum(s => s.Points).ToString("N0")</td>
+                            <td>@Usd(rows.Sum(s => s.Dollars))</td>
+                        </tr>
+                    </tfoot>
+                }
+            </table>
+        </div>
+
+        @if (shownDetailed)
+        {
+            @foreach (var s in rows)
+            {
+                <section class="sales-detail">
+                    <h2>@s.Name</h2>
+                    @if (s.Sales.Count == 0)
+                    {
+                        <p class="tr-muted">No sales in this date range.</p>
+                    }
+                    else
+                    {
+                        <div class="tr-table-wrap">
+                            <table class="tr-table" aria-label="@($"{s.Name} sales")">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Date (UTC)</th>
+                                        <th scope="col">Driver</th>
+                                        <th scope="col">Products</th>
+                                        <th scope="col">Points</th>
+                                        <th scope="col">Dollars</th>
+                                        <th scope="col">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var sale in s.Sales)
+                                    {
+                                        <tr>
+                                            <td>@When(sale)</td>
+                                            <td>@sale.DriverName (@sale.Username)</td>
+                                            <td>@sale.Products</td>
+                                            <td>@sale.Points.ToString("N0")</td>
+                                            <td>@Usd(sale.Dollars)</td>
+                                            <td>@sale.Status</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+            }
+        }
+    }
+</div>
+
+<style>
+    .sales-filters {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .sales-sponsors {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        max-height: 160px;
+        overflow-y: auto;
+        margin: 0;
+    }
+
+    .sales-options {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+        align-items: end;
+        gap: 8px;
+    }
+
+    .sales-options .filter-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .sales-detail h2 {
+        margin-top: 24px;
+    }
+
+    .tr-table tfoot th, .tr-table tfoot td {
+        font-weight: 600;
+    }
+
+    @@media (max-width: 760px) {
+        .sales-filters, .sales-options {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private List<Company> companies = [];
+    private readonly HashSet<int> picked = [];
+    private bool allSponsors = true;
+    private DateOnly? from;
+    private DateOnly? to;
+    private string view = "summary";
+    private bool detailed => view == "detailed";
+    private bool shownDetailed;
+    private string shown = "";
+    private List<SponsorSales> rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignedIn();
+        await Send(c => c.GetAsync("companies"), async r => companies = await r.Content.ReadFromJsonAsync<List<Company>>() ?? [],
+            crashed: "Couldn't load the sponsor list. Please try again.");
+        if (error is null) await Load();
+    }
+
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        allSponsors = (bool)e.Value!;
+        if (allSponsors) picked.Clear();
+    }
+
+    private void Toggle(int companyId, bool on)
+    {
+        if (on) picked.Add(companyId);
+        else picked.Remove(companyId);
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        if (from > to)
+        {
+            error = "The start date must be on or before the end date.";
+            return;
+        }
+        if (!allSponsors && picked.Count == 0)
+        {
+            error = "Pick at least one sponsor, or choose all sponsors.";
+            return;
+        }
+        var query = new List<string> { "detailed=" + (detailed ? "true" : "false") };
+        if (!allSponsors) query.AddRange(picked.Order().Select(c => "companyIds=" + c));
+        if (from is not null) query.Add("from=" + from.Value.ToString("yyyy-MM-dd"));
+        if (to is not null) query.Add("to=" + to.Value.ToString("yyyy-MM-dd"));
+        await Send(c => c.GetAsync($"users/{id}/reports/sales?" + string.Join("&", query)), async r =>
+        {
+            rows = await r.Content.ReadFromJsonAsync<List<SponsorSales>>() ?? [];
+            shownDetailed = detailed;
+            shown = Summary();
+        }, crashed: "Couldn't load the sales report. Please try again.");
+    }
+
+    private string Summary()
+    {
+        var who = allSponsors ? "All sponsors" : string.Join(", ", rows.Select(s => s.Name));
+        var range = (from, to) switch
+        {
+            (null, null) => "all time",
+            ({ } f, null) => $"since {f:yyyy-MM-dd}",
+            (null, { } t) => $"through {t:yyyy-MM-dd}",
+            ({ } f, { } t) => $"{f:yyyy-MM-dd} to {t:yyyy-MM-dd}"
+        };
+        return $"{who}, {range}, {(shownDetailed ? "detailed" : "summary")}.";
+    }
+
+    private static string Usd(decimal d) => "$" + d.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string When(Sale sale) => sale.At?.ToString("yyyy-MM-dd HH:mm") ?? "Not recorded";
+
+    private async Task DownloadPdf()
+    {
+        busy = true;
+        try
+        {
+            var sections = new List<PdfSection>
+            {
+                new("Summary", ["Sponsor", "Orders", "Items", "Points", "Dollars"],
+                    rows.Select(s => new[] { s.Name, s.Orders.ToString("N0"), s.Items.ToString("N0"), s.Points.ToString("N0"), Usd(s.Dollars) })
+                        .Concat(rows.Count > 1
+                            ? [["Total", rows.Sum(s => s.Orders).ToString("N0"), rows.Sum(s => s.Items).ToString("N0"),
+                                rows.Sum(s => s.Points).ToString("N0"), Usd(rows.Sum(s => s.Dollars))]]
+                            : Array.Empty<string[]>()).ToArray())
+            };
+            if (shownDetailed)
+                sections.AddRange(rows.Select(s => new PdfSection(s.Name, ["Date (UTC)", "Driver", "Products", "Points", "Dollars", "Status"],
+                    s.Sales.Select(sale => new[] { When(sale), $"{sale.DriverName} ({sale.Username})", sale.Products,
+                        sale.Points.ToString("N0"), Usd(sale.Dollars), sale.Status }).ToArray())));
+            await PdfReport.Save(Js, "Sales report", $"{shown} {PdfReport.Generated()}", sections, "sales-report.pdf");
+        }
+        catch (JSException)
+        {
+            error = "Couldn't build the PDF. Try again in a moment.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private sealed record SponsorSales(int CompanyId, string Name, int Orders, int Items, long Points, decimal Dollars, List<Sale> Sales);
+    private sealed record Sale(int OrderId, DateTime? At, string DriverName, string Username, string Products, int Items,
+        long Points, decimal Dollars, string Status);
+}
