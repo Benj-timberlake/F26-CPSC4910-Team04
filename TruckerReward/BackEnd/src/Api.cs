@@ -14,6 +14,7 @@ public static class Api
         app.MapNotificationEndpoints();
         app.MapPointsEndpoints();
         app.MapSponsorReportEndpoints();
+        app.MapSalesReportEndpoints();
         app.MapAchievementEndpoints();
         app.MapAuditEndpoints();
         app.MapViewAsEndpoints();
