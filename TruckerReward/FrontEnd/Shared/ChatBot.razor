@@ -201,16 +201,35 @@ private async Task ToggleChat()
         catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException)
         {
             Logger.LogError(ex, "Unable to get a response from Dify.");
-            messages.Add(new ChatMessage
-            {
-                Text = "Sorry, I couldn't reach the AI assistant. Please try again later.",
-                IsBot = true
-            });
+            messages.Add(new ChatMessage { Text = GetFallbackResponse(question), IsBot = true });
         }
         finally
         {
             isSending = false;
         }
+    }
+
+    private static string GetFallbackResponse(string question)
+    {
+        string text = question.ToLowerInvariant();
+
+        if (text.Contains("point"))
+            return "Check your dashboard to view your points balance.";
+
+        if (text.Contains("friend"))
+            return "You're a silly little boyyyyy";
+
+        if (text.Contains("reward") || text.Contains("redeem"))
+            return "Visit the Products page to explore available rewards.";
+
+        if (text.Contains("sponsor"))
+            return "Sponsors participate in the TruckerReward program.";
+
+        if (text.Contains("hello") || text.Contains("hi"))
+            return "Hey there! How can I help you today dawggggg?";
+
+        return "I can help with points, rewards, and sponsors. Could you rephrase your question dudeeee? " +
+            "Don't play with me you know what you're doing kid";
     }
 
     private class ChatMessage
