@@ -51,7 +51,17 @@ Optional user secrets, never appsettings:
 | `Authentication:Google:ClientId` / `ClientSecret` | FrontEnd | Google sign-in button; redirect URI `/signin-google` |
 | `Authentication:Microsoft:ClientId` / `ClientSecret` | FrontEnd | Microsoft sign-in button; redirect URI `/signin-microsoft` |
 | `BACKEND_API_KEY` | both | backend rejects requests without a matching `X-Api-Key` |
+| `DIFY_API_URL` | FrontEnd | Dify server base URL, without `/v1` |
+| `DIFY_API_KEY` | FrontEnd | Dify app API key; only the server uses the key |
 | `Ebay:ClientId` / `ClientSecret` / `Environment` | BackEnd | eBay product search for the catalog |
+
+For local development, set Dify values as FrontEnd user secrets (never in `appsettings.json`):
+
+```
+cd TruckerReward/FrontEnd
+dotnet user-secrets set "DIFY_API_URL" "http://localhost"
+dotnet user-secrets set "DIFY_API_KEY" "your-dify-app-api-key"
+```
 
 ## Schema changes
 
@@ -99,8 +109,16 @@ Environment properties on the Beanstalk environment:
 | `SMTP_USER`, `SMTP_PASSWORD` | `TruckerRewards@gmail.com` and its Google app password |
 | `EMAIL_FROM` | the sender address; without `SMTP_HOST` it means SES instead (verified sender, instance role needs `ses:SendEmail`) |
 | `Authentication__Google__*`, `Authentication__Microsoft__*` | as above, with `__` for `:` |
+| `DIFY_API_URL` | HTTPS base URL for the Dify server, such as the public HTTPS address of a tunnel to your laptop; do not include `/v1` |
+| `DIFY_API_KEY` | Dify app API key; the FrontEnd sends it server-to-server and never exposes it to the browser |
 | `Ebay__ClientId`, `Ebay__ClientSecret`, `Ebay__Environment` | eBay catalog search |
 | `CDL_S3_BUCKET`, `CDL_S3_REGION` | private bucket for uploaded CDL photos (`team04-truckerreward`) |
+
+The chat UI sends messages to Dify from the server and retains Dify's conversation ID for follow-up
+messages in that open chat. For laptop-hosted Dify, `DIFY_API_URL` must be a publicly reachable
+HTTPS tunnel address. Keep Dify, Ollama, and the tunnel running on the laptop; the chatbot cannot
+respond while they are offline. The chat displays a retry-later message and logs connection or
+configuration errors on the server if Dify is unreachable.
 
 ### HTTPS
 

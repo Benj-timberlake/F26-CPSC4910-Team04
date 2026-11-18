@@ -97,6 +97,11 @@
     cursor: pointer;
 }
 
+.chat-input button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
 
 /* Draggable chatbot */
 .chat-drag-handle {

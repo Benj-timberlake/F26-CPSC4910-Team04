@@ -1,6 +1,9 @@
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @using Microsoft.AspNetCore.Components.Routing
+@using System.Text.Json
+@inject FrontEnd.DifyChatClient DifyChat
+@inject ILogger<ChatBot> Logger
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
@@ -26,12 +29,16 @@
                 <button @onclick="ToggleChat" data-no-drag>✕</button>
             </div>
 
-            <div class="chat-messages">
+            <div class="chat-messages" aria-live="polite">
                 @foreach (var message in messages)
                 {
                     <div class="chat-message @(message.IsBot ? "bot" : "user")">
                         @message.Text
                     </div>
+                }
+                @if (isSending)
+                {
+                    <div class="chat-message bot" role="status">Thinking...</div>
                 }
             </div>
 
@@ -39,9 +46,10 @@
                 <input @bind="userMessage"
                        @bind:event="oninput"
                        @onkeydown="HandleKeyDown"
+                       disabled="@isSending"
                        placeholder="Ask me something..." />
 
-                <button @onclick="SendMessage">Send</button>
+                <button @onclick="SendMessage" disabled="@isSending">Send</button>
             </div>
         </div>
     }
@@ -53,7 +61,10 @@
 
 @code {
     private bool isOpen = false;
+    private bool isSending;
     private string userMessage = "";
+    private string? conversationId;
+    private readonly string difyUserId = Guid.NewGuid().ToString("N");
     private ElementReference chatbotElement;
     private IJSObjectReference? dragModule;
     
@@ -158,15 +169,15 @@ private async Task ToggleChat()
     }
 }
 
-    private void HandleKeyDown(KeyboardEventArgs e)
+    private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
-            SendMessage();
+            await SendMessage();
     }
 
-    private void SendMessage()
+    private async Task SendMessage()
     {
-        if (string.IsNullOrWhiteSpace(userMessage))
+        if (isSending || string.IsNullOrWhiteSpace(userMessage))
             return;
 
         string question = userMessage.Trim();
@@ -177,36 +188,29 @@ private async Task ToggleChat()
             IsBot = false
         });
 
-        messages.Add(new ChatMessage
-        {
-            Text = GetResponse(question),
-            IsBot = true
-        });
-
         userMessage = "";
-    }
+        isSending = true;
+        StateHasChanged();
 
-    private string GetResponse(string question)
-    {
-        string text = question.ToLowerInvariant();
-
-        if (text.Contains("point"))
-            return "Check your dashboard to view your points balance.";
-        
-        if (text.Contains("friend"))
-            return "You're a silly little boyyyyy";
-
-        if (text.Contains("reward") || text.Contains("redeem"))
-            return "Visit the Products page to explore available rewards.";
-
-        if (text.Contains("sponsor"))
-            return "Sponsors participate in the TruckerReward program.";
-
-        if (text.Contains("hello") || text.Contains("hi"))
-            return "Hey there! How can I help you today dawggggg?";
-
-        return ("I can help with points, rewards, and sponsors. Could you rephrase your question dudeeee? " +
-            "Don't play with me you know what you're doing kid");
+        try
+        {
+            var reply = await DifyChat.SendAsync(question, difyUserId, conversationId);
+            conversationId = reply.ConversationId ?? conversationId;
+            messages.Add(new ChatMessage { Text = reply.Answer, IsBot = true });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException)
+        {
+            Logger.LogError(ex, "Unable to get a response from Dify.");
+            messages.Add(new ChatMessage
+            {
+                Text = "Sorry, I couldn't reach the AI assistant. Please try again later.",
+                IsBot = true
+            });
+        }
+        finally
+        {
+            isSending = false;
+        }
     }
 
     private class ChatMessage
