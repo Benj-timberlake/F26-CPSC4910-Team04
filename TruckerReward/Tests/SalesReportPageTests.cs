@@ -11,7 +11,7 @@ public sealed class SalesReportPageTests : TestContext
     private readonly JsonBackend backend = new();
     private const string Companies = """[{"id":1,"name":"Acme"},{"id":2,"name":"Beta"},{"id":3,"name":"Zed"}]""";
     private const string Summary = """[{"companyId":1,"name":"Acme","orders":2,"items":3,"points":3500,"dollars":35,"sales":[]},{"companyId":2,"name":"Beta","orders":1,"items":1,"points":700,"dollars":7,"sales":[]}]""";
-    private const string Detailed = """[{"companyId":2,"name":"Beta","orders":1,"items":1,"points":700,"dollars":7,"sales":[{"orderId":4,"at":"2026-09-15T12:00:00","driverName":"Bob User","username":"bob","products":"Cap","items":1,"points":700,"dollars":7,"status":"Ordered"}]}]""";
+    private const string Detailed = """[{"companyId":2,"name":"Beta","orders":1,"items":1,"points":700,"dollars":7,"sales":[{"orderId":4,"sponsor":"Beta","at":"2026-09-15T12:00:00","driverName":"Bob User","username":"bob","products":"Cap","items":1,"points":700,"dollars":7,"status":"Ordered"}]}]""";
 
     private IRenderedComponent<SalesReport> Render()
     {
@@ -50,6 +50,7 @@ public sealed class SalesReportPageTests : TestContext
         page.WaitForAssertion(() => Assert.Single(page.FindAll(".sales-detail")));
         var detail = page.Find(".sales-detail").TextContent;
         Assert.Contains("Bob User (bob)", detail);
+        Assert.Contains("Beta", detail);
         Assert.Contains("Cap", detail);
         Assert.Contains("Ordered", detail);
         Assert.Contains("2026-09-15 12:00", detail);
@@ -86,6 +87,59 @@ public sealed class SalesReportPageTests : TestContext
         Assert.Equal("sales-report.pdf", Prop<string>(arg, "filename"));
         var section = Assert.Single(Prop<PdfSection[]>(arg, "sections"));
         Assert.Equal(["Total", "3", "4", "4,200", "$42.00"], section.Rows[^1]);
+    }
+
+    [Fact]
+    public void SearchNarrowsSponsorsAndCountsThePicks()
+    {
+        var page = Render();
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        Assert.Contains("All 3 sponsors selected", page.Markup);
+        page.Find("#sponsor-search").Input("be");
+        Assert.Empty(page.FindAll("#sales-company-1"));
+        Assert.NotEmpty(page.FindAll("#sales-company-2"));
+        page.Find("#sales-all").Change(false);
+        page.Find("#sales-company-2").Change(true);
+        Assert.Contains("1 of 3 sponsors selected", page.Markup);
+    }
+
+    [Fact]
+    public void DriverReportPicksDriversFromOneSponsor()
+    {
+        backend.Routes["GET /admin/accounts?type=driver&companyId=1"] = (HttpStatusCode.OK,
+            """[{"id":7,"username":"amy","firstName":"Amy","lastName":"Ames"},{"id":8,"username":"cal","firstName":"Cal","lastName":"Cole"}]""");
+        backend.Routes["GET /users/9/reports/sales/drivers?detailed=false&companyId=1&driverIds=8"] = (HttpStatusCode.OK,
+            """[{"driverId":8,"name":"Cal Cole","username":"cal","sponsor":"Acme","orders":1,"items":2,"points":900,"dollars":9,"sales":[]}]""");
+        var page = Render();
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("tbody tr").Count));
+        page.Find("#sales-by").Change("driver");
+        page.Find("form").Submit();
+        Assert.Contains("Choose a sponsor", page.Markup);
+        page.Find("#driver-sponsor").Change("1");
+        page.WaitForAssertion(() => Assert.Contains("All 2 drivers selected", page.Markup));
+        page.Find("#driver-search").Input("cal");
+        Assert.Empty(page.FindAll("#sales-driver-7"));
+        page.Find("#drivers-all").Change(false);
+        page.Find("#sales-driver-8").Change(true);
+        Assert.Contains("1 of 2 drivers selected", page.Markup);
+        page.Find("form").Submit();
+        page.WaitForAssertion(() => Assert.Contains("Cal Cole (cal)", page.Find("tbody").TextContent));
+        Assert.Contains("Acme", page.Find("tbody").TextContent);
+        Assert.Contains("Cal Cole at Acme", page.Markup);
+    }
+
+    [Fact]
+    public void BuildsTheHtmlFromTheReport()
+    {
+        var module = JSInterop.SetupModule("./js/reports.js");
+        module.SetupVoid("html", _ => true).SetVoidResult();
+        var page = Render();
+        page.WaitForAssertion(() => page.Find("button.html"));
+        page.Find("button.html").Click();
+        page.WaitForAssertion(() => Assert.Single(module.Invocations));
+        var arg = module.Invocations.Single().Arguments.Single()!;
+        Assert.Equal("sales-report.html", Prop<string>(arg, "filename"));
+        Assert.Equal(["Sponsor", "Orders", "Items", "Points", "Dollars"], Assert.Single(Prop<PdfSection[]>(arg, "sections")).Columns);
     }
 
     private static T Prop<T>(object o, string name) => (T)o.GetType().GetProperty(name)!.GetValue(o)!;
