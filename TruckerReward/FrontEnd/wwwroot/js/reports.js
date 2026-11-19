@@ -66,3 +66,24 @@ export async function pdf({ title, subtitle, columns, rows, sections, filename }
     }
     doc.save(filename);
 }
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// standalone page with the same sections as the pdf
+export function html({ title, subtitle, sections, filename }) {
+    const tables = sections.map(({ heading, columns, rows }) =>
+        `<h2>${esc(heading)}</h2><table><thead><tr>${columns.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead>` +
+        `<tbody>${rows.map(r => `<tr>${r.map(v => `<td>${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("");
+    const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+body{font-family:system-ui,sans-serif;margin:32px;color:#1e1e1e}p{color:#646464}
+table{border-collapse:collapse;width:100%;margin-bottom:24px;font-size:14px}
+th{background:#1e4078;color:#fff;text-align:left}th,td{padding:6px 8px;border:1px solid #d5dbe5}
+tbody tr:nth-child(even){background:#f4f6fa}</style></head>
+<body><h1>${esc(title)}</h1><p>${esc(subtitle)}</p>${tables}</body></html>`;
+    const url = URL.createObjectURL(new Blob([page], { type: "text/html" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
