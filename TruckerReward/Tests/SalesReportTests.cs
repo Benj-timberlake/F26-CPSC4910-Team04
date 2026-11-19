@@ -8,7 +8,7 @@ namespace TruckerReward.Tests;
 
 public sealed class SalesReportTests
 {
-    private sealed record Seeded(int Admin, int Sponsor, int Acme, int Beta, int Empty);
+    private sealed record Seeded(int Admin, int Sponsor, int Acme, int Beta, int Empty, int Amy, int Bob, int Cal);
 
     private static async Task<Seeded> Seed(TestApp app)
     {
@@ -20,7 +20,8 @@ public sealed class SalesReportTests
         var sponsor = NewUser("sue", "sponsor", acme.Id);
         var amy = NewUser("amy", "driver", acme.Id);
         var bob = NewUser("bob", "driver", beta.Id);
-        db.Users.AddRange(admin, sponsor, amy, bob);
+        var cal = NewUser("cal", "driver", acme.Id);
+        db.Users.AddRange(admin, sponsor, amy, bob, cal);
         await db.SaveChangesAsync();
 
         PointsHistory Order(User u, Company c, int points, int day, string? rejected = null) =>
@@ -38,7 +39,7 @@ public sealed class SalesReportTests
             new CartItem { UserId = amy.Id, Name = "Gone", Price = 5m, InCart = false, PointsHistoryId = rejected.Id },
             new CartItem { UserId = bob.Id, Name = "Cap", Price = 7m, InCart = false, WasOrdered = true, PointsHistoryId = betaOrder.Id });
         await db.SaveChangesAsync();
-        return new(admin.Id, sponsor.Id, acme.Id, beta.Id, empty.Id);
+        return new(admin.Id, sponsor.Id, acme.Id, beta.Id, empty.Id, amy.Id, bob.Id, cal.Id);
     }
 
     [Fact]
@@ -57,6 +58,7 @@ public sealed class SalesReportTests
         Assert.Equal(35m, acme.Dollars);
         Assert.Equal(["Pending", "Ordered"], acme.Sales.Select(x => x.Status));
         Assert.Equal("Mug x2", acme.Sales[1].Products);
+        Assert.All(acme.Sales, x => Assert.Equal("Acme", x.Sponsor));
         Assert.Equal(0, report[2].Orders);
         Assert.Empty(report[2].Sales);
     }
@@ -91,6 +93,47 @@ public sealed class SalesReportTests
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/users/99999/reports/sales")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/users/{s.Admin}/reports/sales?companyIds=99999")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"/users/{s.Admin}/reports/sales?from=2026-09-30&to=2026-09-01")).StatusCode);
+    }
+
+    [Fact]
+    public async Task DriverReportCoversOneSponsorsDrivers()
+    {
+        await using var app = new TestApp();
+        using var client = await app.Start(b => b.Logging.ClearProviders());
+        var s = await Seed(app);
+
+        var all = (await client.GetFromJsonAsync<List<DriverSales>>($"/users/{s.Admin}/reports/sales/drivers?companyId={s.Acme}"))!;
+        Assert.Equal(["amy", "cal"], all.Select(d => d.Username));
+        Assert.Equal(2, all[0].Orders);
+        Assert.Equal(3500, all[0].Points);
+        Assert.Equal(35m, all[0].Dollars);
+        Assert.All(all, d => Assert.Equal("Acme", d.Sponsor));
+        Assert.All(all[0].Sales, x => Assert.Equal("amy User", x.DriverName));
+        Assert.Equal(0, all[1].Orders);
+
+        var one = (await client.GetFromJsonAsync<List<DriverSales>>(
+            $"/users/{s.Admin}/reports/sales/drivers?companyId={s.Acme}&driverIds={s.Amy}&to=2026-09-15&detailed=false"))!;
+        var amy = Assert.Single(one);
+        Assert.Equal(1, amy.Orders);
+        Assert.Equal(2500, amy.Points);
+        Assert.Empty(amy.Sales);
+
+        var two = (await client.GetFromJsonAsync<List<DriverSales>>(
+            $"/users/{s.Admin}/reports/sales/drivers?companyId={s.Acme}&driverIds={s.Cal}&driverIds={s.Amy}"))!;
+        Assert.Equal(2, two.Count);
+    }
+
+    [Fact]
+    public async Task DriverReportRefusesOtherSponsorsDrivers()
+    {
+        await using var app = new TestApp();
+        using var client = await app.Start(b => b.Logging.ClearProviders());
+        var s = await Seed(app);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/users/{s.Admin}/reports/sales/drivers?companyId={s.Acme}&driverIds={s.Bob}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/users/{s.Admin}/reports/sales/drivers?companyId=99999")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/users/{s.Sponsor}/reports/sales/drivers?companyId={s.Acme}")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync($"/users/{s.Admin}/reports/sales/drivers?companyId={s.Acme}&from=2026-09-30&to=2026-09-01")).StatusCode);
     }
 
     private static User NewUser(string name, string role, int? companyId) => new()
