@@ -13,7 +13,7 @@ builder.Services.AddSingleton<CdlStorage>();
 builder.Services.AddSingleton<ICdlReader>(sp => sp.GetRequiredService<CdlStorage>());
 builder.Services.AddHttpClient<DifyChatClient>(client =>
 {
-    client.Timeout = TimeSpan.FromMinutes(3);
+    client.Timeout = TimeSpan.FromSeconds(20);
 });
 
 void ConfigureBackendClient(HttpClient client)
