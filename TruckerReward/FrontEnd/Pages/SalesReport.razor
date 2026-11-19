@@ -7,19 +7,64 @@
 
 <div class="tr-page">
     <h1>Sales Report</h1>
-    <p class="tr-muted">Points and dollars spent on driver orders, by sponsor. Rejected and refunded orders are left out. Dates are in UTC.</p>
+    <p class="tr-muted">Points and dollars spent on driver orders, by sponsor or by driver. Rejected and refunded orders are left out. Dates are in UTC.</p>
 
     <form class="sales-filters" @onsubmit="Load" @onsubmit:preventDefault="true">
-        <fieldset class="sales-sponsors">
-            <legend>Sponsors</legend>
-            <label class="tr-check"><input id="sales-all" type="checkbox" checked="@allSponsors" @onchange="ToggleAll" /> All sponsors</label>
-            @foreach (var c in companies)
-            {
-                <label class="tr-check"><input id="@($"sales-company-{c.Id}")" type="checkbox" checked="@picked.Contains(c.Id)" disabled="@allSponsors"
-                    @onchange="e => Toggle(c.Id, (bool)e.Value!)" /> @c.Name</label>
-            }
-        </fieldset>
+        @if (byDriver)
+        {
+            <fieldset class="sales-pick">
+                <legend>Drivers</legend>
+                <label class="filter-field">
+                    <span>Sponsor</span>
+                    <select id="driver-sponsor" value="@driverCompany" @onchange="PickSponsor">
+                        <option value="0">Choose a sponsor</option>
+                        @foreach (var c in companies)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </select>
+                </label>
+                @if (driverCompany != 0)
+                {
+                    <input id="driver-search" type="search" placeholder="Search drivers by name" aria-label="Search drivers by name"
+                        @bind="driverSearch" @bind:event="oninput" />
+                    <p class="sales-count" role="status">@Count(allDrivers, pickedDrivers.Count, drivers.Count, "driver")</p>
+                    <div class="sales-options-list">
+                        <label class="tr-check"><input id="drivers-all" type="checkbox" checked="@allDrivers" @onchange="e => allDrivers = Clear((bool)e.Value!, pickedDrivers)" /> All drivers</label>
+                        @foreach (var d in Matching(drivers, d => $"{d.FirstName} {d.LastName} {d.Username}", driverSearch))
+                        {
+                            <label class="tr-check"><input id="@($"sales-driver-{d.Id}")" type="checkbox" checked="@pickedDrivers.Contains(d.Id)" disabled="@allDrivers"
+                                @onchange="e => Toggle(pickedDrivers, d.Id, (bool)e.Value!)" /> @d.FirstName @d.LastName (@d.Username)</label>
+                        }
+                    </div>
+                }
+            </fieldset>
+        }
+        else
+        {
+            <fieldset class="sales-pick">
+                <legend>Sponsors</legend>
+                <input id="sponsor-search" type="search" placeholder="Search sponsors by name" aria-label="Search sponsors by name"
+                    @bind="sponsorSearch" @bind:event="oninput" />
+                <p class="sales-count" role="status">@Count(allSponsors, picked.Count, companies.Count, "sponsor")</p>
+                <div class="sales-options-list">
+                    <label class="tr-check"><input id="sales-all" type="checkbox" checked="@allSponsors" @onchange="e => allSponsors = Clear((bool)e.Value!, picked)" /> All sponsors</label>
+                    @foreach (var c in Matching(companies, c => c.Name, sponsorSearch))
+                    {
+                        <label class="tr-check"><input id="@($"sales-company-{c.Id}")" type="checkbox" checked="@picked.Contains(c.Id)" disabled="@allSponsors"
+                            @onchange="e => Toggle(picked, c.Id, (bool)e.Value!)" /> @c.Name</label>
+                    }
+                </div>
+            </fieldset>
+        }
         <div class="sales-options">
+            <label class="filter-field">
+                <span>Report by</span>
+                <select id="sales-by" @bind="by">
+                    <option value="sponsor">Sponsor</option>
+                    <option value="driver">Driver</option>
+                </select>
+            </label>
             <label class="filter-field"><span>From</span><input id="sales-from" type="date" @bind="from" /></label>
             <label class="filter-field"><span>To</span><input id="sales-to" type="date" @bind="to" /></label>
             <label class="filter-field">
@@ -44,27 +89,26 @@
     else if (rows.Count > 0)
     {
         <p class="tr-muted">@shown
-            <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="DownloadPdf">Download PDF</button></p>
+            <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="() => Download(false)">Download PDF</button>
+            <button type="button" class="tr-btn html" disabled="@busy" @onclick="() => Download(true)">Download HTML</button></p>
         <div class="tr-table-wrap">
-            <table class="tr-table" aria-label="Sales by sponsor">
+            <table class="tr-table" aria-label="@(shownByDriver ? "Sales by driver" : "Sales by sponsor")">
                 <thead>
                     <tr>
-                        <th scope="col">Sponsor</th>
-                        <th scope="col">Orders</th>
-                        <th scope="col">Items</th>
-                        <th scope="col">Points</th>
-                        <th scope="col">Dollars</th>
+                        @foreach (var c in SummaryColumns)
+                        {
+                            <th scope="col">@c</th>
+                        }
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var s in rows)
+                    @foreach (var g in rows)
                     {
                         <tr>
-                            <td>@s.Name</td>
-                            <td>@s.Orders.ToString("N0")</td>
-                            <td>@s.Items.ToString("N0")</td>
-                            <td>@s.Points.ToString("N0")</td>
-                            <td>@Usd(s.Dollars)</td>
+                            @foreach (var v in SummaryRow(g))
+                            {
+                                <td>@v</td>
+                            }
                         </tr>
                     }
                 </tbody>
@@ -73,10 +117,10 @@
                     <tfoot>
                         <tr>
                             <th scope="row">Total</th>
-                            <td>@rows.Sum(s => s.Orders).ToString("N0")</td>
-                            <td>@rows.Sum(s => s.Items).ToString("N0")</td>
-                            <td>@rows.Sum(s => s.Points).ToString("N0")</td>
-                            <td>@Usd(rows.Sum(s => s.Dollars))</td>
+                            @foreach (var v in TotalRow().Skip(1))
+                            {
+                                <td>@v</td>
+                            }
                         </tr>
                     </tfoot>
                 }
@@ -85,38 +129,34 @@
 
         @if (shownDetailed)
         {
-            @foreach (var s in rows)
+            @foreach (var g in rows)
             {
                 <section class="sales-detail">
-                    <h2>@s.Name</h2>
-                    @if (s.Sales.Count == 0)
+                    <h2>@Heading(g)</h2>
+                    @if (g.Sales.Count == 0)
                     {
                         <p class="tr-muted">No sales in this date range.</p>
                     }
                     else
                     {
                         <div class="tr-table-wrap">
-                            <table class="tr-table" aria-label="@($"{s.Name} sales")">
+                            <table class="tr-table" aria-label="@($"{Heading(g)} sales")">
                                 <thead>
                                     <tr>
-                                        <th scope="col">Date (UTC)</th>
-                                        <th scope="col">Driver</th>
-                                        <th scope="col">Products</th>
-                                        <th scope="col">Points</th>
-                                        <th scope="col">Dollars</th>
-                                        <th scope="col">Status</th>
+                                        @foreach (var c in DetailColumns)
+                                        {
+                                            <th scope="col">@c</th>
+                                        }
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var sale in s.Sales)
+                                    @foreach (var sale in g.Sales)
                                     {
                                         <tr>
-                                            <td>@When(sale)</td>
-                                            <td>@sale.DriverName (@sale.Username)</td>
-                                            <td>@sale.Products</td>
-                                            <td>@sale.Points.ToString("N0")</td>
-                                            <td>@Usd(sale.Dollars)</td>
-                                            <td>@sale.Status</td>
+                                            @foreach (var v in DetailRow(sale))
+                                            {
+                                                <td>@v</td>
+                                            }
                                         </tr>
                                     }
                                 </tbody>
@@ -137,19 +177,31 @@
         margin-bottom: 16px;
     }
 
-    .sales-sponsors {
+    .sales-pick {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 0;
+    }
+
+    .sales-options-list {
         display: flex;
         flex-wrap: wrap;
         gap: 6px 16px;
         max-height: 160px;
         overflow-y: auto;
+    }
+
+    .sales-count {
         margin: 0;
+        font-size: .9rem;
     }
 
     .sales-options {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         align-items: end;
+        align-content: start;
         gap: 8px;
     }
 
@@ -176,15 +228,24 @@
 
 @code {
     private List<Company> companies = [];
+    private List<Driver> drivers = [];
     private readonly HashSet<int> picked = [];
+    private readonly HashSet<int> pickedDrivers = [];
     private bool allSponsors = true;
+    private bool allDrivers = true;
+    private int driverCompany;
+    private string sponsorSearch = "";
+    private string driverSearch = "";
+    private string by = "sponsor";
+    private bool byDriver => by == "driver";
     private DateOnly? from;
     private DateOnly? to;
     private string view = "summary";
     private bool detailed => view == "detailed";
     private bool shownDetailed;
+    private bool shownByDriver;
     private string shown = "";
-    private List<SponsorSales> rows = [];
+    private List<Group> rows = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -194,16 +255,35 @@
         if (error is null) await Load();
     }
 
-    private void ToggleAll(ChangeEventArgs e)
+    private static IEnumerable<T> Matching<T>(IEnumerable<T> items, Func<T, string> name, string search) =>
+        string.IsNullOrWhiteSpace(search) ? items : items.Where(i => name(i).Contains(search.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private static string Count(bool all, int picked, int total, string noun) =>
+        all ? $"All {total} {noun}{(total == 1 ? "" : "s")} selected" : $"{picked} of {total} {noun}{(total == 1 ? "" : "s")} selected";
+
+    private static bool Clear(bool all, HashSet<int> set)
     {
-        allSponsors = (bool)e.Value!;
-        if (allSponsors) picked.Clear();
+        if (all) set.Clear();
+        return all;
     }
 
-    private void Toggle(int companyId, bool on)
+    private static void Toggle(HashSet<int> set, int item, bool on)
     {
-        if (on) picked.Add(companyId);
-        else picked.Remove(companyId);
+        if (on) set.Add(item);
+        else set.Remove(item);
+    }
+
+    private async Task PickSponsor(ChangeEventArgs e)
+    {
+        driverCompany = int.TryParse(e.Value?.ToString(), out var c) ? c : 0;
+        drivers = [];
+        pickedDrivers.Clear();
+        allDrivers = true;
+        driverSearch = "";
+        if (driverCompany == 0) return;
+        await Send(c => c.GetAsync($"admin/accounts?type=driver&companyId={driverCompany}"),
+            async r => drivers = await r.Content.ReadFromJsonAsync<List<Driver>>() ?? [],
+            crashed: "Couldn't load that sponsor's drivers. Please try again.");
     }
 
     private async Task Load()
@@ -214,26 +294,50 @@
             error = "The start date must be on or before the end date.";
             return;
         }
-        if (!allSponsors && picked.Count == 0)
-        {
-            error = "Pick at least one sponsor, or choose all sponsors.";
-            return;
-        }
         var query = new List<string> { "detailed=" + (detailed ? "true" : "false") };
-        if (!allSponsors) query.AddRange(picked.Order().Select(c => "companyIds=" + c));
+        string path;
+        if (byDriver)
+        {
+            if (driverCompany == 0)
+            {
+                error = "Choose a sponsor to see its drivers.";
+                return;
+            }
+            if (!allDrivers && pickedDrivers.Count == 0)
+            {
+                error = "Pick at least one driver, or choose all drivers.";
+                return;
+            }
+            path = "reports/sales/drivers";
+            query.Add("companyId=" + driverCompany);
+            if (!allDrivers) query.AddRange(pickedDrivers.Order().Select(d => "driverIds=" + d));
+        }
+        else
+        {
+            if (!allSponsors && picked.Count == 0)
+            {
+                error = "Pick at least one sponsor, or choose all sponsors.";
+                return;
+            }
+            path = "reports/sales";
+            if (!allSponsors) query.AddRange(picked.Order().Select(c => "companyIds=" + c));
+        }
         if (from is not null) query.Add("from=" + from.Value.ToString("yyyy-MM-dd"));
         if (to is not null) query.Add("to=" + to.Value.ToString("yyyy-MM-dd"));
-        await Send(c => c.GetAsync($"users/{id}/reports/sales?" + string.Join("&", query)), async r =>
+        await Send(c => c.GetAsync($"users/{id}/{path}?" + string.Join("&", query)), async r =>
         {
-            rows = await r.Content.ReadFromJsonAsync<List<SponsorSales>>() ?? [];
+            rows = await r.Content.ReadFromJsonAsync<List<Group>>() ?? [];
             shownDetailed = detailed;
+            shownByDriver = byDriver;
             shown = Summary();
         }, crashed: "Couldn't load the sales report. Please try again.");
     }
 
     private string Summary()
     {
-        var who = allSponsors ? "All sponsors" : string.Join(", ", rows.Select(s => s.Name));
+        var who = shownByDriver
+            ? (allDrivers ? "All drivers" : string.Join(", ", rows.Select(g => g.Name))) + " at " + companies.First(c => c.Id == driverCompany).Name
+            : allSponsors ? "All sponsors" : string.Join(", ", rows.Select(g => g.Name));
         var range = (from, to) switch
         {
             (null, null) => "all time",
@@ -244,33 +348,51 @@
         return $"{who}, {range}, {(shownDetailed ? "detailed" : "summary")}.";
     }
 
+    private string[] SummaryColumns => shownByDriver
+        ? ["Driver", "Sponsor", "Orders", "Items", "Points", "Dollars"]
+        : ["Sponsor", "Orders", "Items", "Points", "Dollars"];
+
+    private static readonly string[] DetailColumns = ["Date (UTC)", "Sponsor", "Driver", "Products", "Points", "Dollars", "Status"];
+
+    private string Heading(Group g) => shownByDriver ? $"{g.Name} ({g.Username})" : g.Name;
+
+    private string[] SummaryRow(Group g) => shownByDriver
+        ? [Heading(g), g.Sponsor ?? "", g.Orders.ToString("N0"), g.Items.ToString("N0"), g.Points.ToString("N0"), Usd(g.Dollars)]
+        : [g.Name, g.Orders.ToString("N0"), g.Items.ToString("N0"), g.Points.ToString("N0"), Usd(g.Dollars)];
+
+    private string[] TotalRow()
+    {
+        string[] totals = [rows.Sum(g => g.Orders).ToString("N0"), rows.Sum(g => g.Items).ToString("N0"),
+            rows.Sum(g => g.Points).ToString("N0"), Usd(rows.Sum(g => g.Dollars))];
+        return shownByDriver ? ["Total", "", .. totals] : ["Total", .. totals];
+    }
+
+    private static string[] DetailRow(Sale s) =>
+        [s.At?.ToString("yyyy-MM-dd HH:mm") ?? "Not recorded", s.Sponsor, $"{s.DriverName} ({s.Username})", s.Products,
+            s.Points.ToString("N0"), Usd(s.Dollars), s.Status];
+
     private static string Usd(decimal d) => "$" + d.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
 
-    private static string When(Sale sale) => sale.At?.ToString("yyyy-MM-dd HH:mm") ?? "Not recorded";
-
-    private async Task DownloadPdf()
+    private async Task Download(bool html)
     {
         busy = true;
         try
         {
             var sections = new List<PdfSection>
             {
-                new("Summary", ["Sponsor", "Orders", "Items", "Points", "Dollars"],
-                    rows.Select(s => new[] { s.Name, s.Orders.ToString("N0"), s.Items.ToString("N0"), s.Points.ToString("N0"), Usd(s.Dollars) })
-                        .Concat(rows.Count > 1
-                            ? [["Total", rows.Sum(s => s.Orders).ToString("N0"), rows.Sum(s => s.Items).ToString("N0"),
-                                rows.Sum(s => s.Points).ToString("N0"), Usd(rows.Sum(s => s.Dollars))]]
-                            : Array.Empty<string[]>()).ToArray())
+                new("Summary", SummaryColumns, rows.Select(SummaryRow).Concat(rows.Count > 1 ? [TotalRow()] : []).ToArray())
             };
             if (shownDetailed)
-                sections.AddRange(rows.Select(s => new PdfSection(s.Name, ["Date (UTC)", "Driver", "Products", "Points", "Dollars", "Status"],
-                    s.Sales.Select(sale => new[] { When(sale), $"{sale.DriverName} ({sale.Username})", sale.Products,
-                        sale.Points.ToString("N0"), Usd(sale.Dollars), sale.Status }).ToArray())));
-            await PdfReport.Save(Js, "Sales report", $"{shown} {PdfReport.Generated()}", sections, "sales-report.pdf");
+                sections.AddRange(rows.Select(g => new PdfSection(Heading(g), DetailColumns, g.Sales.Select(DetailRow).ToArray())));
+            var subtitle = $"{shown} {PdfReport.Generated()}";
+            if (html)
+                await PdfReport.SaveHtml(Js, "Sales report", subtitle, sections, "sales-report.html");
+            else
+                await PdfReport.Save(Js, "Sales report", subtitle, sections, "sales-report.pdf");
         }
         catch (JSException)
         {
-            error = "Couldn't build the PDF. Try again in a moment.";
+            error = "Couldn't build the download. Try again in a moment.";
         }
         finally
         {
@@ -278,7 +400,8 @@
         }
     }
 
-    private sealed record SponsorSales(int CompanyId, string Name, int Orders, int Items, long Points, decimal Dollars, List<Sale> Sales);
-    private sealed record Sale(int OrderId, DateTime? At, string DriverName, string Username, string Products, int Items,
-        long Points, decimal Dollars, string Status);
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName);
+    private sealed record Group(string Name, string? Username, string? Sponsor, int Orders, int Items, long Points, decimal Dollars, List<Sale> Sales);
+    private sealed record Sale(int OrderId, DateTime? At, string Sponsor, string DriverName, string Username, string Products,
+        int Items, long Points, decimal Dollars, string Status);
 }
