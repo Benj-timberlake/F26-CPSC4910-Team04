@@ -57,6 +57,46 @@
                 </dl>
             </section>
 
+            @if (account.UserType == "driver")
+            {
+                <section class="tr-card">
+                    <h2>Company</h2>
+                    @if (account.Companies is { Count: > 0 })
+                    {
+                        <ul class="profile-company-list">
+                            @foreach (var company in account.Companies)
+                            {
+                                <li>
+                                    <span>@company.Name</span>
+                                    @if (company.CurrentCompanyViewed)
+                                    {
+                                        <span class="profile-current-company">Currently viewing</span>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="tr-btn" disabled="@(switchingCompanyId is not null)" @onclick="() => SwitchCompany(company.Id)">
+                                            @(switchingCompanyId == company.Id ? "Switching..." : "Switch here")
+                                        </button>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                        @if (companySwitchError is not null)
+                        {
+                            <p role="alert" class="tr-alert-error">@companySwitchError</p>
+                        }
+                    }
+                    else
+                    {
+                        <p>You are not currently associated with a company.</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(account.PendingCompanyName))
+                    {
+                        <p>Application pending: @account.PendingCompanyName</p>
+                    }
+                </section>
+            }
+
             <section class="tr-card">
                 <h2>Security</h2>
                 @if (activity.FailedSincePreviousLogin > 0)
@@ -164,6 +204,10 @@
         margin-top: 8px;
     }
 
+    .profile-company-list { list-style: none; padding: 0; margin: 0; }
+    .profile-company-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e3e7ee; }
+    .profile-current-company { color: #176b3a; font-size: 13px; font-weight: 700; }
+
 </style>
 
 @code {
@@ -175,6 +219,8 @@
     private string? loadError;
     private string? notice;
     private bool sending;
+    private int? switchingCompanyId;
+    private string? companySwitchError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -230,7 +276,33 @@
         return rel == "" ? abs : $"{abs} ({rel})";
     }
 
-    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, int? CompanyId, int Points, string? PendingCompanyName, bool EmailConfirmed = true, bool EmailCodes = false);
+    private sealed record Account(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string>? CompanyNames, List<CompanyMembership>? Companies, int? CompanyId, int Points, string? PendingCompanyName, bool EmailConfirmed = true, bool EmailCodes = false);
+    private sealed record CompanyMembership(int Id, string Name, bool CurrentCompanyViewed, long Points);
+
+    private async Task SwitchCompany(int companyId)
+    {
+        if (switchingCompanyId is not null || account is null) return;
+        switchingCompanyId = companyId;
+        companySwitchError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsync($"users/{account.Id}/companies/{companyId}/switch", null);
+            if (!response.IsSuccessStatusCode)
+            {
+                companySwitchError = "Couldn't switch companies. Please try again.";
+                return;
+            }
+            account = await client.GetFromJsonAsync<Account>($"users/{account.Id}");
+            notice = "Your current company has been switched.";
+            Nav.NavigateTo(Nav.Uri, forceLoad: true);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            companySwitchError = "Couldn't switch companies right now. Please try again.";
+        }
+        finally { switchingCompanyId = null; }
+    }
 
     private async Task ResendConfirmation()
     {

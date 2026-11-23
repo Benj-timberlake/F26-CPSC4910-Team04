@@ -1,0 +1,45 @@
+@page "/manage-accounts"
+@attribute [Authorize(Roles = "admin")]
+
+<PageTitle>Manage Accounts</PageTitle>
+
+<main class="manage-accounts-page">
+    <header>
+        <p class="eyebrow">ADMINISTRATION</p>
+        <h1>Manage Accounts</h1>
+        <p>Choose an area to manage.</p>
+    </header>
+
+    <section class="manage-accounts-grid" aria-label="Account management options">
+        <a href="admin/accounts" class="manage-action-card">
+            <span aria-hidden="true">👥</span>
+            <strong>Accounts</strong>
+            <small>Manage user accounts and profiles</small>
+        </a>
+        <a href="manage-points" class="manage-action-card">
+            <span aria-hidden="true">🏅</span>
+            <strong>Manage Points</strong>
+            <small>Review and change driver and sponsor points</small>
+        </a>
+        <a href="applications" class="manage-action-card">
+            <span aria-hidden="true">📄</span>
+            <strong>Applications</strong>
+            <small>Review sponsor and driver applications</small>
+        </a>
+    </section>
+</main>
+
+<style>
+    .manage-accounts-page { max-width: 1200px; margin: 0 auto; padding: 36px clamp(20px, 4vw, 56px) 60px; color: #1f2937; }
+    .manage-accounts-page header { margin-bottom: 28px; }
+    .manage-accounts-page .eyebrow { color: var(--brand); font-weight: 700; font-size: 11px; letter-spacing: .12em; margin: 0 0 8px; }
+    .manage-accounts-page h1 { margin: 0; font-size: clamp(30px, 3vw, 38px); font-weight: 700; letter-spacing: -.03em; }
+    .manage-accounts-page header p:last-child { margin: 7px 0 0; color: #697586; }
+    .manage-accounts-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .manage-action-card { min-height: 170px; padding: 22px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #e3e9f0; border-radius: 14px; background: white; color: inherit; text-decoration: none; box-shadow: 0 5px 16px #172b4d0a; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+    .manage-action-card:hover, .manage-action-card:focus-visible { transform: translateY(-2px); border-color: #b8c9e2; box-shadow: 0 10px 24px #172b4d16; }
+    .manage-action-card span { font-size: 28px; }
+    .manage-action-card strong { font-size: 17px; }
+    .manage-action-card small { color: #697586; font-size: 13px; }
+    @@media (max-width: 760px) { .manage-accounts-grid { grid-template-columns: 1fr; } }
+</style>

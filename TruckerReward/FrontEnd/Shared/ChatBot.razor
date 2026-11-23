@@ -21,6 +21,9 @@
     </div>
 }
 <div class="trucker-chat" @ref="chatbotElement">
+    <button type="button" class="chat-reset-position" data-no-drag hidden
+            aria-label="Move chatbot to bottom-right corner" title="Move chatbot to bottom-right corner"
+            @onclick="ResetChatPosition">↘</button>
     @if (isOpen)
     {
         <div class="chat-window">
@@ -78,11 +81,20 @@ protected override async Task OnAfterRenderAsync(bool firstRender)
     if (firstRender)
     {
         dragModule = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "./js/chatbotDrag.js");
+            "import", "./js/chatbotDrag.js?v=4");
 
         await dragModule.InvokeVoidAsync(
             "enableChatbotDrag", chatbotElement);
     }
+
+    if (dragModule is not null && isOpen)
+        await dragModule.InvokeVoidAsync("updateChatOpenDirection", chatbotElement);
+}
+
+private async Task ResetChatPosition()
+{
+    if (dragModule is not null)
+        await dragModule.InvokeVoidAsync("resetChatbotPosition", chatbotElement);
 }
 
 private void OnLocationChanged(

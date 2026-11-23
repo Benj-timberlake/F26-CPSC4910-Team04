@@ -1,5 +1,5 @@
 @page "/dashboard"
-@attribute [Authorize]
+@page "/"
 @using System.Security.Claims
 @inject IHttpClientFactory HttpClientFactory
 @inject NavigationManager Nav
@@ -8,22 +8,30 @@
 @implements IAsyncDisposable
 
 
-<PageTitle>
-    @(account?.UserType == "admin"
-        ? "Admin Command Center | TruckerReward"
-        : "Dashboard | TruckerReward")
-</PageTitle>
+<PageTitle>Home | TruckerReward</PageTitle>
 
 
 <div class="tr-page">
-    @if (loadError != null)
+    @if (!isAuthenticated)
     {
-        <h1>Dashboard</h1>
+        <section class="home-intro">
+            <h1>TruckerReward</h1>
+            <div class="home-accent"></div>
+            <p class="home-welcome">Welcome to TruckerReward!</p>
+            <div class="home-actions">
+                <a class="tr-btn" href="login">Log in</a>
+                <a class="tr-btn-outline" href="register">Create an account</a>
+            </div>
+        </section>
+    }
+    else if (loadError != null)
+    {
+        <h1>Home</h1>
         <p role="alert" class="tr-alert-error">@loadError</p>
     }
     else if (account == null)
     {
-        <h1>Dashboard</h1>
+        <h1>Home</h1>
         <p role="status"><em>Loading your account...</em></p>
     }
     else
@@ -38,7 +46,7 @@
         }
         else
         {
-            <h1>My TruckerReward Dashboard</h1>
+            <h1>Home</h1>
         }
 
         @if (account.UserType == "driver" && System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["cdlUpload"] == "failed")
@@ -49,11 +57,6 @@
         @if (account.UserType == "sponsor")
         {
             <p><a class="tr-btn" href="sponsor-report">Report</a> <a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a> <button type="button" class="tr-btn" @onclick="OpenMonthlyPoints">Montly Points</button></p>
-        }
-
-        else if (account.UserType == "driver")
-        {
-            <p><a class="tr-btn" href="pastorders">Past Orders</a></p>
         }
 
         @if (notice is not null)
@@ -73,7 +76,7 @@
                     </div>
 
                     <div class="admin-quick-grid">
-                        <a href="admin/accounts" class="admin-action-card">
+                        <a href="manage-accounts" class="admin-action-card">
                             <span class="admin-action-icon">👥</span>
                             <strong>Manage Accounts</strong>
                             <small>Users and profiles</small>
@@ -1164,6 +1167,7 @@ private void HandleAdminTaskKeyDown(
     }
     private void CloseMassAccountCreationModal() => showMassAccountCreationModal = false;
     private string? loadError;
+    private bool isAuthenticated;
     private string? notice;
     private List<CompanyOption>? companies;
     private int? selectedCompanyId;
@@ -1187,6 +1191,9 @@ private void HandleAdminTaskKeyDown(
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthState).User;
+        isAuthenticated = user.Identity?.IsAuthenticated == true;
+        if (!isAuthenticated)
+            return;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
         using var client = HttpClientFactory.CreateClient("Backend");
         try
@@ -1310,6 +1317,7 @@ private void HandleAdminTaskKeyDown(
 
             account = await client.GetFromJsonAsync<Account>($"users/{id}");
             notice = "Your current company has been switched.";
+            Nav.NavigateTo(Nav.Uri, forceLoad: true);
         }
         catch (HttpRequestException)
         {

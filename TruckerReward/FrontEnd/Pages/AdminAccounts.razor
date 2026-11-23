@@ -6,6 +6,7 @@
 <PageTitle>Accounts</PageTitle>
 
 <div class="tr-page">
+    <a class="back-manage-accounts" href="manage-accounts">← Back to Manage Accounts</a>
     <h1>Accounts</h1>
 
     @if (counts is not null)
@@ -115,7 +116,7 @@
                         <th scope="col">Created</th>
                         <th scope="col">Last sign-in</th>
                         <th scope="col">Status</th>
-                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                        <th scope="col">Manage</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -129,65 +130,68 @@
                             <td>@When(a.CreatedAt)</td>
                             <td>@(a.LastLoginAt is null ? "Never" : When(a.LastLoginAt))</td>
                             <td>@a.Status</td>
-                            <td>
+                            <td class="manage-cell">
                                 @if (a.Id.ToString() != id)
                                 {
-                                    <button type="button" class="tr-btn-outline" disabled="@busy" aria-label="@(a.Status == "active" ? "Deactivate" : "Reactivate") @a.Username" @onclick="() => Toggle(a)">
-                                        @(a.Status == "active" ? "Deactivate" : "Reactivate")
-                                    </button>
-                                    <button type="button" class="tr-btn-outline edit" disabled="@busy" aria-label="Edit @a.Username" @onclick="() => StartEdit(a)">Edit</button>
-                                    <button type="button" class="tr-btn-outline sign-out" disabled="@busy" aria-label="Sign out @a.Username everywhere" @onclick="() => SignOutEverywhere(a)">Sign out</button>
-                                    @if (a.Status == "active")
-                                    {
-                                        <button type="button" class="tr-btn-outline reset-link" disabled="@busy" aria-label="Send reset link to @a.Username" @onclick="() => SendResetLink(a)">Send reset link</button>
-                                    }
-                                    @if (deleting == a.Id)
-                                    {
-                                        <button type="button" class="tr-btn delete" disabled="@busy" @onclick="() => Delete(a)">Delete @a.Username for good</button>
-                                        <button type="button" class="tr-btn-outline" @onclick="() => deleting = null">Cancel</button>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class="tr-btn-outline delete" disabled="@busy" aria-label="Delete @a.Username" @onclick="() => deleting = a.Id">Delete</button>
-                                    }
-                                    @if (a.UserType != "admin" && a.Status == "active")
-                                    {
-                                        <form class="view-as" method="post" action="account/view-as/@a.Id">
-                                            <button type="submit" class="tr-btn-outline" aria-label="View as @a.Username">View as</button>
-                                        </form>
-                                    }
+                                    <button type="button" class="manage-account-button" disabled="@busy" @onclick="() => OpenManage(a)">Manage</button>
                                 }
                             </td>
                         </tr>
-                        @if (editing is not null && editing.Id == a.Id)
-                        {
-                            <tr class="editing">
-                                <td colspan="8">
-                                    <form class="edit-form" @onsubmit="SaveEdit">
-                                        <input aria-label="First name" @bind="editing.FirstName" />
-                                        <input aria-label="Last name" @bind="editing.LastName" />
-                                        <input type="email" aria-label="Email" @bind="editing.Email" />
-                                        <input aria-label="Phone number" @bind="editing.PhoneNumber" />
-                                        <input aria-label="Address" @bind="editing.Address" />
-                                        @if (a.UserType != "admin")
-                                        {
-                                            <select aria-label="Account sponsor" @bind="editing.CompanyId">
-                                                <option value="0">No sponsor</option>
-                                                @foreach (var c in companies)
-                                                {
-                                                    <option value="@c.Id">@c.Name</option>
-                                                }
-                                            </select>
-                                        }
-                                        <button type="submit" class="tr-btn" disabled="@busy">Save</button>
-                                        <button type="button" class="tr-btn-outline" @onclick="() => editing = null">Cancel</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        }
                     }
                 </tbody>
             </table>
+        </div>
+    }
+    @if (managing is not null)
+    {
+        <div class="manage-backdrop" @onclick="CloseManage">
+            <section class="manage-dialog" role="dialog" aria-modal="true" aria-labelledby="manage-account-title" @onclick:stopPropagation="true">
+                <button type="button" class="manage-close" aria-label="Close" @onclick="CloseManage">×</button>
+                <p class="manage-eyebrow">ACCOUNT ACTIONS</p>
+                <h2 id="manage-account-title">@managing.FirstName @managing.LastName</h2>
+                <p class="manage-subtitle">@managing.Username · @managing.UserType · @managing.Status</p>
+                @if (error is not null) { <p role="alert" class="tr-alert-error">@error</p> }
+                @if (editing is not null && editing.Id == managing.Id)
+                {
+                    <form class="manage-edit-form" @onsubmit="SaveEdit" @onsubmit:preventDefault="true">
+                        <label>First name<input aria-label="First name" @bind="editing.FirstName" /></label>
+                        <label>Last name<input aria-label="Last name" @bind="editing.LastName" /></label>
+                        <label>Email<input type="email" aria-label="Email" @bind="editing.Email" /></label>
+                        <label>Phone<input aria-label="Phone number" @bind="editing.PhoneNumber" /></label>
+                        <label>Address<input aria-label="Address" @bind="editing.Address" /></label>
+                        @if (managing.UserType != "admin")
+                        {
+                            <label>Sponsor<select aria-label="Account sponsor" @bind="editing.CompanyId"><option value="0">No sponsor</option>@foreach (var c in companies) { <option value="@c.Id">@c.Name</option> }</select></label>
+                        }
+                        <div class="manage-actions"><button type="submit" class="tr-btn" disabled="@busy">Save</button><button type="button" class="tr-btn-outline" @onclick="() => editing = null">Cancel</button></div>
+                    </form>
+                }
+                else
+                {
+                    <div class="manage-action-grid">
+                        <button type="button" disabled="@busy" @onclick="() => StartEdit(managing)">Edit</button>
+                        <button type="button" disabled="@busy" @onclick="() => Toggle(managing)">@(managing.Status == "active" ? "Deactivate" : "Reactivate")</button>
+                        <button type="button" disabled="@busy" @onclick="() => SignOutEverywhere(managing)">Sign out</button>
+                        @if (managing.Status == "active")
+                        {
+                            <button type="button" disabled="@busy" @onclick="() => SendResetLink(managing)">Send reset link</button>
+                        }
+                        @if (managing.UserType != "admin" && managing.Status == "active")
+                        {
+                            <form method="post" action="account/view-as/@managing.Id"><button type="submit">View as</button></form>
+                        }
+                        @if (deleting == managing.Id)
+                        {
+                            <div class="delete-confirm"><p>Delete @managing.Username permanently? This cannot be undone.</p><button type="button" class="danger-button" disabled="@busy" @onclick="() => Delete(managing)">Delete</button><button type="button" class="tr-btn-outline" @onclick="() => deleting = null">Cancel</button></div>
+                        }
+                        else
+                        {
+                            <button type="button" class="danger-outline" disabled="@busy" @onclick="() => deleting = managing.Id">Delete</button>
+                        }
+                    </div>
+                }
+                <div class="manage-footer"><button type="button" class="tr-btn-outline" @onclick="CloseManage">Close</button></div>
+            </section>
         </div>
     }
 </div>
@@ -222,6 +226,29 @@
     }
 
     .account-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .manage-cell { min-width: 105px; }
+    .manage-account-button { padding: 8px 16px; border: 1px solid #2455a4; border-radius: 7px; background: #2455a4; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+    .manage-account-button:hover { background: #1e478b; }
+    .manage-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: #10182799; backdrop-filter: blur(3px); }
+    .manage-dialog { position: relative; width: min(560px, 100%); max-height: min(85vh, 760px); overflow-y: auto; padding: 30px; border: 1px solid #e3e9f0; border-radius: 16px; background: #fff; color: #1f2937; box-shadow: 0 24px 70px #0004; }
+    .manage-dialog h2 { margin: 0; font-size: 25px; }
+    .manage-close { position: absolute; top: 14px; right: 16px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: #f1f4f8; color: #465366; font-size: 24px; cursor: pointer; }
+    .manage-eyebrow { margin: 0 0 6px; color: #2455a4; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+    .manage-subtitle { margin: 6px 0 22px; color: #6b7280; text-transform: capitalize; }
+    .manage-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .manage-action-grid > button, .manage-action-grid form button { box-sizing: border-box; width: 100%; min-height: 52px; padding: 12px 14px; border: 1px solid #dbe2eb; border-radius: 9px; background: #f8fafc; color: #26364b; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+    .manage-action-grid > button:hover, .manage-action-grid form button:hover { border-color: #9db4d3; background: #eff4fa; }
+    .manage-action-grid form { margin: 0; }
+    .manage-action-grid .danger-outline { color: #a32c2c; border-color: #efcaca; background: #fff8f8; }
+    .delete-confirm { grid-column: 1 / -1; padding: 14px; border: 1px solid #efcaca; border-radius: 9px; background: #fff8f8; }
+    .delete-confirm p { margin: 0 0 12px; font-weight: 600; }
+    .danger-button { padding: 9px 12px; border: 0; border-radius: 7px; background: #b42323; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+    .delete-confirm .tr-btn-outline { margin-left: 8px; }
+    .manage-edit-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .manage-edit-form label { display: grid; gap: 5px; color: #526071; font-size: 13px; font-weight: 600; }
+    .manage-edit-form input, .manage-edit-form select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #cbd3dd; border-radius: 7px; font: inherit; }
+    .manage-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+    .manage-footer { display: flex; justify-content: flex-end; padding-top: 18px; margin-top: 18px; border-top: 1px solid #edf0f4; }
     .mass-account-creation-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: white; color: var(--brand); cursor: pointer; }
     .mass-account-creation-button:hover { background: #edf1f6; }
     .mass-account-creation-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
@@ -257,11 +284,30 @@
     private List<Company> companies = [];
     private Edit? editing;
     private int? deleting;
+    private Account? managing;
     private NewAccount? creating;
     private bool showMassAccountCreationModal;
     private int actorId;
 
     private void CloseMassAccountCreationModal() => showMassAccountCreationModal = false;
+
+    private void OpenManage(Account a)
+    {
+        managing = a;
+        editing = null;
+        deleting = null;
+        error = null;
+        notice = null;
+    }
+
+    private void CloseManage()
+    {
+        if (busy) return;
+        managing = null;
+        editing = null;
+        deleting = null;
+        error = null;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -314,6 +360,7 @@
         {
             notice = $"{a.Username} was {(next == "active" ? "reactivated" : "deactivated")}.";
             await Load();
+            managing = accounts?.FirstOrDefault(x => x.Id == a.Id);
         });
     }
 
@@ -331,6 +378,7 @@
         {
             notice = $"{a.Username} was deleted.";
             await Load();
+            managing = null;
         });
         deleting = null;
     }
@@ -377,6 +425,7 @@
             notice = $"{e.Username} was updated.";
             editing = null;
             await Load();
+            managing = accounts?.FirstOrDefault(x => x.Id == e.Id);
         });
     }
 

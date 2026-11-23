@@ -61,6 +61,9 @@ export function enableChatbotDrag(chatbot) {
 
         chatbot.style.right = "auto";
         chatbot.style.bottom = "auto";
+        chatbot.dataset.moved = "true";
+        const resetButton = chatbot.querySelector(".chat-reset-position");
+        if (resetButton) resetButton.hidden = false;
 
         e.preventDefault();
     }
@@ -116,8 +119,19 @@ export function resetChatbotPosition(chatbot) {
 
     chatbot.style.removeProperty("left");
     chatbot.style.removeProperty("top");
-    chatbot.style.removeProperty("right");
-    chatbot.style.removeProperty("bottom");
+    chatbot.style.left = "auto";
+    chatbot.style.right = "24px";
+    chatbot.style.bottom = "24px";
+    chatbot.dataset.moved = "false";
+    const resetButton = chatbot.querySelector(".chat-reset-position");
+    if (resetButton) resetButton.hidden = true;
+}
+
+export function updateChatOpenDirection(chatbot) {
+    if (!chatbot) return;
+    const rect = chatbot.getBoundingClientRect();
+    chatbot.dataset.openVertical = rect.top + rect.height / 2 > window.innerHeight / 2 ? "up" : "down";
+    chatbot.dataset.openHorizontal = rect.left + rect.width / 2 < window.innerWidth / 2 ? "right" : "left";
 }
 
 export function disableChatbotDrag(chatbot) {

@@ -35,6 +35,15 @@ a, .btn-link {
 }
 
 /* page containers */
+.back-manage-accounts {
+    display: inline-block;
+    margin: 0 0 16px;
+    color: var(--brand);
+    font-weight: 600;
+    text-decoration: none;
+}
+.back-manage-accounts:hover, .back-manage-accounts:focus-visible { text-decoration: underline; }
+
 .tr-page {
     max-width: 1100px;
     margin: 0 auto;
@@ -69,6 +78,11 @@ a, .btn-link {
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 20px;
     align-items: start;
+}
+
+.tr-cards:has(> .tr-card:only-child) {
+    grid-template-columns: minmax(min(100%, 300px), 700px);
+    justify-content: center;
 }
 
 /* label / value pairs */

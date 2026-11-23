@@ -1,13 +1,16 @@
 @namespace FrontEnd.Shared
 @inherits Microsoft.AspNetCore.Components.LayoutComponentBase
 
-<div class="mouse-gradient-background">
-
+<div class="mouse-gradient-background app-shell">
     <AccountBar />
-
-    <main id="main-content" tabindex="-1">
+    <main id="main-content" tabindex="-1" class="app-content">
         @Body
     </main>
     <ChatBot />
-
 </div>
+
+<style>
+    .app-shell { display: flex; min-height: 100vh; }
+    .app-content { flex: 1; min-width: 0; margin-left: 250px; padding-top: 24px; }
+    @@media (max-width: 720px) { .app-shell { display: block; } .app-content { margin-left: 0; padding-top: 16px; } }
+</style>

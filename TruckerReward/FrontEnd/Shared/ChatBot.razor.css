@@ -7,7 +7,25 @@
     font-family: inherit;
 }
 
+.chat-reset-position {
+    position: absolute;
+    top: -14px;
+    right: -14px;
+    z-index: 2;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 50%;
+    background: #1769aa;
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 3px 10px #0003;
+}
+
 .chat-toggle {
+    max-width: 226px;
     background: #1769aa;
     color: white;
     border: none;
@@ -17,7 +35,15 @@
     box-shadow: 0 4px 14px #0003;
 }
 
+@media (max-width: 720px) {
+    .trucker-chat { right: 12px; bottom: 12px; }
+}
+
 .chat-window {
+    position: absolute;
+    left: auto;
+    right: 0;
+    bottom: calc(100% + 12px);
     width: min(350px, calc(100vw - 48px));
     height: 440px;
     background: white;
@@ -28,6 +54,13 @@
     overflow: hidden;
     margin-bottom: 12px;
 }
+
+.trucker-chat[data-open-vertical="down"] .chat-window {
+    top: calc(100% + 12px);
+    bottom: auto;
+}
+
+.trucker-chat[data-open-horizontal="right"] .chat-window { left: 0; right: auto; }
 
 .chat-header {
     background: #1769aa;

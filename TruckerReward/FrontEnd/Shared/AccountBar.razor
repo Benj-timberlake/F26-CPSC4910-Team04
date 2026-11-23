@@ -1,66 +1,26 @@
 @namespace FrontEnd.Shared
+@using System.Security.Claims
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
 
 @* <base href> would send a bare #main-content to the home page *@
 <a class="skip-link" href="#main-content" onclick="document.getElementById('main-content').focus(); return false;">Skip to main content</a>
 
 <nav class="account-bar" aria-label="Main">
-    <AuthorizeView Context="homeNav">
-        @if (!homeNav.User.IsInRole("sponsor"))
-        {
-            <a href="">Home</a>
-        }
-    </AuthorizeView>
-    <a href="about-us">About Us</a>
     <AuthorizeView>
         <Authorized>
-            <a href="products">Products</a>
-            @if (context.User.HasClaim(c => c.Type == FrontEnd.Auth.TruckerSignIn.SponsorViewClaim))
-            {
-                <span>Viewing as @context.User.Identity?.Name</span>
-                <form method="post" action="account/driver-view/return">
-                    <button type="submit">Return to sponsor view</button>
-                </form>
-            }
-            <a href="dashboard">Dashboard</a>
-            <AuthorizeView Roles="admin" Context="admin">
-                <a href="admin/security">Security</a>
-                <a href="admin/accounts">Accounts</a>
-                <a href="admin/banner">Banner</a>
-            </AuthorizeView>
-            <AuthorizeView Roles="driver" Context="driver">
-                <a href="points">Points</a>
-                <a href="achievements">Achievements</a>
-            </AuthorizeView>
-            <AuthorizeView Roles="driver,sponsor" Context="news">
-                <a href="announcements">Announcements</a>
-            </AuthorizeView>
-            <AuthorizeView Roles="sponsor,admin" Context="pointsNav">
-                @if (pointsNav.User.IsInRole("admin"))
-                {
-                    <a href="manage-points">Manage Points</a>
-                }
-                <a href="audit">Audit log</a>
-            </AuthorizeView>
-            <AuthorizeView Roles="sponsor" Context="sponsorNav">
-                <a href="achievement-goals">Achievement goals</a>
-            </AuthorizeView>
-            <span class="spacer"></span>
-            <NotificationBell />
-            <AuthorizeView Roles="driver" Context="wishlistNav">
-                <a href="wishlist" class="wishlist-link" aria-label="Wishlist" title="Wishlist"><HeartIcon /></a>
-            </AuthorizeView>
-            <a href="cart" class="cart-link" aria-label="Cart">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="9" cy="21" r="1" />
-                    <circle cx="20" cy="21" r="1" />
-                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-                </svg>
-            </a>
             <div class="profile-menu" @onkeydown="HandleProfileKey">
                 <button type="button" class="profile-link" aria-label="Profile menu"
                         aria-expanded="@(profileOpen ? "true" : "false")" aria-controls="profile-options"
                         @onclick="() => profileOpen = !profileOpen">
-                    @context.User.Identity?.Name <span aria-hidden="true">▾</span>
+                    <span class="profile-label">
+                        <span class="profile-username">@context.User.Identity?.Name</span>
+                        @if (!string.IsNullOrWhiteSpace(profileCompany))
+                        {
+                            <span class="profile-company">@profileCompany</span>
+                        }
+                    </span>
+                    <span class="profile-chevron" aria-hidden="true">▾</span>
                 </button>
                 @if (profileOpen)
                 {
@@ -77,9 +37,58 @@
             {
                 <button type="button" class="profile-backdrop" tabindex="-1" aria-label="Close profile menu" @onclick="CloseProfile"></button>
             }
+            <div class="sidebar-quick-links" aria-label="Quick links">
+                <NotificationBell />
+                <AuthorizeView Roles="driver" Context="cartNav">
+                    <a href="cart" class="cart-link" aria-label="Cart" title="Cart">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="9" cy="21" r="1" />
+                            <circle cx="20" cy="21" r="1" />
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                        </svg>
+                    </a>
+                </AuthorizeView>
+                <AuthorizeView Roles="driver" Context="wishlistNav">
+                    <a href="pastorders" class="past-orders-link" aria-label="Past Orders" title="Past Orders">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 3h13l3 3v15H4z" />
+                            <path d="M17 3v4h4M8 11h8M8 15h8M8 19h5" />
+                        </svg>
+                    </a>
+                    <a href="wishlist" class="wishlist-link" aria-label="Favorites" title="Favorites"><HeartIcon /></a>
+                </AuthorizeView>
+            </div>
+            <a href="">Home</a>
+            <a href="about-us">About Us</a>
+            <a href="products">Products</a>
+            @if (context.User.HasClaim(c => c.Type == FrontEnd.Auth.TruckerSignIn.SponsorViewClaim))
+            {
+                <span>Viewing as @context.User.Identity?.Name</span>
+                <form method="post" action="account/driver-view/return">
+                    <button type="submit">Return to sponsor view</button>
+                </form>
+            }
+            <AuthorizeView Roles="admin" Context="admin">
+                <a href="admin/security">Security</a>
+                <a href="manage-accounts">Manage Accounts</a>
+                <a href="admin/banner">Banner</a>
+            </AuthorizeView>
+            <AuthorizeView Roles="driver" Context="driver">
+                <a href="points">Points</a>
+                <a href="achievements">Achievements</a>
+            </AuthorizeView>
+            <AuthorizeView Roles="driver,sponsor" Context="news">
+                <a href="announcements">Announcements</a>
+            </AuthorizeView>
+            <AuthorizeView Roles="sponsor,admin" Context="pointsNav">
+                <a href="audit">Audit log</a>
+            </AuthorizeView>
+            <AuthorizeView Roles="sponsor" Context="sponsorNav">
+                <a href="achievement-goals">Achievement goals</a>
+            </AuthorizeView>
         </Authorized>
         <NotAuthorized>
-            <span class="spacer"></span>
+            <a href="about-us">About Us</a>
             <a href="login">Log in</a>
             <a href="register">Create account</a>
         </NotAuthorized>
@@ -101,32 +110,68 @@
 <style>
     .account-bar {
         display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 12px 18px;
-        padding: 12px 24px;
+        flex: 0 0 250px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        box-sizing: border-box;
+        width: 250px;
+        height: 100vh;
+        position: fixed;
+        inset: 0 auto 0 0;
+        overflow-y: auto;
+        padding: 18px 14px;
         background: var(--brand);
         color: white;
     }
 
     .account-bar a {
+        display: flex;
+        align-items: center;
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 48px;
+        padding: 0 12px;
+        border-radius: 6px;
         color: white;
+        font-size: 18px;
+        line-height: 1.25;
         text-decoration: none;
     }
 
+    .account-bar a:hover, .account-bar a:focus-visible { background: #ffffff24; }
+
     .account-bar .wishlist-link,
-    .account-bar .cart-link {
+    .account-bar .cart-link,
+    .account-bar .past-orders-link {
         display: inline-flex;
+        justify-content: center;
+        flex: 0 0 48px;
+        width: 48px;
+        min-height: 48px;
+        padding: 0;
     }
+
+    .sidebar-quick-links { display: flex; align-items: center; gap: 8px; }
+    .sidebar-quick-links .notification-bell { flex: 0 0 48px; width: 48px; min-height: 48px; justify-content: center; padding: 0; }
 
     .account-bar .spacer {
         flex: 1;
+        min-height: 8px;
     }
 
     .profile-menu {
         position: relative;
         z-index: 101;
+        width: 100%;
     }
+
+    .account-bar .profile-link { box-sizing: border-box; width: 100%; min-height: 48px; text-align: left; white-space: normal; }
+    .account-bar .profile-link { display: flex; align-items: center; gap: 8px; }
+    .profile-label { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+    .profile-username { font-weight: 700; }
+    .profile-company { overflow: hidden; color: #ffffffd9; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+    .profile-chevron { margin-left: auto; }
 
     .profile-options {
         position: absolute;
@@ -208,10 +253,38 @@
         cursor: pointer;
         white-space: nowrap;
     }
+
+    @@media (max-width: 720px) {
+        .account-bar { position: relative; inset: auto; flex-direction: row; flex-wrap: wrap; width: 100%; height: auto; min-height: 0; padding: 10px 12px; gap: 6px; }
+        .account-bar .spacer { display: none; }
+        .account-bar a { width: auto; min-height: 44px; }
+        .sidebar-quick-links { flex-direction: row; }
+    }
 </style>
 
 @code {
     private bool profileOpen;
+    private string? profileCompany;
+
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        if (!user.IsInRole("driver") && !user.IsInRole("sponsor")) return;
+        var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(id)) return;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            profileCompany = (await client.GetFromJsonAsync<HeaderAccount>($"users/{id}"))?.CompanyName;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            profileCompany = null;
+        }
+    }
 
     private void CloseProfile() => profileOpen = false;
 
@@ -219,4 +292,6 @@
     {
         if (e.Key == "Escape") CloseProfile();
     }
+
+    private sealed record HeaderAccount(string? CompanyName);
 }

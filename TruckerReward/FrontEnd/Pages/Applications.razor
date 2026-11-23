@@ -11,6 +11,10 @@
 <div class="applications-page">
     <header class="applications-heading">
         <div>
+            @if (isAdmin)
+            {
+                <a class="back-manage-accounts" href="manage-accounts">← Back to Manage Accounts</a>
+            }
             <p class="eyebrow">APPLICATION REVIEW</p>
             <h1>Applications</h1>
             <p class="applications-subtitle">Review applications and applicant details.</p>

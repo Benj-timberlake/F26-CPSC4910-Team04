@@ -1,0 +1,22 @@
+.home-intro {
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 75px 20px 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.home-intro h1 { font-size: clamp(38px, 5vw, 52px); font-weight: 750; letter-spacing: -1.5px; line-height: 1.2; color: #202b3a; margin: 0; }
+.home-accent { height: 4px; width: 58px; border-radius: 10px; background: #2859a3; margin: 22px auto; }
+.home-welcome { font-size: 19px; color: #526278; margin: 0 0 28px; }
+.home-actions { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 14px; }
+.home-actions .tr-btn, .home-actions .tr-btn-outline { margin: 0; padding: 13px 24px; border-radius: 9px; font-size: 16px; font-weight: 600; text-decoration: none; transition: transform .2s, box-shadow .2s; }
+.home-actions a:hover { transform: translateY(-2px); box-shadow: 0 6px 18px #25549a24; }
+
+@media (max-width: 600px) {
+    .home-intro { padding-top: 55px; }
+    .home-actions { gap: 10px; }
+}
