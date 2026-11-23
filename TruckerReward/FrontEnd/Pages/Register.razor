@@ -7,12 +7,14 @@
     <div class="tr-card">
         <h1>Create account</h1>
 
+        <p id="register-submit-error" role="alert" class="tr-alert-error" hidden></p>
         @if (!string.IsNullOrEmpty(Error))
         {
             <p role="alert" class="tr-alert-error">@Error</p>
         }
 
-        <form class="tr-form" method="post" action="account/register" enctype="multipart/form-data">
+        <form class="tr-form" method="post" action="account/register" enctype="multipart/form-data"
+              onsubmit="return truckerRegister.submit(event, this)">
             <label for="userType">I am a</label>
             <select id="userType" name="userType" @bind="userType">
                 <option value="driver">Driver</option>
@@ -21,15 +23,52 @@
 
             @if (userType == "driver" && companies.Count > 0)
             {
-                <label for="companyId">Sponsor</label>
-                <select id="companyId" name="companyId" required>
-                    <option value="">Pick the sponsor you drive for</option>
+                <label for="sponsorToAdd">Sponsors</label>
+                <div class="sponsor-picker">
+                    <select id="sponsorToAdd" value="@sponsorToAdd" @onchange="SelectSponsorToAdd">
+                        <option value="">Choose a sponsor</option>
                     @foreach (var c in companies)
                     {
-                        <option value="@c.Id">@c.Name</option>
+                        @if (!selectedSponsorIds.Contains(c.Id))
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    }
+                    </select>
+                    <button type="button" class="tr-btn" @onclick="AddSponsor" disabled="@(sponsorToAdd is null)">Add sponsor</button>
+                </div>
+                @if (selectedSponsorIds.Count == 0)
+                {
+                    <p class="help">Add at least one sponsor. Each sponsor reviews your application before you can earn points with them.</p>
+                }
+                else
+                {
+                    <input type="hidden" name="companyIds" value="@string.Join(",", selectedSponsorIds)" />
+                    <ul class="selected-sponsors">
+                        @for (var index = 0; index < selectedSponsorIds.Count; index++)
+                        {
+                            var sponsorId = selectedSponsorIds[index];
+                            var sponsor = companies.FirstOrDefault(company => company.Id == sponsorId);
+                            <li>
+                                <span>@sponsor?.Name</span>
+                                <button type="button" class="remove-sponsor" aria-label="Remove @sponsor?.Name" @onclick="() => RemoveSponsor(sponsorId)">Remove</button>
+                            </li>
+                        }
+                    </ul>
+                    <p class="help">Each sponsor reviews your application before you can earn points with them.</p>
+                }
+            }
+            else if (userType == "sponsor")
+            {
+                <label for="companyId">Company</label>
+                <select id="companyId" name="companyId" required>
+                    <option value="">Choose the company you are applying to</option>
+                    @foreach (var company in companies)
+                    {
+                        <option value="@company.Id">@company.Name</option>
                     }
                 </select>
-                <p class="help">Your sponsor reviews your application before you can earn points.</p>
+                <p class="help">Sponsor accounts can apply to one company at account creation.</p>
             }
 
             @if (userType == "driver")
@@ -68,9 +107,22 @@
 
 @code {
     private string userType = "driver";
+    private string sponsorToAdd = "";
+    private List<int> selectedSponsorIds = [];
     [SupplyParameterFromQuery] private string? Error { get; set; }
     private string? policy;
     private List<Company> companies = [];
+
+    private void SelectSponsorToAdd(ChangeEventArgs args) => sponsorToAdd = args.Value?.ToString() ?? "";
+
+    private void AddSponsor()
+    {
+        if (int.TryParse(sponsorToAdd, out var id) && !selectedSponsorIds.Contains(id))
+            selectedSponsorIds.Add(id);
+        sponsorToAdd = "";
+    }
+
+    private void RemoveSponsor(int id) => selectedSponsorIds.Remove(id);
 
     protected override async Task OnInitializedAsync()
     {
@@ -85,4 +137,15 @@
             // drivers can still apply from their dashboard
         }
     }
+
+    private sealed record Company(int Id, string Name);
 }
+
+<style>
+    .sponsor-picker { display: flex; gap: 10px; align-items: stretch; }
+    .sponsor-picker select { flex: 1; min-width: 0; }
+    .selected-sponsors { list-style: none; margin: 10px 0 0; padding: 0; }
+    .selected-sponsors li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 12px; border: 1px solid #d9e1ec; border-radius: 8px; margin-bottom: 7px; background: #f8faff; }
+    .remove-sponsor { border: 0; color: #a32c2c; background: transparent; font: inherit; cursor: pointer; }
+    .remove-sponsor:hover { text-decoration: underline; }
+</style>

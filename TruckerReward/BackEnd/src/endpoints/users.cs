@@ -84,7 +84,10 @@ public static class UserEndpoints
             var applicant = await db.Users.FirstOrDefaultAsync(user => user.Id == id);
             if (applicant is null)
                 return Results.NotFound();
-            var application = await db.Applications.FirstOrDefaultAsync(item => item.ApplicantId == id && item.Status == "active");
+            var applicationQuery = db.Applications.Where(item => item.ApplicantId == id && item.Status == "active");
+            if (request.CompanyId is int companyId)
+                applicationQuery = applicationQuery.Where(item => item.CompanyId == companyId);
+            var application = await applicationQuery.FirstOrDefaultAsync();
             if (application is null)
                 return Results.Conflict(new { message = "No active application was found." });
 
@@ -266,10 +269,11 @@ public static class UserEndpoints
                 .ToListAsync();
             if (companyNames.Count == 0 && company is not null)
                 companyNames.Add(company.Name);
-            var pendingCompany = await db.Applications.AsNoTracking()
+            var pendingCompanies = await db.Applications.AsNoTracking()
                 .Where(application => application.ApplicantId == id && application.Status == "active")
-                .Join(db.Companies.AsNoTracking(), application => application.CompanyId, c => c.Id, (application, c) => c.Name)
-                .FirstOrDefaultAsync();
+                .Join(db.Companies.AsNoTracking(), application => application.CompanyId, c => c.Id, (application, c) => new UserPendingCompany(c.Id, c.Name))
+                .ToListAsync();
+            var pendingCompany = pendingCompanies.FirstOrDefault()?.Name;
             var displayedPoints = user.UserType == AuthEndpoints.Driver && effectiveCompanyId is int currentCompanyId
                 ? await db.PointsHistory.Where(history => history.UserId == id && history.CompanyId == currentCompanyId)
                     .SumAsync(history => (long?)history.PointsDelta) ?? 0L
@@ -286,7 +290,18 @@ public static class UserEndpoints
             }
             return Results.Ok(new UserDetails(user.Id, user.UserType, user.Username, user.FirstName, user.LastName, user.Email, user.PhoneNumber, user.Address ?? "", company?.Name, companyNames, memberships, effectiveCompanyId, displayedPoints, pendingCompany,
                 user.UserType == "sponsor" ? company?.MonthlyBudget : null, user.EmailConfirmedAt is not null, user.EmailCodes, user.Password is not null,
-                monthlyDriverPoints, nextReward));
+                monthlyDriverPoints, nextReward, pendingCompanies));
+        });
+
+        app.MapGet("/users/{id:int}/pending-applications", async (int id, AppDbContext db) =>
+        {
+            var pendingCompanies = await db.Applications.AsNoTracking()
+                .Where(application => application.ApplicantId == id && application.Status == "active")
+                .OrderByDescending(application => application.ApplicationTimestamp)
+                .Join(db.Companies.AsNoTracking(), application => application.CompanyId, company => company.Id,
+                    (application, company) => new UserPendingCompany(company.Id, company.Name))
+                .ToListAsync();
+            return Results.Ok(pendingCompanies);
         });
 
         // this login, the one before it, failures in between, the last ten attempts and when the
@@ -414,14 +429,15 @@ public record ChangeUsernameRequest(string? CurrentPassword, string? NewUsername
 public record ChangeEmailRequest(string? CurrentPassword, string? NewEmail);
 public record UpdateUserProfileRequest(string? FirstName, string? LastName, string? PhoneNumber, string? Address);
 public record CreateApplicationRequest(int CompanyId, string? ApplicantExtraInfo);
-public record CancelApplicationRequest(string? Reasoning);
+public record CancelApplicationRequest(string? Reasoning, int? CompanyId = null);
 public record ApplicationListingData(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, int? ReviewerId, string? ReviewerReasoning, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ApplicationListing(int Id, int ApplicantId, int CompanyId, string ApplicantName, string ApplicantEmail, string? ApplicantExtraInfo, string CompanyName, string Status, string? ReviewerUserType, string? ReviewerName, string? ReviewerEmail, string? ReviewerReasoning, bool CanRevert, DateTime ApplicationTimestamp, DateTime? ResponseTimestamp);
 public record ReviewApplicationRequest(string? Decision, string? Reasoning);
 
-public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, bool EmailConfirmed = true, bool EmailCodes = false, bool HasPassword = true, int MonthlyDriverPoints = 0, DateTime? NextMonthlyReward = null);
+public record UserDetails(int Id, string UserType, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string? CompanyName, List<string> CompanyNames, List<UserCompany> Companies, int? CompanyId, long Points, string? PendingCompanyName, decimal? MonthlyBudget, bool EmailConfirmed = true, bool EmailCodes = false, bool HasPassword = true, int MonthlyDriverPoints = 0, DateTime? NextMonthlyReward = null, List<UserPendingCompany>? PendingCompanies = null);
 
 public record UserCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
+public record UserPendingCompany(int Id, string Name);
 
 public record CompanyOption(int Id, string Name, string? Description);
 

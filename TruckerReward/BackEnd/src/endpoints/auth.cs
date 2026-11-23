@@ -28,12 +28,24 @@ public static class AuthEndpoints
                 return Results.Conflict(new { message = "That username is already taken." });
             if (await db.Users.AnyAsync(u => u.Email == email))
                 return Results.Conflict(new { message = "An account with that email already exists." });
-            // drivers apply to a sponsor as they sign up
-            var companyName = req.UserType == Driver && req.CompanyId is int companyId
-                ? await db.Companies.Where(c => c.Id == companyId).Select(c => c.Name).FirstOrDefaultAsync()
-                : null;
-            if (req.UserType == Driver && req.CompanyId is not null && companyName is null)
-                return Results.BadRequest(new { message = "Pick a sponsor from the list." });
+            // Drivers may apply to multiple sponsors at signup. Sponsor accounts
+            // must choose exactly one company. Keep CompanyId for existing callers.
+            var companyIds = req.UserType == Driver
+                ? (req.CompanyIds ?? []).Concat(req.CompanyId is int legacyDriverCompanyId ? [legacyDriverCompanyId] : [])
+                    .Distinct().ToList()
+                : req.UserType == Sponsor && req.CompanyId is int sponsorCompanyId
+                    ? [sponsorCompanyId]
+                    : [];
+            if (req.UserType == Driver && companyIds.Count == 0 && await db.Companies.AnyAsync())
+                return Results.BadRequest(new { message = "Add at least one sponsor." });
+            if (req.UserType == Sponsor && companyIds.Count != 1)
+                return Results.BadRequest(new { message = "Choose exactly one company." });
+            var companyNames = companyIds.Count == 0
+                ? new Dictionary<int, string>()
+                : await db.Companies.Where(company => companyIds.Contains(company.Id))
+                    .ToDictionaryAsync(company => company.Id, company => company.Name);
+            if (companyNames.Count != companyIds.Count)
+                return Results.BadRequest(new { message = "Choose sponsors from the list." });
 
             var user = new User
             {
@@ -50,11 +62,16 @@ public static class AuthEndpoints
             await db.SaveChangesAsync();
             await EmailConfirmEndpoints.Send(db, user, mail, clock, config);
             await notifications.AccountCreated(user);
-            if (companyName is not null)
+            if (companyIds.Count > 0)
             {
-                db.Applications.Add(new Application { ApplicantId = user.Id, CompanyId = req.CompanyId!.Value });
+                db.Applications.AddRange(companyIds.Select(companyId => new Application
+                {
+                    ApplicantId = user.Id,
+                    CompanyId = companyId
+                }));
                 await db.SaveChangesAsync();
-                await notifications.CompanyApplicationSubmitted(user, req.CompanyId.Value, companyName);
+                foreach (var companyId in companyIds)
+                    await notifications.CompanyApplicationSubmitted(user, companyId, companyNames[companyId]);
             }
 
             return Results.Created($"/users/{user.Id}", UserProfile.Of(user));
@@ -145,7 +162,7 @@ public static class AuthEndpoints
     }
 }
 
-public record RegisterRequest(string Username, string FirstName, string LastName, string Email, string Password, string UserType, string? PhoneNumber, string? Address, int? CompanyId = null);
+public record RegisterRequest(string Username, string FirstName, string LastName, string Email, string Password, string UserType, string? PhoneNumber, string? Address, int? CompanyId = null, List<int>? CompanyIds = null);
 
 public record LoginRequest(string Username, string Password, string? IpAddress);
 

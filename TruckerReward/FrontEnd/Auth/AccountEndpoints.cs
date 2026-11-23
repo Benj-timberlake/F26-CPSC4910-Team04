@@ -77,21 +77,34 @@ public static class AccountEndpoints
             [FromForm] string? phoneNumber,
             [FromForm] string? address,
             [FromForm] int? companyId,
+            [FromForm] string? companyIds,
             IFormFile? cdlLicense,
             HttpContext http,
             [FromServices] CdlStorage cdlStorage,
             IHttpClientFactory clients) =>
         {
+            var isAjax = string.Equals(http.Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
             using var license = userType == "driver" && cdlLicense is not null
                 ? await ReadLicense(cdlLicense, http.RequestAborted) : null;
             if (userType == "driver" && cdlLicense is not null && license is null)
-                return Results.Redirect("/register?error=" + Uri.EscapeDataString("Choose a PDF, JPEG, or PNG CDL license, up to 10 MB."));
+            {
+                const string message = "Choose a PDF, JPEG, or PNG CDL license, up to 10 MB.";
+                return isAjax
+                    ? Results.BadRequest(new { message })
+                    : Results.Redirect("/register?error=" + Uri.EscapeDataString(message));
+            }
 
             using var response = await clients.CreateClient("Backend").PostAsJsonAsync("auth/register",
-                new { username, firstName, lastName, email, password, userType, phoneNumber, address, companyId });
+                new { username, firstName, lastName, email, password, userType, phoneNumber, address, companyId,
+                    companyIds = ParseCompanyIds(companyIds) });
 
             if (!response.IsSuccessStatusCode)
-                return Results.Redirect("/register?error=" + await ErrorParam(response, "Could not create the account."));
+            {
+                var error = await ErrorParam(response, "Could not create the account.");
+                return isAjax
+                    ? Results.Json(new { message = Uri.UnescapeDataString(error) }, statusCode: (int)response.StatusCode)
+                    : Results.Redirect("/register?error=" + error);
+            }
 
             var user = await response.Content.ReadFromJsonAsync<UserProfile>();
             await TruckerSignIn.SignInAsync(http, user!);
@@ -101,10 +114,14 @@ public static class AccountEndpoints
                 catch (Exception ex)
                 {
                     http.RequestServices.GetRequiredService<ILogger<CdlStorage>>().LogError(ex, "Signup CDL upload failed for driver {DriverId}", user.Id);
-                    return Results.LocalRedirect("/dashboard?cdlUpload=failed");
+                    return isAjax
+                        ? Results.Ok(new { redirectUrl = "/dashboard?cdlUpload=failed" })
+                        : Results.LocalRedirect("/dashboard?cdlUpload=failed");
                 }
             }
-            return Results.LocalRedirect("/dashboard");
+            return isAjax
+                ? Results.Ok(new { redirectUrl = "/dashboard" })
+                : Results.LocalRedirect("/dashboard");
         }).DisableAntiforgery();
 
         app.MapGet("/account/external/{provider}", async (string provider, string? returnUrl, IAuthenticationSchemeProvider schemes) =>
@@ -328,6 +345,17 @@ public static class AccountEndpoints
     }
 
     private static string? Ip(HttpContext http) => http.Connection.RemoteIpAddress?.ToString();
+
+    private static List<int> ParseCompanyIds(string? companyIds)
+    {
+        if (string.IsNullOrWhiteSpace(companyIds))
+            return [];
+        return companyIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => int.TryParse(value, out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+    }
 
     internal static string SafeReturn(string? returnUrl) =>
         !string.IsNullOrEmpty(returnUrl) && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") ? returnUrl : "/dashboard";
