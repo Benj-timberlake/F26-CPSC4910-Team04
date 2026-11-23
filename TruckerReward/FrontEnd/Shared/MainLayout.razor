@@ -4,13 +4,48 @@
 <div class="mouse-gradient-background app-shell">
     <AccountBar />
     <main id="main-content" tabindex="-1" class="app-content">
-        @Body
+        @if (viewingAsAdmin)
+        {
+            <div class="view-as-banner" role="status">
+                You are viewing the site as @viewingUsername.
+                <form method="post" action="/account/view-as/stop"><button type="submit">Return to your account</button></form>
+            </div>
+        }
+        else if (viewingAsSponsor)
+        {
+            <div class="view-as-banner" role="status">
+                You are viewing the site as @viewingUsername.
+                <form method="post" action="/account/driver-view/return"><button type="submit">Return to your account</button></form>
+            </div>
+        }
+        <div class="app-body @((viewingAsAdmin || viewingAsSponsor) ? "viewing-as" : "")">@Body</div>
     </main>
     <ChatBot />
 </div>
 
 <style>
     .app-shell { display: flex; min-height: 100vh; }
-    .app-content { flex: 1; min-width: 0; margin-left: 250px; padding-top: 24px; }
-    @@media (max-width: 720px) { .app-shell { display: block; } .app-content { margin-left: 0; padding-top: 16px; } }
+    .app-content { flex: 1; min-width: 0; margin-left: 250px; padding-top: 0; }
+    .app-body { min-height: 100vh; padding-top: 24px; }
+    .app-body.viewing-as { padding-top: 8px; }
+    .view-as-banner { position: sticky; top: 0; z-index: 1000; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 52px; padding: 8px 18px; background: #fef3c7; color: #78350f; box-shadow: 0 2px 8px #0002; }
+    .view-as-banner form { margin: 0; }
+    .view-as-banner button { padding: 5px 12px; border: 1px solid #78350f; border-radius: 6px; background: #fff8dc; color: inherit; font: inherit; font-weight: 650; cursor: pointer; }
+    .view-as-banner button:hover, .view-as-banner button:focus-visible { background: white; }
+    @@media (max-width: 720px) { .app-shell { display: block; } .app-content { margin-left: 0; } .app-body { padding-top: 16px; } .app-body.viewing-as { padding-top: 8px; } }
 </style>
+
+@code {
+    [CascadingParameter] private Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> AuthState { get; set; } = default!;
+    private bool viewingAsAdmin;
+    private bool viewingAsSponsor;
+    private string? viewingUsername;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var user = (await AuthState).User;
+        viewingAsAdmin = user.HasClaim(c => c.Type == FrontEnd.Auth.ViewAs.ViewerNameClaim);
+        viewingAsSponsor = !viewingAsAdmin && user.HasClaim(c => c.Type == FrontEnd.Auth.TruckerSignIn.SponsorViewClaim);
+        viewingUsername = user.Identity?.Name;
+    }
+}

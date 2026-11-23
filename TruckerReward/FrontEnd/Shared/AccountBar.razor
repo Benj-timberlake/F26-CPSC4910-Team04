@@ -2,6 +2,8 @@
 @using System.Security.Claims
 @using System.Net.Http.Json
 @inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+@implements IDisposable
 
 @* <base href> would send a bare #main-content to the home page *@
 <a class="skip-link" href="#main-content" onclick="document.getElementById('main-content').focus(); return false;">Skip to main content</a>
@@ -40,7 +42,7 @@
             <div class="sidebar-quick-links" aria-label="Quick links">
                 <NotificationBell />
                 <AuthorizeView Roles="driver" Context="cartNav">
-                    <a href="cart" class="cart-link" aria-label="Cart" title="Cart">
+                    <a href="cart" class='cart-link @NavClass("cart")' aria-label="Cart" title="Cart">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <circle cx="9" cy="21" r="1" />
                             <circle cx="20" cy="21" r="1" />
@@ -49,64 +51,46 @@
                     </a>
                 </AuthorizeView>
                 <AuthorizeView Roles="driver" Context="wishlistNav">
-                    <a href="pastorders" class="past-orders-link" aria-label="Past Orders" title="Past Orders">
+                    <a href="pastorders" class='past-orders-link @NavClass("pastorders")' aria-label="Past Orders" title="Past Orders">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M4 3h13l3 3v15H4z" />
                             <path d="M17 3v4h4M8 11h8M8 15h8M8 19h5" />
                         </svg>
                     </a>
-                    <a href="wishlist" class="wishlist-link" aria-label="Favorites" title="Favorites"><HeartIcon /></a>
+                    <a href="wishlist" class='wishlist-link @NavClass("wishlist")' aria-label="Favorites" title="Favorites"><HeartIcon /></a>
                 </AuthorizeView>
             </div>
-            <a href="">Home</a>
-            <a href="about-us">About Us</a>
-            <a href="products">Products</a>
-            @if (context.User.HasClaim(c => c.Type == FrontEnd.Auth.TruckerSignIn.SponsorViewClaim))
-            {
-                <span>Viewing as @context.User.Identity?.Name</span>
-                <form method="post" action="account/driver-view/return">
-                    <button type="submit">Return to sponsor view</button>
-                </form>
-            }
+            <a href="" class='@NavClass("home")'>Home</a>
+            <a href="about-us" class='@NavClass("about-us")'>About Us</a>
+            <a href="products" class='@NavClass("products")'>Products</a>
             <AuthorizeView Roles="admin" Context="admin">
-                <a href="admin/security">Security</a>
-                <a href="manage-accounts">Manage Accounts</a>
-                <a href="admin/banner">Banner</a>
+                <a href="admin/security" class='@NavClass("admin/security")'>Security</a>
+                <a href="manage-accounts" class='@NavClass("manage-accounts")'>Manage Accounts</a>
+                <a href="admin/banner" class='@NavClass("admin/banner")'>Banner</a>
             </AuthorizeView>
             <AuthorizeView Roles="driver" Context="driver">
-                <a href="points">Points</a>
-                <a href="achievements">Achievements</a>
+                <a href="points" class='@NavClass("points")'>Points</a>
+                <a href="achievements" class='@NavClass("achievements")'>Achievements</a>
             </AuthorizeView>
             <AuthorizeView Roles="driver,sponsor" Context="news">
-                <a href="announcements">Announcements</a>
+                <a href="announcements" class='@NavClass("announcements")'>Announcements</a>
             </AuthorizeView>
             <AuthorizeView Roles="sponsor,admin" Context="pointsNav">
-                <a href="audit">Audit log</a>
+                <a href="audit" class='@NavClass("audit")'>Audit log</a>
             </AuthorizeView>
             <AuthorizeView Roles="sponsor" Context="sponsorNav">
-                <a href="accounts">Accounts</a>
-                <a href="achievement-goals">Achievement goals</a>
+                <a href="accounts" class='@NavClass("accounts")'>Accounts</a>
+                <a href="achievement-goals" class='@NavClass("achievement-goals")'>Achievement goals</a>
             </AuthorizeView>
         </Authorized>
         <NotAuthorized>
-            <a href="about-us">About Us</a>
-            <a href="login">Log in</a>
-            <a href="register">Create account</a>
+            <a href="about-us" class='@NavClass("about-us")'>About Us</a>
+            <a href="login" class='@NavClass("login")'>Log in</a>
+            <a href="register" class='@NavClass("register")'>Create account</a>
         </NotAuthorized>
     </AuthorizeView>
 </nav>
 <SiteBanner />
-<AuthorizeView Context="viewing">
-    @if (viewing.User.FindFirst(FrontEnd.Auth.ViewAs.ViewerNameClaim) is { } viewer)
-    {
-        <div class="view-as-banner" role="status">
-            Viewing the site as @viewing.User.Identity?.Name, read-only.
-            <form method="post" action="account/view-as/stop">
-                <button type="submit">Return to @viewer.Value</button>
-            </form>
-        </div>
-    }
-</AuthorizeView>
 
 <style>
     .account-bar {
@@ -141,6 +125,7 @@
     }
 
     .account-bar a:hover, .account-bar a:focus-visible { background: #ffffff24; }
+    .account-bar a.nav-current { background: #ffffff35; box-shadow: inset 4px 0 #fef3c7; font-weight: 700; }
 
     .account-bar .wishlist-link,
     .account-bar .cart-link,
@@ -225,25 +210,6 @@
         cursor: default;
     }
 
-    .view-as-banner {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 12px;
-        padding: 8px 24px;
-        background: #fef3c7;
-        color: #78350f;
-    }
-
-    .view-as-banner button {
-        padding: 4px 10px;
-        border: 1px solid #78350f;
-        border-radius: 6px;
-        background: transparent;
-        color: inherit;
-        cursor: pointer;
-    }
-
     .account-bar button,
     .account-bar .profile-link {
         padding: 6px 12px;
@@ -266,6 +232,9 @@
 @code {
     private bool profileOpen;
     private string? profileCompany;
+    private bool isAdmin;
+    private bool isSponsor;
+    private string currentRoute = "";
 
     [CascadingParameter]
     private Task<AuthenticationState> AuthState { get; set; } = default!;
@@ -273,6 +242,10 @@
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthState).User;
+        isAdmin = user.IsInRole("admin");
+        isSponsor = user.IsInRole("sponsor");
+        currentRoute = Route();
+        Navigation.LocationChanged += OnLocationChanged;
         if (!user.IsInRole("driver") && !user.IsInRole("sponsor")) return;
         var id = user.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrWhiteSpace(id)) return;
@@ -286,6 +259,32 @@
             profileCompany = null;
         }
     }
+
+    private string Route() => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/').ToLowerInvariant();
+
+    private string NavClass(string item)
+    {
+        var active = item switch
+        {
+            "home" => currentRoute is "" or "dashboard",
+            "accounts" => currentRoute == "accounts" || (isSponsor && currentRoute is "applications" or "leaderboard"),
+            "manage-accounts" => currentRoute is "manage-accounts" or "admin/accounts" or "admin/users" || (isAdmin && currentRoute is "applications" or "manage-points"),
+            "points" => currentRoute is "points",
+            "cart" => currentRoute is "cart",
+            "pastorders" => currentRoute is "pastorders",
+            "wishlist" => currentRoute is "wishlist",
+            _ => currentRoute == item
+        };
+        return active ? "nav-current" : "";
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+    {
+        currentRoute = Route();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
 
     private void CloseProfile() => profileOpen = false;
 

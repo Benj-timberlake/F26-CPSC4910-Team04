@@ -47,7 +47,7 @@ public static class DriverViewEndpoints
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             http.User = new ClaimsPrincipal(new ClaimsIdentity());
             await TruckerSignIn.SignInAsync(http, sponsor);
-            return Results.LocalRedirect("/dashboard");
+            return Results.LocalRedirect("/accounts");
         }).RequireAuthorization().DisableAntiforgery();
     }
 

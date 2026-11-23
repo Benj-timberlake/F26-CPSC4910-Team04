@@ -73,12 +73,15 @@
                                     <td>@member.Username</td>
                                     <td>@member.Email</td>
                                     <td><span class="sponsor-status @(member.Status == "active" ? "active" : "inactive")">@(member.Status == "inactive" ? "Deactivated" : "Active")</span></td>
-                                    <td class="sponsor-member-actions">
+                                    <td class="sponsor-actions-cell">
                                         @if (member.Id.ToString() != id)
                                         {
-                                            <button type="button" class="tr-btn-outline" @onclick="() => OpenEdit(member)">Edit</button>
-                                            <button type="button" class="tr-btn-outline remove" disabled="@busy" @onclick="() => OpenRemove(member)">Remove</button>
+                                            <div class="sponsor-member-actions">
+                                                <button type="button" class="sponsor-member-button" @onclick="() => OpenEdit(member)">Edit</button>
+                                                <button type="button" class="sponsor-member-button remove" disabled="@busy" @onclick="() => OpenRemove(member)">Remove</button>
+                                            </div>
                                         }
+                                        else { <span class="sponsor-self-label">You</span> }
                                     </td>
                                 </tr>
                             }
@@ -185,7 +188,7 @@
         cursor: pointer;
     }
     .sponsor-invite-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .sponsors-card .tr-table { width: 100%; }
+    .sponsors-card .tr-table { width: 100%; min-width: 900px; }
     .sponsors-card .accounts-panel-heading { margin-bottom: 16px; }
     .sponsors-card.drivers-card-collapsed .accounts-panel-heading { margin-bottom: 0; }
     .sponsor-inline-filter { padding: 12px; margin: 0 0 14px; border: 1px solid #e3e9f0; border-radius: 8px; background: #f8fafc; }
@@ -194,9 +197,14 @@
     .sponsor-status { display: inline-block; padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; }
     .sponsor-status.active { background: #dcfce7; color: #166534; }
     .sponsor-status.inactive { background: #f1f5f9; color: #475569; }
-    .sponsor-member-actions { display: flex; align-items: center; gap: 8px; }
+    .sponsor-actions-cell { min-width: 190px; }
+    .sponsor-member-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .sponsor-member-button { min-height: 36px; padding: 7px 13px; border: 1px solid #2455a4; border-radius: 7px; background: #2455a4; color: white; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+    .sponsor-member-button:hover, .sponsor-member-button:focus-visible { background: #183f82; border-color: #183f82; }
+    .sponsor-member-button.remove { border-color: #efcaca; background: #fff8f8; color: #a32c2c; }
+    .sponsor-member-button.remove:hover, .sponsor-member-button.remove:focus-visible { background: #feecec; border-color: #e4aaaa; }
+    .sponsor-self-label { color: #687487; font-size: 12px; font-weight: 600; }
     .sponsor-modal-username { margin-top: -14px; color: #687487; }
-    .sponsor-member-actions .remove, .sponsor-invite-actions .remove { color: #a32c2c; border-color: #efcaca; background: #fff8f8; }
 </style>
 
 @code {

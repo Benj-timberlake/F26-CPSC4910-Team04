@@ -54,7 +54,7 @@ public static class ViewAs
                 return Results.Redirect("/login");
             }
             await TruckerSignIn.SignInAsync(http, viewer);
-            return Results.Redirect("/admin/accounts");
+            return Results.Redirect("/manage-accounts");
         }).RequireAuthorization().DisableAntiforgery();
     }
 
