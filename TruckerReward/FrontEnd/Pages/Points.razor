@@ -48,7 +48,7 @@
         <section class="tr-card history">
             <h2>History</h2>
             <p>
-                <a class="export" href="points/export">Download CSV</a>
+                <a class="tr-btn export" href="points/export">Download CSV</a>
                 <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="DownloadPdf">Download PDF</button>
             </p>
             @if (summary.History.Count == 0)

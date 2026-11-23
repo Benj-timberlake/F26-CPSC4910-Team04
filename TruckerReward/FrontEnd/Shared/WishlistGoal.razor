@@ -1,8 +1,9 @@
 @namespace FrontEnd.Shared
 @inject IHttpClientFactory HttpClientFactory
 
-<section class="tr-card wishlist-goal" aria-labelledby="wishlist-goal-title">
-    <h2 id="wishlist-goal-title">Wishlist goal</h2>
+<a class="tr-card driver-past-orders-card wishlist-home-card" href="wishlist" aria-labelledby="wishlist-goal-title">
+    <span class="home-nav-icon" aria-hidden="true">♡</span>
+    <h2 id="wishlist-goal-title">Wishlist</h2>
     @if (loading)
     {
         <p role="status">Loading your wishlist goal...</p>
@@ -28,8 +29,7 @@
             <p class="wishlist-remaining"><strong>@RewardPoints.Format(total - Points) away</strong> from affording all your wishlisted items.</p>
         }
     }
-    <a href="wishlist">View wishlist</a>
-</section>
+</a>
 
 @code {
     [Parameter] public int UserId { get; set; }

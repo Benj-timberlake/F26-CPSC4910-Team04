@@ -78,7 +78,7 @@
         }
         else
         {
-            <p class="tr-muted">Showing the newest @rows.Count entries. <a class="export" href="@ExportUrl">Download CSV</a>
+            <p class="tr-muted">Showing the newest @rows.Count entries. <a class="tr-btn export" href="@ExportUrl">Download CSV</a>
                 <button type="button" class="tr-btn pdf" disabled="@busy" @onclick="DownloadPdf">Download PDF</button></p>
             <div class="tr-table-wrap">
                 <table class="tr-table" aria-label="Audit log entries">
