@@ -6,6 +6,36 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this WebApplication app)
     {
+        app.MapGet("/admin/points/sponsors", async (string? search, AppDbContext db) =>
+        {
+            var sponsors = db.Users.AsNoTracking().Where(u => u.UserType == AuthEndpoints.Sponsor);
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+                sponsors = sponsors.Where(u => u.Username.ToLower().Contains(term) || u.Email.ToLower().Contains(term)
+                    || (u.FirstName + " " + u.LastName).ToLower().Contains(term));
+            }
+            return Results.Ok(await sponsors.OrderBy(u => u.LastName).ThenBy(u => u.FirstName)
+                .Select(u => new AdminSponsorPoints(u.Id, u.Username, u.FirstName, u.LastName, u.Email, u.Points)).ToListAsync());
+        });
+        app.MapPost("/admin/points/sponsors/{id:int}", async (int id, AdminSponsorPointsChange request, AppDbContext db, TimeProvider clock) =>
+        {
+            var admin = await db.Users.AnyAsync(u => u.Id == request.AdminId && u.UserType == AuthEndpoints.Admin);
+            if (!admin) return Results.StatusCode(StatusCodes.Status403Forbidden);
+            var reason = request.Reason?.Trim() ?? "";
+            if (request.Points == 0 || Math.Abs((long)request.Points) > PointsEndpoints.MaxChange || reason.Length is 0 or > PointsEndpoints.MaxReasonLength)
+                return Results.BadRequest(new { message = "Enter a nonzero points change up to 1,000,000 and a reason up to 500 characters." });
+            var sponsor = await db.Users.FirstOrDefaultAsync(u => u.Id == id && u.UserType == AuthEndpoints.Sponsor);
+            if (sponsor is null) return Results.NotFound();
+            var companyId = await CompanyMembershipQueries.FirstCompanyId(db, id);
+            if (companyId is null) return Results.Conflict(new { message = "This sponsor has no company for a points history entry." });
+            sponsor.Points = checked(sponsor.Points + request.Points);
+            var history = new PointsHistory { UserId = id, CompanyId = companyId.Value, PointsDelta = request.Points, Timestamp = clock.GetUtcNow().UtcDateTime };
+            db.PointsHistory.Add(history);
+            db.AuditHistories.Add(new AuditHistory { UserId = request.AdminId, PointsHistory = history, Resoning = reason });
+            await db.SaveChangesAsync();
+            return Results.Ok(new AdminSponsorPoints(sponsor.Id, sponsor.Username, sponsor.FirstName, sponsor.LastName, sponsor.Email, sponsor.Points));
+        });
         app.MapGet("/admin/locked-accounts", async (AppDbContext db, TimeProvider clock) =>
             Results.Ok(await Lockout.All(db, clock.GetUtcNow().UtcDateTime)));
 
@@ -320,3 +350,5 @@ public record ChangeAccountStatusRequest(int AdminId, string? Status);
 public record UnlockRequest(int AdminId);
 
 public record PasswordChangeEntry(DateTime ChangedAt, int UserId, string Username, string ChangeType, string? IpAddress, string? RequestedBy = null);
+public record AdminSponsorPoints(int Id, string Username, string FirstName, string LastName, string Email, int Points);
+public record AdminSponsorPointsChange(int AdminId, int Points, string? Reason);

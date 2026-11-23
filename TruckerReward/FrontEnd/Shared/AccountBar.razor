@@ -37,7 +37,7 @@
             <AuthorizeView Roles="sponsor,admin" Context="pointsNav">
                 @if (pointsNav.User.IsInRole("admin"))
                 {
-                    <a href="manage-points">Driver points</a>
+                    <a href="manage-points">Manage Points</a>
                 }
                 <a href="audit">Audit log</a>
             </AuthorizeView>

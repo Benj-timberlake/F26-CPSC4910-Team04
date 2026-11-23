@@ -4,13 +4,13 @@
 
 @if (!Embedded)
 {
-    <PageTitle>Driver points</PageTitle>
+    <PageTitle>Manage Points</PageTitle>
 }
 
 <div class="@(Embedded ? "dashboard-drivers" : "tr-page")">
     @if (!Embedded)
     {
-        <h1>Driver points</h1>
+        <h1>Manage Points</h1>
         <p class="tr-muted" style="margin-bottom: 20px;">
             Only drivers who are connected to a sponsor company are
             displayed here. Additional drivers will automatically appear
@@ -20,12 +20,46 @@
 
     <Alerts Notice="@notice" Error="@error" />
 
-    @if (noCompany)
+    @if (admin && !Embedded)
     {
-        <p>You aren't with a company yet, so there are no drivers to manage.</p>
+        <div class="application-switch" role="tablist" aria-label="Points type">
+            <button type="button" role="tab" aria-selected="@(adminView == "driver")" class="application-tab @(adminView == "driver" ? "selected" : "")" @onclick='() => SwitchAdminView("driver")'>Driver Points</button>
+            <button type="button" role="tab" aria-selected="@(adminView == "sponsor")" class="application-tab @(adminView == "sponsor" ? "selected" : "")" @onclick='() => SwitchAdminView("sponsor")'>Sponsor Points</button>
+        </div>
     }
-    else
+
+    @if (admin && !Embedded && adminView == "sponsor")
     {
+        <form class="search tr-toolbar" @onsubmit="LoadSponsors" @onsubmit:preventDefault="true">
+            <input type="search" placeholder="Search sponsors" aria-label="Search sponsors" @bind="sponsorSearch" />
+            <button type="submit" class="tr-btn">Search</button>
+        </form>
+        @if (sponsors is null)
+        {
+            <p role="status"><em>Loading sponsors...</em></p>
+        }
+        else if (sponsors.Count == 0)
+        {
+            <p class="tr-muted">No sponsors found.</p>
+        }
+        else
+        {
+            <div class="tr-table-wrap"><table class="tr-table" aria-label="Sponsor points"><thead><tr><th>Sponsor</th><th>Email</th><th>Points</th><th></th></tr></thead><tbody>
+            @foreach (var sponsor in sponsors)
+            {
+                <tr><td>@sponsor.FirstName @sponsor.LastName (@sponsor.Username)</td><td>@sponsor.Email</td><td class="balance">@sponsor.Points.ToString("N0")</td><td><button type="button" class="tr-btn-outline" @onclick="() => EditSponsor(sponsor)">Change points</button></td></tr>
+            }
+            </tbody></table></div>
+        }
+    }
+    @if (!(admin && !Embedded && adminView == "sponsor"))
+    {
+        @if (noCompany)
+        {
+            <p>You aren't with a company yet, so there are no drivers to manage.</p>
+        }
+        else
+        {
         @if (!Embedded)
         {
         <form class="search tr-toolbar" @onsubmit="Search" @onsubmit:preventDefault="true">
@@ -163,6 +197,7 @@
                 </table>
             </div>
         }
+        }
     }
     @if (filtersOpen)
     {
@@ -286,6 +321,18 @@
     }
 </div>
 
+@if (editingSponsor is not null)
+{
+    <div class="modal-backdrop"><section class="change-modal" role="dialog" aria-modal="true" aria-labelledby="sponsor-points-title">
+        <h2 id="sponsor-points-title">Change points for @editingSponsor.Username</h2>
+        <p>Current balance: <strong>@editingSponsor.Points.ToString("N0")</strong></p>
+        <label for="sponsor-points-amount">Points change</label><input id="sponsor-points-amount" type="number" @bind="sponsorAmount" placeholder="+100 or -50" />
+        <label for="sponsor-points-reason">Reason</label><input id="sponsor-points-reason" maxlength="500" @bind="sponsorReason" />
+        @if (error is not null) { <p role="alert" class="tr-alert-error">@error</p> }
+        <div class="modal-actions"><button type="button" class="tr-btn" disabled="@(busy || sponsorAmount is null || string.IsNullOrWhiteSpace(sponsorReason))" @onclick="SaveSponsor">Save change</button><button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => editingSponsor = null">Cancel</button></div>
+    </section></div>
+}
+
 <style>
     .dashboard-drivers td.balance { font-size: inherit; font-weight: 400; line-height: inherit; }
     .search {
@@ -386,6 +433,12 @@
     private bool noCompany;
     private bool viewing;
     private bool admin;
+    private string adminView = "driver";
+    private List<SponsorPointRow>? sponsors;
+    private string? sponsorSearch;
+    private SponsorPointRow? editingSponsor;
+    private int? sponsorAmount;
+    private string? sponsorReason;
     private Driver? editingDriver;
     private List<DriverCompany>? editCompanies;
     private int? selectedCompanyId;
@@ -404,6 +457,48 @@
         admin = user.IsInRole("admin");
         await Load();
         await LoadReasons();
+    }
+
+    private async Task SwitchAdminView(string view)
+    {
+        adminView = view;
+        error = null;
+        notice = null;
+        if (view == "sponsor") await LoadSponsors();
+    }
+
+    private async Task LoadSponsors()
+    {
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var query = string.IsNullOrWhiteSpace(sponsorSearch) ? "" : "?search=" + Uri.EscapeDataString(sponsorSearch.Trim());
+            sponsors = await client.GetFromJsonAsync<List<SponsorPointRow>>($"admin/points/sponsors{query}") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException) { error = "Couldn't load sponsors right now. Try again."; }
+    }
+
+    private void EditSponsor(SponsorPointRow sponsor) { editingSponsor = sponsor; sponsorAmount = null; sponsorReason = null; error = null; }
+
+    private async Task SaveSponsor()
+    {
+        if (editingSponsor is null || sponsorAmount is null) return;
+        busy = true;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var response = await client.PostAsJsonAsync($"admin/points/sponsors/{editingSponsor.Id}", new { adminId = id, points = sponsorAmount.Value, reason = sponsorReason });
+            if (response.IsSuccessStatusCode)
+            {
+                var updated = await response.Content.ReadFromJsonAsync<SponsorPointRow>();
+                notice = $"{editingSponsor.Username}'s balance is now {updated?.Points.ToString("N0")} points.";
+                editingSponsor = null;
+                await LoadSponsors();
+            }
+            else error = (await response.Content.ReadFromJsonAsync<Problem>())?.Message ?? "That didn't work.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException) { error = "That didn't work. Reload and try again."; }
+        finally { busy = false; }
     }
 
     private async Task Search()
@@ -698,4 +793,5 @@
     private sealed record DriverDetails(List<DriverCompany>? Companies);
     private sealed record DriverCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
     private sealed record SavedReason(int Id, string Reason);
+    private sealed record SponsorPointRow(int Id, string Username, string FirstName, string LastName, string Email, int Points);
 }
