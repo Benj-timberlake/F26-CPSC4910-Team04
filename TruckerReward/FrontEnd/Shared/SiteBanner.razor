@@ -26,6 +26,8 @@
 
 @code {
     public const string CacheKey = "site-banner";
+    public static event Action? BannerChanged;
+    public static void NotifyChanged() => BannerChanged?.Invoke();
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(45);
 
     private Banner? banner;
@@ -34,8 +36,23 @@
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += OnLocationChanged;
+        BannerChanged += OnBannerChanged;
         await Load();
     }
+
+    private void OnBannerChanged() =>
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Load();
+                StateHasChanged();
+            }
+            catch (ObjectDisposedException)
+            {
+                // the circuit went away mid-load
+            }
+        });
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
         _ = InvokeAsync(async () =>
@@ -73,7 +90,11 @@
         }
     }
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        BannerChanged -= OnBannerChanged;
+    }
 
     private sealed record Banner(string Message, string Level);
 }

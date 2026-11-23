@@ -18,6 +18,10 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h12l4 4v14H4zM16 3v5h4M8 13h8M8 17h8" /></svg>
             <span>Applications</span>
         </a>
+        <button type="button" class="accounts-action-button" @onclick="OpenMonthlyPoints">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v10M8.5 10h6a2 2 0 0 1 0 4h-5" /></svg>
+            <span>Monthly Points</span>
+        </button>
         <a href="leaderboard" class="accounts-action-button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="6" /><path d="M8.2 12.6 7 22l5-3 5 3-1.2-9.4" /></svg>
             <span>Points Leaderboard</span>
@@ -34,6 +38,9 @@
                 @if (!driversCollapsed)
                 {
                     <div class="accounts-card-icon-row">
+                        <button type="button" class="accounts-filter-button" title="Award points to selected drivers" aria-label="Award points to selected drivers" @onclick="OpenBulkAward">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v10M8.5 10h6a2 2 0 0 1 0 4h-5" /></svg>
+                        </button>
                         <button type="button" class="accounts-filter-button" title="Filter drivers" aria-label="Filter drivers" @onclick="OpenDriverFilters">
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9Z" /></svg>
                         </button>
@@ -52,6 +59,25 @@
 
     <FrontEnd.Shared.DashboardSponsors />
     <MassAccountCreationModal IsOpen="@showMassCreation" ActorId="@actorId" IsAdmin="false" OnClose="@CloseMassCreation" OnCreated="@RefreshDrivers" BackLink="accounts" BackLabel="← Back to Accounts" />
+    @if (showMonthlyPointsModal)
+    {
+        <div class="monthly-points-backdrop" @onclick="CloseMonthlyPoints">
+            <section class="monthly-points-dialog" role="dialog" aria-modal="true" aria-labelledby="monthly-points-title" @onclick:stopPropagation="true">
+                <button type="button" class="monthly-points-close" aria-label="Close" title="Close" disabled="@savingMonthlyPoints" @onclick="CloseMonthlyPoints">×</button>
+                <h2 id="monthly-points-title">Monthly Points</h2>
+                <p>Available points: @FrontEnd.Shared.RewardPoints.Format(sponsorPoints)</p>
+                <p>Your balance resets to your company's monthly budget on the first of each month.</p>
+                <p>Each active driver receives this amount on the first of each month (Eastern time), starting next month. Enter 0 to disable awards.</p>
+                @if (monthlyPointsError is not null) { <p role="alert" class="tr-alert-error">@monthlyPointsError</p> }
+                <form @onsubmit="SaveMonthlyPoints" @onsubmit:preventDefault="true">
+                    <label for="monthly-points-input">Monthly points</label>
+                    <input id="monthly-points-input" type="number" min="0" max="1000000" step="1" required @bind="monthlyPoints" />
+                    <div class="monthly-points-actions"><button type="submit" class="tr-btn" disabled="@savingMonthlyPoints">@(savingMonthlyPoints ? "Saving..." : "Confirm")</button></div>
+                </form>
+            </section>
+        </div>
+    }
+    @if (monthlyPointsNotice is not null) { <p role="status" class="tr-alert-success">@monthlyPointsNotice</p> }
     @if (showAddAccount)
     {
         <div class="add-account-backdrop" @onclick="CloseAddAccount">
@@ -83,7 +109,7 @@
     .accounts-panel-heading p { margin: 4px 0 0; color: #687487; font-size: 13px; }
     .accounts-actions { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
     .accounts-card-icon-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .accounts-top-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0 0 18px; }
+    .accounts-top-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0 0 18px; }
     .accounts-action-button { display: flex; align-items: center; justify-content: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 64px; padding: 0 16px; border: 1px solid #183c78; border-radius: 9px; background: #2455a4; color: white; font: inherit; font-size: 16px; font-weight: 650; text-align: center; text-decoration: none; cursor: pointer; box-shadow: 0 3px 8px #183c7833; }
     .accounts-action-button svg { width: 24px; height: 24px; flex: 0 0 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .accounts-action-button:hover, .accounts-action-button:focus-visible { background: #183f82; border-color: #102f66; }
@@ -102,6 +128,14 @@
     .add-account-dialog label { display: block; margin: 12px 0 5px; font-size: 13px; font-weight: 650; }
     .add-account-dialog input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cbd3dd; border-radius: 7px; font: inherit; }
     .add-account-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .monthly-points-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0009; }
+    .monthly-points-dialog { position: relative; box-sizing: border-box; width: min(520px, 100%); max-height: 90vh; overflow: auto; padding: 24px; border-radius: 12px; background: white; color: #222; box-shadow: 0 12px 40px #0005; }
+    .monthly-points-dialog h2 { margin: 0 40px 16px 0; }
+    .monthly-points-dialog label { display: block; margin: 0 0 6px; font-weight: 600; }
+    .monthly-points-dialog input { box-sizing: border-box; display: block; width: 100%; margin-bottom: 14px; padding: 10px; border: 1px solid #b8c0cc; border-radius: 8px; font: inherit; }
+    .monthly-points-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #b8bec7; border-radius: 9px; background: #f1f2f4; color: #666; font-size: 24px; line-height: 1; cursor: pointer; }
+    .monthly-points-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
+    @@media (max-width: 1000px) { .accounts-top-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @@media (max-width: 900px) { .accounts-panel-heading { align-items: center; flex-direction: row; } }
     @@media (max-width: 700px) { .accounts-top-actions { grid-template-columns: 1fr; gap: 10px; } }
 </style>
@@ -119,6 +153,12 @@
     private string? addAccountError;
     private string? accountCreatedNotice;
     private int actorId;
+    private bool showMonthlyPointsModal;
+    private long? monthlyPoints;
+    private bool savingMonthlyPoints;
+    private string? monthlyPointsError;
+    private string? monthlyPointsNotice;
+    private long sponsorPoints;
 
     protected override async Task OnInitializedAsync()
     {
@@ -127,10 +167,60 @@
     }
 
     private void OpenDriverFilters() => driverManagement?.OpenFilters();
+    private void OpenBulkAward() => driverManagement?.OpenBulkAward();
     private void CloseMassCreation() => showMassCreation = false;
     private void OpenAddAccount() { showAddAccount = true; addAccountError = null; accountCreatedNotice = null; }
     private void CloseAddAccount() { if (!addingAccount) showAddAccount = false; }
+    private void CloseMonthlyPoints() { if (!savingMonthlyPoints) showMonthlyPointsModal = false; }
     private async Task RefreshDrivers() { if (driverManagement is not null) await driverManagement.Refresh(); }
+
+    private async Task OpenMonthlyPoints()
+    {
+        monthlyPointsError = null;
+        monthlyPointsNotice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var account = await client.GetFromJsonAsync<SponsorBalance>($"users/{actorId}");
+            sponsorPoints = account?.Points ?? 0;
+            var setting = await client.GetFromJsonAsync<MonthlyPointsSetting>($"users/{actorId}/points/monthly");
+            monthlyPoints = setting?.Points ?? 0;
+            showMonthlyPointsModal = true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            monthlyPointsNotice = "Couldn't load monthly points. Make sure you belong to a company and try again.";
+        }
+    }
+
+    private async Task SaveMonthlyPoints()
+    {
+        if (savingMonthlyPoints) return;
+        if (monthlyPoints is null or < 0 or > 1_000_000)
+        {
+            monthlyPointsError = "Enter 0 to 1,000,000 whole points.";
+            return;
+        }
+        savingMonthlyPoints = true;
+        monthlyPointsError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PostAsJsonAsync($"users/{actorId}/points/monthly", new { Points = (int)monthlyPoints.Value });
+            if (!response.IsSuccessStatusCode)
+            {
+                monthlyPointsError = "Couldn't save monthly points. Make sure you belong to a company and try again.";
+                return;
+            }
+            showMonthlyPointsModal = false;
+            monthlyPointsNotice = monthlyPoints == 0 ? "Monthly driver points disabled." : $"Saved: each active driver will receive {monthlyPoints:N0} points on the first of each month (Eastern time), starting next month.";
+        }
+        catch (HttpRequestException)
+        {
+            monthlyPointsError = "Couldn't save monthly points. Please try again.";
+        }
+        finally { savingMonthlyPoints = false; }
+    }
 
     private async Task AddAccount()
     {
@@ -160,4 +250,6 @@
     }
 
     private sealed record AddAccountResult(string? Message);
+    private sealed record MonthlyPointsSetting(int Points);
+    private sealed record SponsorBalance(long Points);
 }

@@ -41,6 +41,14 @@
             }
             <div class="sidebar-quick-links" aria-label="Quick links">
                 <NotificationBell />
+                <AuthorizeView Roles="sponsor" Context="catalogNav">
+                    <a href="catalog" class='catalog-link @NavClass("catalog")' aria-label="Sponsor catalog" title="Catalog">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9 5 3h14l2 6" /><path d="M4 9v12h16V9M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" /><path d="M9 21v-6h6v6" /></svg>
+                    </a>
+                    <a href="sponsor/orders" class='sponsor-orders-link @NavClass("sponsor/orders")' aria-label="Driver orders" title="Driver orders">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18v13H3zM7 21h10M12 17v4" /><path d="M7 8h10M7 12h6" /></svg>
+                    </a>
+                </AuthorizeView>
                 <AuthorizeView Roles="driver" Context="cartNav">
                     <a href="cart" class='cart-link @NavClass("cart")' aria-label="Cart" title="Cart">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -66,6 +74,7 @@
             <AuthorizeView Roles="admin" Context="admin">
                 <a href="admin/security" class='@NavClass("admin/security")'>Security</a>
                 <a href="manage-accounts" class='@NavClass("manage-accounts")'>Manage Accounts</a>
+                <a href="admin/reports" class='@NavClass("admin/reports")'>Sales Report</a>
                 <a href="admin/banner" class='@NavClass("admin/banner")'>Banner</a>
             </AuthorizeView>
             <AuthorizeView Roles="driver" Context="driver">
@@ -79,6 +88,7 @@
                 <a href="audit" class='@NavClass("audit")'>Audit log</a>
             </AuthorizeView>
             <AuthorizeView Roles="sponsor" Context="sponsorNav">
+                <a href="sponsor-report" class='@NavClass("sponsor-report")'>Report</a>
                 <a href="accounts" class='@NavClass("accounts")'>Accounts</a>
                 <a href="achievement-goals" class='@NavClass("achievement-goals")'>Achievement goals</a>
             </AuthorizeView>
@@ -90,7 +100,6 @@
         </NotAuthorized>
     </AuthorizeView>
 </nav>
-<SiteBanner />
 
 <style>
     .account-bar {
@@ -129,7 +138,9 @@
 
     .account-bar .wishlist-link,
     .account-bar .cart-link,
-    .account-bar .past-orders-link {
+    .account-bar .past-orders-link,
+    .account-bar .catalog-link,
+    .account-bar .sponsor-orders-link {
         display: inline-flex;
         justify-content: center;
         flex: 0 0 48px;
@@ -273,6 +284,8 @@
             "cart" => currentRoute is "cart",
             "pastorders" => currentRoute is "pastorders",
             "wishlist" => currentRoute is "wishlist",
+            "catalog" => currentRoute is "catalog",
+            "sponsor/orders" => currentRoute is "sponsor/orders",
             _ => currentRoute == item
         };
         return active ? "nav-current" : "";

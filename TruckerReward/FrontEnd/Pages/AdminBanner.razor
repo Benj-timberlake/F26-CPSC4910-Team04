@@ -83,6 +83,7 @@
     private async Task Changed()
     {
         Services.GetService<IMemoryCache>()?.Remove(FrontEnd.Shared.SiteBanner.CacheKey);
+        FrontEnd.Shared.SiteBanner.NotifyChanged();
         await Load();
     }
 

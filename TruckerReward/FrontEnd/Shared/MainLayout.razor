@@ -18,6 +18,7 @@
                 <form method="post" action="/account/driver-view/return"><button type="submit">Return to your account</button></form>
             </div>
         }
+        <SiteBanner />
         <div class="app-body @((viewingAsAdmin || viewingAsSponsor) ? "viewing-as" : "")">@Body</div>
     </main>
     <ChatBot />

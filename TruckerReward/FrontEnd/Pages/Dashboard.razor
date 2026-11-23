@@ -54,11 +54,6 @@
             <p role="alert" class="tr-alert-error">Your account was created, but your CDL upload failed. Please retry below.</p>
             <CdlLicenseUpload Id="retry-cdl-license" />
         }
-        @if (account.UserType == "sponsor")
-        {
-            <p><a class="tr-btn" href="sponsor-report">Report</a> <a class="tr-btn" href="catalog">Catalog</a> <a class="tr-btn" href="sponsor/orders">Order</a> <button type="button" class="tr-btn" @onclick="OpenMonthlyPoints">Montly Points</button></p>
-        }
-
         @if (notice is not null)
         {
             <p role="status" class="tr-alert-success">@notice</p>
@@ -281,18 +276,24 @@
             </div>
         }
 
-        <div class="tr-cards">
-            @if (account.UserType == "sponsor")
-            {
-                <section class="tr-card points">
-                    <h2>Budget</h2>
+        @if (account.UserType == "sponsor")
+        {
+            <div class="sponsor-home-nav-cards" aria-label="Pages">
+                <a class="sponsor-home-nav-card" href="catalog"><span class="home-nav-icon">▤</span><strong>Catalog</strong><small>Manage your company catalog</small></a>
+                <a class="sponsor-home-nav-card" href="sponsor/orders"><span class="home-nav-icon">▣</span><strong>Driver Orders</strong><small>Review driver orders</small></a>
+                <a class="sponsor-home-nav-card" href="accounts"><span class="home-nav-icon">♙</span><strong>Accounts</strong><small>Manage drivers and sponsors</small></a>
+                <section class="tr-card points sponsor-home-points-card">
+                    <h2>Points</h2>
                     <p class="balance">@FrontEnd.Shared.RewardPoints.Format(account.Points)</p>
                     <p class="hint">Available points. Your balance resets to your company's monthly budget on the first of each month.</p>
                 </section>
-            }
+            </div>
+        }
 
-            @if ((account.UserType == "sponsor" || account.UserType == "driver") &&
-                (account.CompanyId is null || account.UserType == "driver"))
+        @if (account.UserType == "driver")
+        {
+        <div class="tr-cards">
+            @if (account.CompanyId is null || account.UserType == "driver")
             {
                 <section class="tr-card">
                     <div class="company-card-heading">
@@ -349,7 +350,7 @@
                 </section>
             }
 
-            @if (account.UserType == "driver" && account.CompanyId is not null)
+            @if (account.CompanyId is not null)
             {
                 <section class="tr-card points">
                     <h2>Points</h2>
@@ -367,34 +368,13 @@
                 </section>
             }
 
-            @if (account.UserType == "driver")
-            {
-                <FrontEnd.Shared.WishlistGoal UserId="@account.Id" Points="@account.Points" />
-            }
+            <FrontEnd.Shared.WishlistGoal UserId="@account.Id" Points="@account.Points" />
+            <a class="tr-card driver-past-orders-card" href="pastorders">
+                <span class="home-nav-icon" aria-hidden="true">▤</span>
+                <h2>Past Orders</h2>
+                <p>Review your previous reward purchases.</p>
+            </a>
         </div>
-
-        @if (showMonthlyPointsModal && account.UserType == "sponsor")
-        {
-            <div class="company-backdrop" @onclick="() => showMonthlyPointsModal = false">
-                <section class="company-dialog" role="dialog" aria-modal="true" aria-labelledby="monthly-points-title" @onclick:stopPropagation="true">
-                    <button type="button" class="company-close-button" aria-label="Close" title="Close" @onclick="() => showMonthlyPointsModal = false">×</button>
-                    <h2 id="monthly-points-title">Montly Points</h2>
-                    <p>Available points: @FrontEnd.Shared.RewardPoints.Format(account.Points)</p>
-                    <p>Your balance resets to your company's monthly budget on the first of each month.</p>
-                    <p>Each active driver receives this amount on the first of each month (Eastern time), starting next month. Enter 0 to disable awards.</p>
-                    @if (monthlyPointsError is not null)
-                    {
-                        <p role="alert" class="tr-alert-error">@monthlyPointsError</p>
-                    }
-                    <form @onsubmit="SaveMonthlyPoints" @onsubmit:preventDefault="true">
-                        <label class="extra-info-label" for="monthly-points-input">Monthly points</label>
-                        <input id="monthly-points-input" class="extra-info-input" type="number" min="0" max="1000000" step="1" required @bind="monthlyPoints" />
-                        <div class="monthly-points-actions">
-                            <button type="submit" class="tr-btn" disabled="@savingMonthlyPoints">@(savingMonthlyPoints ? "Saving..." : "Confirm")</button>
-                        </div>
-                    </form>
-                </section>
-            </div>
         }
 
         @if (showCompanyModal)
@@ -476,6 +456,20 @@
 </div>
 
 <style>
+    .sponsor-home-nav-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0 0 20px; }
+    .sponsor-home-nav-card { display: grid; grid-template-columns: 48px 1fr; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: 14px; min-height: 112px; box-sizing: border-box; padding: 18px 22px; border: 1px solid #d9e1ec; border-radius: 10px; background: white; color: #24364d; text-decoration: none; box-shadow: 0 3px 10px #183c7810; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+    .sponsor-home-nav-card:hover, .sponsor-home-nav-card:focus-visible { transform: translateY(-2px); border-color: #9eb5d3; color: #183f82; box-shadow: 0 8px 20px #183c7820; }
+    .sponsor-home-nav-card .home-nav-icon { grid-row: 1 / 3; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; background: #edf3fb; color: #2455a4; font-size: 27px; font-weight: 700; }
+    .sponsor-home-nav-card strong { align-self: end; font-size: 16px; }
+    .sponsor-home-nav-card small { align-self: start; margin-top: 3px; color: #687487; font-size: 13px; }
+    .sponsor-home-points-card { min-height: 112px; display: flex; flex-direction: column; justify-content: center; }
+    .sponsor-home-points-card .balance { margin: 0 0 8px; }
+    .sponsor-home-points-card .hint { margin: 0; }
+    .driver-past-orders-card { display: block; color: #24364d; text-decoration: none; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+    .driver-past-orders-card:hover, .driver-past-orders-card:focus-visible { transform: translateY(-2px); border-color: #9eb5d3; color: #183f82; box-shadow: 0 8px 20px #183c7820; }
+    .driver-past-orders-card .home-nav-icon { display: inline-grid; place-items: center; width: 40px; height: 40px; margin-bottom: 12px; border-radius: 9px; background: #edf3fb; color: #2455a4; font-size: 25px; }
+    .driver-past-orders-card p { margin: 0; color: #687487; }
+    @@media (max-width: 700px) { .sponsor-home-nav-cards { grid-template-columns: 1fr; gap: 12px; } }
     .drivers-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
     .drivers-card.drivers-card-collapsed { padding: 10px 16px; }
     .drivers-card-collapsed .drivers-heading { margin-bottom: 0; gap: 24px; }
@@ -1107,10 +1101,6 @@ private void HandleAdminTaskKeyDown(
     private List<CompanyOption>? companies;
     private int? selectedCompanyId;
     private bool showCompanyModal;
-    private bool showMonthlyPointsModal;
-    private long? monthlyPoints;
-    private bool savingMonthlyPoints;
-    private string? monthlyPointsError;
     private string? companyLoadError;
     private string? applicantExtraInfo;
     private string? applicationError;
@@ -1139,55 +1129,6 @@ private void HandleAdminTaskKeyDown(
             loadError = "Couldn't load your account right now. Try again in a moment.";
         }
 
-    }
-
-    private async Task OpenMonthlyPoints()
-    {
-        monthlyPointsError = null;
-        try
-        {
-            var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var setting = await client.GetFromJsonAsync<MonthlyPointsSetting>($"users/{id}/points/monthly");
-            monthlyPoints = setting?.Points ?? 0;
-            showMonthlyPointsModal = true;
-        }
-        catch (HttpRequestException)
-        {
-            notice = "Couldn't load monthly points. Make sure you belong to a company and try again.";
-        }
-    }
-
-    private sealed record MonthlyPointsSetting(int Points);
-
-    private async Task SaveMonthlyPoints()
-    {
-        if (savingMonthlyPoints) return;
-        if (monthlyPoints is null or < 0 or > 1_000_000)
-        {
-            monthlyPointsError = "Enter 0 to 1,000,000 whole points.";
-            return;
-        }
-        savingMonthlyPoints = true;
-        monthlyPointsError = null;
-        try
-        {
-            var id = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
-            using var client = HttpClientFactory.CreateClient("Backend");
-            var response = await client.PostAsJsonAsync($"users/{id}/points/monthly", new { Points = (int)monthlyPoints.Value });
-            if (!response.IsSuccessStatusCode)
-            {
-                monthlyPointsError = "Couldn't save monthly points. Make sure you belong to a company and try again.";
-                return;
-            }
-            showMonthlyPointsModal = false;
-            notice = monthlyPoints == 0 ? "Monthly driver points disabled." : $"Saved: each active driver will receive {monthlyPoints:N0} points on the first of each month (Eastern time), starting next month.";
-        }
-        catch (HttpRequestException)
-        {
-            monthlyPointsError = "Couldn't save monthly points. Please try again.";
-        }
-        finally { savingMonthlyPoints = false; }
     }
 
     private async Task ShowCompanyModal()

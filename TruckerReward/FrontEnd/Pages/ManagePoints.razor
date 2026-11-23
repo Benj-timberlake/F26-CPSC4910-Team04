@@ -466,6 +466,19 @@
 
     public Task Refresh() => Load();
 
+    public void OpenBulkAward()
+    {
+        if (!CanBulk) return;
+        if (selected.Count == 0)
+        {
+            notice = "Select one or more drivers first, then award their points.";
+            error = null;
+            StateHasChanged();
+            return;
+        }
+        StartBulk();
+    }
+
     private void CloseFilters()
     {
         if (!applyingFilters) filtersOpen = false;
