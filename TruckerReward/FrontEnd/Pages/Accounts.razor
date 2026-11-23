@@ -1,0 +1,163 @@
+@page "/accounts"
+@attribute [Authorize(Roles = "sponsor")]
+@inherits BackendPage
+@using System.Net.Http.Json
+
+<PageTitle>Accounts</PageTitle>
+
+<div class="tr-page accounts-page">
+    <h1>Accounts</h1>
+    <p class="tr-muted accounts-subtitle">Manage your company’s drivers and sponsor team.</p>
+
+    <div class="accounts-actions accounts-top-actions">
+        <button type="button" class="accounts-action-button" @onclick="() => showMassCreation = true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6" /></svg>
+            <span>Mass Account Creation</span>
+        </button>
+        <a href="applications" class="accounts-action-button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h12l4 4v14H4zM16 3v5h4M8 13h8M8 17h8" /></svg>
+            <span>Applications</span>
+        </a>
+        <a href="leaderboard" class="accounts-action-button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="6" /><path d="M8.2 12.6 7 22l5-3 5 3-1.2-9.4" /></svg>
+            <span>Points Leaderboard</span>
+        </a>
+    </div>
+
+    <section class="tr-card accounts-panel">
+        <header class="accounts-panel-heading">
+            <div><h2>Drivers</h2><p>Drivers connected to your company</p></div>
+            <div class="accounts-actions">
+                <button type="button" class="accounts-collapse-button" @onclick="() => driversCollapsed = !driversCollapsed" aria-expanded="@(!driversCollapsed)" aria-label="@(driversCollapsed ? "Expand drivers card" : "Collapse drivers card")" title="@(driversCollapsed ? "Expand" : "Collapse")">
+                    <span class="@(driversCollapsed ? "collapsed" : "")" aria-hidden="true">⌄</span>
+                </button>
+                @if (!driversCollapsed)
+                {
+                    <div class="accounts-card-icon-row">
+                        <button type="button" class="accounts-filter-button" title="Filter drivers" aria-label="Filter drivers" @onclick="OpenDriverFilters">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9Z" /></svg>
+                        </button>
+                        <button type="button" class="accounts-filter-button" title="Add account" aria-label="Add account" @onclick="OpenAddAccount">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                        </button>
+                    </div>
+                }
+            </div>
+        </header>
+        @if (!driversCollapsed)
+        {
+            <FrontEnd.Pages.ManagePoints @ref="driverManagement" Embedded="true" />
+        }
+    </section>
+
+    <FrontEnd.Shared.DashboardSponsors />
+    <MassAccountCreationModal IsOpen="@showMassCreation" ActorId="@actorId" IsAdmin="false" OnClose="@CloseMassCreation" OnCreated="@RefreshDrivers" BackLink="accounts" BackLabel="← Back to Accounts" />
+    @if (showAddAccount)
+    {
+        <div class="add-account-backdrop" @onclick="CloseAddAccount">
+            <section class="add-account-dialog" role="dialog" aria-modal="true" aria-labelledby="add-account-title" @onclick:stopPropagation="true">
+                <button type="button" class="add-account-close" aria-label="Close" @onclick="CloseAddAccount">×</button>
+                <p class="add-account-eyebrow">DRIVER ACCOUNT</p>
+                <h2 id="add-account-title">Add an account</h2>
+                <p class="add-account-copy">The driver will receive an email link to set a password. They’ll be added to your company.</p>
+                <form @onsubmit="AddAccount" @onsubmit:preventDefault="true">
+                    <label for="new-driver-username">Username</label><input id="new-driver-username" @bind="newUsername" required maxlength="255" />
+                    <label for="new-driver-first">First name</label><input id="new-driver-first" @bind="newFirstName" required maxlength="100" />
+                    <label for="new-driver-last">Last name</label><input id="new-driver-last" @bind="newLastName" required maxlength="100" />
+                    <label for="new-driver-email">Email</label><input id="new-driver-email" type="email" @bind="newEmail" required maxlength="255" />
+                    @if (addAccountError is not null) { <p role="alert" class="tr-alert-error">@addAccountError</p> }
+                    <div class="add-account-actions"><button type="button" class="tr-btn-outline" disabled="@addingAccount" @onclick="CloseAddAccount">Cancel</button><button type="submit" class="tr-btn" disabled="@addingAccount">@(addingAccount ? "Adding..." : "Add account")</button></div>
+                </form>
+            </section>
+        </div>
+    }
+    @if (accountCreatedNotice is not null) { <p role="status" class="tr-alert-success">@accountCreatedNotice</p> }
+</div>
+
+<style>
+    .accounts-page { max-width: 1500px; }
+    .accounts-subtitle { margin: -8px 0 22px; }
+    .accounts-panel { margin-bottom: 20px; }
+    .accounts-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .accounts-panel-heading h2 { margin: 0; }
+    .accounts-panel-heading p { margin: 4px 0 0; color: #687487; font-size: 13px; }
+    .accounts-actions { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+    .accounts-card-icon-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .accounts-top-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0 0 18px; }
+    .accounts-action-button { display: flex; align-items: center; justify-content: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 64px; padding: 0 16px; border: 1px solid #183c78; border-radius: 9px; background: #2455a4; color: white; font: inherit; font-size: 16px; font-weight: 650; text-align: center; text-decoration: none; cursor: pointer; box-shadow: 0 3px 8px #183c7833; }
+    .accounts-action-button svg { width: 24px; height: 24px; flex: 0 0 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .accounts-action-button:hover, .accounts-action-button:focus-visible { background: #183f82; border-color: #102f66; }
+    .accounts-filter-button { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 7px; background: #f2f5f9; color: var(--brand); cursor: pointer; }
+    .accounts-filter-button:hover, .accounts-filter-button:focus-visible { background: #e4ebf4; }
+    .accounts-collapse-button { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 28px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--brand); font-size: 25px; cursor: pointer; }
+    .accounts-collapse-button:hover, .accounts-collapse-button:focus-visible { color: #163d7c; background: transparent; }
+    .accounts-collapse-button span { display: inline-block; transform: rotate(180deg); transition: transform .15s ease; }
+    .accounts-collapse-button span.collapsed { transform: rotate(0); }
+    .add-account-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: #10182799; backdrop-filter: blur(3px); }
+    .add-account-dialog { position: relative; width: min(480px, 100%); padding: 28px; border-radius: 15px; background: white; color: #1f2937; box-shadow: 0 24px 70px #0004; }
+    .add-account-dialog h2 { margin: 0 0 8px; font-size: 25px; }
+    .add-account-eyebrow { margin: 0 0 6px; color: #2455a4; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+    .add-account-copy { margin: 0 0 18px; color: #697586; line-height: 1.45; }
+    .add-account-close { position: absolute; top: 12px; right: 14px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: #f1f4f8; color: #465366; font-size: 24px; cursor: pointer; }
+    .add-account-dialog label { display: block; margin: 12px 0 5px; font-size: 13px; font-weight: 650; }
+    .add-account-dialog input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cbd3dd; border-radius: 7px; font: inherit; }
+    .add-account-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    @@media (max-width: 900px) { .accounts-panel-heading { align-items: center; flex-direction: row; } }
+    @@media (max-width: 700px) { .accounts-top-actions { grid-template-columns: 1fr; gap: 10px; } }
+</style>
+
+@code {
+    private FrontEnd.Pages.ManagePoints? driverManagement;
+    private bool showMassCreation;
+    private bool driversCollapsed;
+    private bool showAddAccount;
+    private bool addingAccount;
+    private string newFirstName = "";
+    private string newLastName = "";
+    private string newEmail = "";
+    private string newUsername = "";
+    private string? addAccountError;
+    private string? accountCreatedNotice;
+    private int actorId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignedIn();
+        if (int.TryParse(id, out var value)) actorId = value;
+    }
+
+    private void OpenDriverFilters() => driverManagement?.OpenFilters();
+    private void CloseMassCreation() => showMassCreation = false;
+    private void OpenAddAccount() { showAddAccount = true; addAccountError = null; accountCreatedNotice = null; }
+    private void CloseAddAccount() { if (!addingAccount) showAddAccount = false; }
+    private async Task RefreshDrivers() { if (driverManagement is not null) await driverManagement.Refresh(); }
+
+    private async Task AddAccount()
+    {
+        if (addingAccount) return;
+        addingAccount = true;
+        addAccountError = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            using var response = await client.PostAsJsonAsync($"users/{actorId}/drivers", new { username = newUsername, firstName = newFirstName, lastName = newLastName, email = newEmail });
+            var result = await response.Content.ReadFromJsonAsync<AddAccountResult>();
+            if (!response.IsSuccessStatusCode)
+            {
+                addAccountError = result?.Message ?? "Couldn't add the account. Check the details and try again.";
+                return;
+            }
+            showAddAccount = false;
+            accountCreatedNotice = result?.Message ?? $"{newUsername.Trim()} was added and emailed a link to set a password.";
+            newUsername = newFirstName = newLastName = newEmail = "";
+            await RefreshDrivers();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            addAccountError = "Couldn't add the account right now. Try again in a moment.";
+        }
+        finally { addingAccount = false; }
+    }
+
+    private sealed record AddAccountResult(string? Message);
+}

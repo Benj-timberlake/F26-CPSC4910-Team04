@@ -2,10 +2,14 @@
 @attribute [Authorize]
 @inherits BackendPage
 
-<PageTitle>Leaderboard</PageTitle>
+<PageTitle>Points Leaderboard</PageTitle>
 
 <div class="tr-page">
-    <h1>Leaderboard</h1>
+    @if (sponsor)
+    {
+        <a class="back-manage-accounts" href="accounts">← Back to Accounts</a>
+    }
+    <h1>Points Leaderboard</h1>
 
     <form class="filters tr-toolbar" @onsubmit="Load">
         <select aria-label="Period" @bind="period">
@@ -122,6 +126,7 @@
     private bool admin;
     private bool manager;
     private bool driver;
+    private bool sponsor;
     private string period = "all";
     private string category = "points";
     // period and category of the loaded board
@@ -136,6 +141,7 @@
         var user = await SignedIn();
         admin = user.IsInRole("admin");
         driver = user.IsInRole("driver");
+        sponsor = user.IsInRole("sponsor");
         manager = admin || user.IsInRole("sponsor");
         if (admin)
         {

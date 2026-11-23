@@ -1,45 +1,582 @@
 @page "/manage-accounts"
 @attribute [Authorize(Roles = "admin")]
+@inherits BackendPage
 
 <PageTitle>Manage Accounts</PageTitle>
 
-<main class="manage-accounts-page">
-    <header>
-        <p class="eyebrow">ADMINISTRATION</p>
-        <h1>Manage Accounts</h1>
-        <p>Choose an area to manage.</p>
-    </header>
+<div class="tr-page accounts-page admin-accounts-page">
+    <h1>Manage Accounts</h1>
+    <div class="accounts-actions accounts-top-actions admin-accounts-actions">
+        <a href="applications" class="accounts-action-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h12l4 4v14H4zM16 3v5h4M8 13h8M8 17h8" /></svg><span>Applications</span></a>
+        <button type="button" class="accounts-action-button" @onclick="() => showMassAccountCreationModal = true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6M22 11h-6" /></svg><span>Mass Account Creation</span></button>
+    </div>
 
-    <section class="manage-accounts-grid" aria-label="Account management options">
-        <a href="admin/accounts" class="manage-action-card">
-            <span aria-hidden="true">👥</span>
-            <strong>Accounts</strong>
-            <small>Manage user accounts and profiles</small>
-        </a>
-        <a href="manage-points" class="manage-action-card">
-            <span aria-hidden="true">🏅</span>
-            <strong>Manage Points</strong>
-            <small>Review and change driver and sponsor points</small>
-        </a>
-        <a href="applications" class="manage-action-card">
-            <span aria-hidden="true">📄</span>
-            <strong>Applications</strong>
-            <small>Review sponsor and driver applications</small>
-        </a>
+    @if (counts is not null)
+    {
+        <dl class="counts">
+            <div><dt>Active drivers</dt><dd class="drivers">@counts.ActiveDrivers</dd></div>
+            <div><dt>Active sponsors</dt><dd class="sponsors">@counts.ActiveSponsors</dd></div>
+            <div><dt>Active admins</dt><dd>@counts.ActiveAdmins</dd></div>
+            <div><dt>Deactivated</dt><dd>@counts.Inactive</dd></div>
+            <div>
+                <dt>Drivers without a sponsor</dt>
+                <dd><button type="button" class="link no-sponsor" @onclick="ShowUnsponsored">@counts.DriversWithoutSponsor</button></dd>
+            </div>
+        </dl>
+    }
+
+    <section class="tr-card admin-account-card accounts-panel">
+    <header class="accounts-panel-heading">
+        <div><h2>All accounts</h2><p>Manage drivers, sponsors, and admins</p></div>
+        <div class="accounts-card-icon-row">
+            <button type="button" class="accounts-filter-button" title="Filter accounts" aria-label="Filter accounts" aria-expanded="@filterOpen" @onclick="() => filterOpen = !filterOpen"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9Z" /></svg></button>
+            <button type="button" class="accounts-filter-button" title="Add account" aria-label="Add account" @onclick="OpenCreate"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>
+        </div>
+    </header>
+    @if (filterOpen)
+    {
+    <form class="account-filter-panel" @onsubmit="Load" @onsubmit:preventDefault="true">
+        <label>Search accounts<input type="search" aria-label="Search accounts" placeholder="Name, username or email" @bind="search" /></label>
+        <label>Account type<select aria-label="Account type" @bind="type">
+            <option value="">All types</option>
+            <option value="driver">Drivers</option>
+            <option value="sponsor">Sponsors</option>
+            <option value="admin">Admins</option>
+        </select></label>
+        <label>Sponsor<select aria-label="Sponsor" @bind="companyId">
+            <option value="0">All sponsors</option>
+            <option value="-1">No sponsor</option>
+            @foreach (var c in companies)
+            {
+                <option value="@c.Id">@c.Name</option>
+            }
+        </select></label>
+        <label>Status<select aria-label="Status" @bind="status">
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+        </select></label>
+        <label>Sort by<select aria-label="Sort" @bind="sort">
+            <option value="name">Sort by name</option>
+            <option value="created">Newest accounts first</option>
+            <option value="last-login">Most recent sign-in first</option>
+        </select></label>
+        <button type="submit" class="tr-btn">Apply</button>
+    </form>
+
+    }
+
+    <Alerts Notice="@notice" Error="@error" />
+
+    @if (accounts is null)
+    {
+        <p role="status"><em>Loading...</em></p>
+    }
+    else if (accounts.Count == 0)
+    {
+        <p class="tr-muted">No accounts match.</p>
+    }
+    else
+    {
+        <div class="tr-table-wrap">
+            <table class="tr-table" aria-label="Accounts">
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Username</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Created</th>
+                        <th scope="col">Last sign-in</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">View as</th>
+                        <th scope="col">Manage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in accounts)
+                    {
+                        <tr class="@(a.Status == "inactive" ? "inactive" : "")">
+                            <td>@a.FirstName @a.LastName</td>
+                            <td>@a.Username</td>
+                            <td>@a.Email</td>
+                            <td>@a.UserType</td>
+                            <td>@When(a.CreatedAt)</td>
+                            <td>@(a.LastLoginAt is null ? "Never" : When(a.LastLoginAt))</td>
+                            <td>@a.Status</td>
+                            <td class="view-as-cell">
+                                @if (a.Id.ToString() != id && a.UserType != "admin" && a.Status == "active")
+                                {
+                                    <form method="post" action="account/view-as/@a.Id"><button type="submit" class="driver-view-eye" title="View as @a.Username" aria-label="View as @a.Username"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg></button></form>
+                                }
+                            </td>
+                            <td class="manage-cell">
+                                @if (a.Id.ToString() != id)
+                                {
+                                    <button type="button" class="manage-account-button" disabled="@busy" @onclick="() => OpenManage(a)">Manage</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
     </section>
-</main>
+    @if (creating is not null)
+    {
+        <div class="add-account-backdrop" @onclick="CloseCreate">
+            <section class="add-account-dialog" role="dialog" aria-modal="true" aria-labelledby="add-account-title" @onclick:stopPropagation="true">
+                <button type="button" class="add-account-close" aria-label="Close" @onclick="CloseCreate">×</button>
+                <p class="add-account-eyebrow">NEW ACCOUNT</p><h2 id="add-account-title">Add an account</h2>
+                <form @onsubmit="Create" @onsubmit:preventDefault="true">
+                    <label>Account type<select aria-label="New account type" @bind="creating.UserType"><option value="driver">Driver</option><option value="sponsor">Sponsor</option><option value="admin">Admin</option></select></label>
+                    <label>Username<input aria-label="New username" @bind="creating.Username" required /></label>
+                    <label>First name<input aria-label="New first name" @bind="creating.FirstName" required /></label>
+                    <label>Last name<input aria-label="New last name" @bind="creating.LastName" required /></label>
+                    <label>Email<input type="email" aria-label="New email" @bind="creating.Email" required /></label>
+                    @if (creating.UserType != "admin")
+                    {
+                        <label>Sponsor<select aria-label="New account sponsor" @bind="creating.CompanyId"><option value="0">@(creating.UserType == "driver" ? "Pick a sponsor" : "No sponsor")</option>@foreach (var c in companies) { <option value="@c.Id">@c.Name</option> }</select></label>
+                    }
+                    <div class="add-account-actions"><button type="button" class="tr-btn-outline" @onclick="CloseCreate">Cancel</button><button type="submit" class="tr-btn" disabled="@busy">Create account</button></div>
+                </form>
+            </section>
+        </div>
+    }
+    <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" ActorId="@actorId" IsAdmin="true" OnClose="@CloseMassAccountCreationModal" OnCreated="@Load" />
+    @if (managing is not null)
+    {
+        <div class="manage-backdrop" @onclick="CloseManage">
+            <section class="manage-dialog" role="dialog" aria-modal="true" aria-labelledby="manage-account-title" @onclick:stopPropagation="true">
+                <button type="button" class="manage-close" aria-label="Close" @onclick="CloseManage">×</button>
+                <p class="manage-eyebrow">ACCOUNT ACTIONS</p>
+                <h2 id="manage-account-title">@managing.FirstName @managing.LastName</h2>
+                <p class="manage-subtitle">@managing.Username · @managing.UserType · @managing.Status</p>
+                @if (error is not null) { <p role="alert" class="tr-alert-error">@error</p> }
+                @if (pointsEditing is not null && pointsEditing.Id == managing.Id)
+                {
+                    <form class="manage-edit-form points-edit-form" @onsubmit="SavePoints" @onsubmit:preventDefault="true">
+                        @if (pointsEditing.UserType == "driver" && pointCompanies is { Count: > 0 })
+                        {
+                            <label class="wide-field">Company<select aria-label="Company for points change" @bind="pointCompanyId"><option value="">Choose a company</option>@foreach (var company in pointCompanies) { <option value="@company.Id">@company.Name (@company.Points points)</option> }</select></label>
+                        }
+                        @if (pointsEditing.UserType == "driver" && pointCompanies is { Count: 0 })
+                        {
+                            <p class="wide-field tr-muted">This driver is not associated with a sponsor.</p>
+                        }
+                        <label class="wide-field">Points change<input type="number" placeholder="+100 or -50" @bind="pointAmount" /></label>
+                        <label class="wide-field">Reason<input maxlength="500" @bind="pointReason" /></label>
+                        <div class="manage-actions"><button type="submit" class="tr-btn" disabled="@(busy || pointAmount is null || string.IsNullOrWhiteSpace(pointReason) || (pointsEditing.UserType == "driver" && pointCompanyId is null))">Save change</button><button type="button" class="tr-btn-outline" disabled="@busy" @onclick="() => pointsEditing = null">Cancel</button></div>
+                    </form>
+                }
+                else if (editing is not null && editing.Id == managing.Id)
+                {
+                    <form class="manage-edit-form" @onsubmit="SaveEdit" @onsubmit:preventDefault="true">
+                        <label>First name<input aria-label="First name" @bind="editing.FirstName" /></label>
+                        <label>Last name<input aria-label="Last name" @bind="editing.LastName" /></label>
+                        <label>Email<input type="email" aria-label="Email" @bind="editing.Email" /></label>
+                        <label>Phone<input aria-label="Phone number" @bind="editing.PhoneNumber" /></label>
+                        <label>Address<input aria-label="Address" @bind="editing.Address" /></label>
+                        @if (managing.UserType != "admin")
+                        {
+                            <label>Sponsor<select aria-label="Account sponsor" @bind="editing.CompanyId"><option value="0">No sponsor</option>@foreach (var c in companies) { <option value="@c.Id">@c.Name</option> }</select></label>
+                        }
+                        <div class="manage-actions"><button type="submit" class="tr-btn" disabled="@busy">Save</button><button type="button" class="tr-btn-outline" @onclick="() => editing = null">Cancel</button></div>
+                    </form>
+                }
+                else
+                {
+                    <div class="manage-action-grid">
+                        <button type="button" disabled="@busy" @onclick="() => StartEdit(managing)">Edit</button>
+                        @if (managing.UserType is "driver" or "sponsor")
+                        {
+                            <button type="button" disabled="@busy" @onclick="() => StartPointsEdit(managing)">Change points</button>
+                        }
+                        <button type="button" disabled="@busy" @onclick="() => Toggle(managing)">@(managing.Status == "active" ? "Deactivate" : "Reactivate")</button>
+                        <button type="button" disabled="@busy" @onclick="() => SignOutEverywhere(managing)">Sign out</button>
+                        @if (managing.Status == "active")
+                        {
+                            <button type="button" disabled="@busy" @onclick="() => SendResetLink(managing)">Send reset link</button>
+                        }
+                        @if (managing.UserType != "admin" && managing.Status == "active")
+                        {
+                            <form method="post" action="account/view-as/@managing.Id"><button type="submit">View as</button></form>
+                        }
+                        @if (deleting == managing.Id)
+                        {
+                            <div class="delete-confirm"><p>Delete @managing.Username permanently? This cannot be undone.</p><button type="button" class="danger-button" disabled="@busy" @onclick="() => Delete(managing)">Delete</button><button type="button" class="tr-btn-outline" @onclick="() => deleting = null">Cancel</button></div>
+                        }
+                        else
+                        {
+                            <button type="button" class="danger-outline" disabled="@busy" @onclick="() => deleting = managing.Id">Delete</button>
+                        }
+                    </div>
+                }
+                <div class="manage-footer"><button type="button" class="tr-btn-outline" @onclick="CloseManage">Close</button></div>
+            </section>
+        </div>
+    }
+</div>
 
 <style>
-    .manage-accounts-page { max-width: 1200px; margin: 0 auto; padding: 36px clamp(20px, 4vw, 56px) 60px; color: #1f2937; }
-    .manage-accounts-page header { margin-bottom: 28px; }
-    .manage-accounts-page .eyebrow { color: var(--brand); font-weight: 700; font-size: 11px; letter-spacing: .12em; margin: 0 0 8px; }
-    .manage-accounts-page h1 { margin: 0; font-size: clamp(30px, 3vw, 38px); font-weight: 700; letter-spacing: -.03em; }
-    .manage-accounts-page header p:last-child { margin: 7px 0 0; color: #697586; }
-    .manage-accounts-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-    .manage-action-card { min-height: 170px; padding: 22px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #e3e9f0; border-radius: 14px; background: white; color: inherit; text-decoration: none; box-shadow: 0 5px 16px #172b4d0a; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
-    .manage-action-card:hover, .manage-action-card:focus-visible { transform: translateY(-2px); border-color: #b8c9e2; box-shadow: 0 10px 24px #172b4d16; }
-    .manage-action-card span { font-size: 28px; }
-    .manage-action-card strong { font-size: 17px; }
-    .manage-action-card small { color: #697586; font-size: 13px; }
-    @@media (max-width: 760px) { .manage-accounts-grid { grid-template-columns: 1fr; } }
+    .admin-accounts-page { max-width: 1500px; }
+    .accounts-top-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0 0 18px; }
+    .accounts-action-button { display: flex; align-items: center; justify-content: center; gap: 12px; box-sizing: border-box; width: 100%; min-height: 64px; padding: 0 16px; border: 1px solid #183c78; border-radius: 9px; background: #2455a4; color: white; font: inherit; font-size: 16px; font-weight: 650; text-align: center; text-decoration: none; cursor: pointer; box-shadow: 0 3px 8px #183c7833; }
+    .accounts-action-button svg { width: 24px; height: 24px; flex: 0 0 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .accounts-action-button:hover, .accounts-action-button:focus-visible { background: #183f82; border-color: #102f66; }
+    .admin-account-card { padding: 22px; }
+    .accounts-panel { margin-bottom: 20px; }
+    .accounts-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .accounts-panel-heading h2 { margin: 0; }
+    .accounts-panel-heading p { margin: 4px 0 0; color: #687487; font-size: 13px; }
+    .accounts-card-icon-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .accounts-filter-button { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 7px; background: #f2f5f9; color: var(--brand); cursor: pointer; }
+    .accounts-filter-button:hover, .accounts-filter-button:focus-visible { background: #e4ebf4; }
+    .account-filter-panel { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(4, minmax(130px, 1fr)) auto; align-items: end; gap: 10px; padding: 14px; margin: 0 0 16px; border: 1px solid #e3e9f0; border-radius: 10px; background: #f8fafc; }
+    .account-filter-panel label { display: grid; gap: 5px; color: #536174; font-size: 12px; font-weight: 600; }
+    .account-filter-panel input, .account-filter-panel select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 7px 9px; border: 1px solid #c8d1dd; border-radius: 6px; background: white; font: inherit; }
+    @@media (max-width: 1100px) { .account-filter-panel { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @@media (max-width: 700px) { .account-filter-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); } .account-filter-panel > button { grid-column: 1 / -1; } }
+    .counts {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .counts {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin: 0 0 20px;
+    }
+
+    .counts div {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px 16px;
+        background: white;
+    }
+
+    .counts dt { font-weight: 700; }
+
+    .counts dd {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 700;
+    }
+
+    .new-account {
+        margin: 0;
+    }
+
+    .account-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .manage-cell { min-width: 105px; }
+    .accounts-table { min-width: 1080px; table-layout: fixed; }
+    .accounts-table th:nth-child(1), .accounts-table td:nth-child(1) { width: 15%; }
+    .accounts-table th:nth-child(2), .accounts-table td:nth-child(2) { width: 12%; }
+    .accounts-table th:nth-child(3), .accounts-table td:nth-child(3) { width: 17%; overflow-wrap: anywhere; }
+    .accounts-table th:nth-child(4), .accounts-table td:nth-child(4) { width: 8%; }
+    .accounts-table th:nth-child(5), .accounts-table td:nth-child(5), .accounts-table th:nth-child(6), .accounts-table td:nth-child(6) { width: 14%; }
+    .accounts-table th:nth-child(7), .accounts-table td:nth-child(7) { width: 8%; }
+    .accounts-table th:nth-child(8), .accounts-table td:nth-child(8) { width: 6%; }
+    .accounts-table th:nth-child(9), .accounts-table td:nth-child(9) { width: 8%; }
+    .view-as-cell form { margin: 0; }
+    .driver-view-eye { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: #f2f5f9; color: var(--brand); cursor: pointer; }
+    .driver-view-eye:hover, .driver-view-eye:focus-visible { background: #e4ebf4; }
+    .add-account-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: #10182799; backdrop-filter: blur(3px); }
+    .add-account-dialog { position: relative; width: min(480px, 100%); max-height: 85vh; overflow-y: auto; padding: 28px; border-radius: 15px; background: white; color: #1f2937; box-shadow: 0 24px 70px #0004; }
+    .add-account-dialog h2 { margin: 0 0 8px; font-size: 25px; }
+    .add-account-eyebrow { margin: 0 0 6px; color: #2455a4; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+    .add-account-close { position: absolute; top: 12px; right: 14px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: #f1f4f8; color: #465366; font-size: 24px; cursor: pointer; }
+    .add-account-dialog label { display: grid; gap: 5px; margin: 12px 0 5px; color: #526071; font-size: 13px; font-weight: 650; }
+    .add-account-dialog input, .add-account-dialog select { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cbd3dd; border-radius: 7px; font: inherit; }
+    .add-account-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    @@media (max-width: 700px) { .accounts-panel-heading { align-items: flex-start; } .admin-account-card { padding: 14px; } }
+    .manage-account-button { padding: 8px 16px; border: 1px solid #2455a4; border-radius: 7px; background: #2455a4; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+    .manage-account-button:hover { background: #1e478b; }
+    .manage-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; background: #10182799; backdrop-filter: blur(3px); }
+    .manage-dialog { position: relative; width: min(560px, 100%); max-height: min(85vh, 760px); overflow-y: auto; padding: 30px; border: 1px solid #e3e9f0; border-radius: 16px; background: #fff; color: #1f2937; box-shadow: 0 24px 70px #0004; }
+    .manage-dialog h2 { margin: 0; font-size: 25px; }
+    .manage-close { position: absolute; top: 14px; right: 16px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: #f1f4f8; color: #465366; font-size: 24px; cursor: pointer; }
+    .manage-eyebrow { margin: 0 0 6px; color: #2455a4; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+    .manage-subtitle { margin: 6px 0 22px; color: #6b7280; text-transform: capitalize; }
+    .manage-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .manage-action-grid > button, .manage-action-grid form button { box-sizing: border-box; width: 100%; min-height: 52px; padding: 12px 14px; border: 1px solid #dbe2eb; border-radius: 9px; background: #f8fafc; color: #26364b; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+    .manage-action-grid > button:hover, .manage-action-grid form button:hover { border-color: #9db4d3; background: #eff4fa; }
+    .manage-action-grid form { margin: 0; }
+    .manage-action-grid .danger-outline { color: #a32c2c; border-color: #efcaca; background: #fff8f8; }
+    .delete-confirm { grid-column: 1 / -1; padding: 14px; border: 1px solid #efcaca; border-radius: 9px; background: #fff8f8; }
+    .delete-confirm p { margin: 0 0 12px; font-weight: 600; }
+    .danger-button { padding: 9px 12px; border: 0; border-radius: 7px; background: #b42323; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+    .delete-confirm .tr-btn-outline { margin-left: 8px; }
+    .manage-edit-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .manage-edit-form label { display: grid; gap: 5px; color: #526071; font-size: 13px; font-weight: 600; }
+    .manage-edit-form .wide-field { grid-column: 1 / -1; }
+    @@media (max-width: 1000px) { .counts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @@media (max-width: 700px) { .accounts-top-actions { grid-template-columns: 1fr; } .counts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .admin-account-card { padding: 14px; } }
+    .manage-edit-form input, .manage-edit-form select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #cbd3dd; border-radius: 7px; font: inherit; }
+    .manage-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+    .manage-footer { display: flex; justify-content: flex-end; padding-top: 18px; margin-top: 18px; border-top: 1px solid #edf0f4; }
+    .mass-account-creation-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: white; color: var(--brand); cursor: pointer; }
+    .mass-account-creation-button:hover { background: #edf1f6; }
+    .mass-account-creation-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .edit-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    button.link {
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        color: inherit;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+
+    tr.inactive td {
+        color: #6b7280;
+    }
 </style>
+
+@code {
+    private List<Account>? accounts;
+    private string? search;
+    private string type = "";
+    private string status = "";
+    private string sort = "name";
+    private int companyId;
+    private Counts? counts;
+    private List<Company> companies = [];
+    private Edit? editing;
+    private int? deleting;
+    private Account? managing;
+    private Account? pointsEditing;
+    private List<DriverCompany>? pointCompanies;
+    private int? pointCompanyId;
+    private int? pointAmount;
+    private string? pointReason;
+    private NewAccount? creating;
+    private bool showMassAccountCreationModal;
+    private bool filterOpen;
+    private int actorId;
+
+    private void CloseMassAccountCreationModal() => showMassAccountCreationModal = false;
+    private void OpenCreate() { creating = new(); error = null; notice = null; }
+    private void CloseCreate() { if (!busy) creating = null; }
+
+    private void OpenManage(Account a)
+    {
+        managing = a;
+        editing = null;
+        pointsEditing = null;
+        deleting = null;
+        error = null;
+        notice = null;
+    }
+
+    private void CloseManage()
+    {
+        if (busy) return;
+        managing = null;
+        editing = null;
+        pointsEditing = null;
+        deleting = null;
+        error = null;
+    }
+
+    private async Task StartPointsEdit(Account a)
+    {
+        pointsEditing = a;
+        editing = null;
+        pointAmount = null;
+        pointReason = null;
+        pointCompanyId = null;
+        pointCompanies = null;
+        error = notice = null;
+        if (a.UserType != "driver") return;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var details = await client.GetFromJsonAsync<DriverDetails>($"users/{a.Id}");
+            pointCompanies = details?.Companies ?? [];
+            if (pointCompanies.Count == 1) pointCompanyId = pointCompanies[0].Id;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load the driver's companies. Try again.";
+        }
+    }
+
+    private Task SavePoints()
+    {
+        if (pointsEditing is null || pointAmount is null || string.IsNullOrWhiteSpace(pointReason)) return Task.CompletedTask;
+        var account = pointsEditing;
+        var request = account.UserType == "sponsor"
+            ? Send(c => c.PostAsJsonAsync($"admin/points/sponsors/{account.Id}", new { adminId = actorId, points = pointAmount.Value, reason = pointReason }), async _ =>
+                {
+                    notice = $"Points updated for {account.Username}.";
+                    pointsEditing = null;
+                    await Load();
+                })
+            : Send(c => c.PostAsJsonAsync($"users/{actorId}/points/drivers/{account.Id}", new { points = pointAmount.Value, reason = pointReason, companyId = pointCompanyId }), async _ =>
+                {
+                    notice = $"Points updated for {account.Username}.";
+                    pointsEditing = null;
+                    await Load();
+                });
+        return request;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignedIn();
+        actorId = int.Parse(id!);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            companies = await client.GetFromJsonAsync<List<Company>>("companies") ?? [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            // the sponsor filter just stays empty
+        }
+        await Load();
+    }
+
+    private async Task ShowUnsponsored()
+    {
+        (type, companyId, status) = ("driver", -1, "active");
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        error = null;
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(search)) query.Add("search=" + Uri.EscapeDataString(search.Trim()));
+        if (type != "") query.Add("type=" + type);
+        if (companyId > 0) query.Add("companyId=" + companyId);
+        if (companyId == -1) query.Add("noSponsor=true");
+        if (status != "") query.Add("status=" + status);
+        if (sort != "name") query.Add("sort=" + sort);
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            accounts = await client.GetFromJsonAsync<List<Account>>("admin/accounts" + (query.Count > 0 ? "?" + string.Join("&", query) : "")) ?? [];
+            counts = await client.GetFromJsonAsync<Counts>("admin/accounts/counts");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load accounts right now. Try again in a moment.";
+        }
+    }
+
+    private Task Toggle(Account a)
+    {
+        var next = a.Status == "active" ? "inactive" : "active";
+        return Send(c => c.PostAsJsonAsync($"admin/accounts/{a.Id}/status", new { adminId = int.Parse(id!), status = next }), async _ =>
+        {
+            notice = $"{a.Username} was {(next == "active" ? "reactivated" : "deactivated")}.";
+            await Load();
+            managing = accounts?.FirstOrDefault(x => x.Id == a.Id);
+        });
+    }
+
+    private Task SendResetLink(Account a) =>
+        Send(c => c.PostAsJsonAsync($"admin/accounts/{a.Id}/reset-link", new { adminId = int.Parse(id!) }),
+            async r => notice = await Message(r) ?? $"A reset link was emailed to {a.Username}.");
+
+    private Task SignOutEverywhere(Account a) =>
+        Send(c => c.PostAsJsonAsync($"users/{a.Id}/sessions/revoke", new { actorId = int.Parse(id!) }),
+            _ => notice = $"{a.Username} will be signed out everywhere within five minutes.", failed: "That didn't work.");
+
+    private async Task Delete(Account a)
+    {
+        await Send(c => c.DeleteAsync($"admin/accounts/{a.Id}?adminId={id}"), async _ =>
+        {
+            notice = $"{a.Username} was deleted.";
+            await Load();
+            managing = null;
+        });
+        deleting = null;
+    }
+
+    private Task Create()
+    {
+        var c = creating!;
+        return Send(client => client.PostAsJsonAsync("admin/accounts", new
+        {
+            adminId = int.Parse(id!), userType = c.UserType, username = c.Username, firstName = c.FirstName, lastName = c.LastName,
+            email = c.Email, companyId = c.UserType == "admin" || c.CompanyId == 0 ? (int?)null : c.CompanyId
+        }), async _ =>
+        {
+            notice = $"{c.Username.Trim()} was created and emailed a link to set a password.";
+            creating = null;
+            await Load();
+        });
+    }
+
+    private async Task StartEdit(Account a)
+    {
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var d = await client.GetFromJsonAsync<Details>($"users/{a.Id}");
+            editing = d is null ? null : new Edit { Id = a.Id, Username = a.Username, FirstName = d.FirstName, LastName = d.LastName, Email = d.Email, PhoneNumber = d.PhoneNumber, Address = d.Address, CompanyId = d.CompanyId ?? 0 };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load that account right now. Try again in a moment.";
+        }
+    }
+
+    private Task SaveEdit()
+    {
+        var e = editing!;
+        return Send(c => c.PutAsJsonAsync($"admin/accounts/{e.Id}", new
+        {
+            adminId = int.Parse(id!), firstName = e.FirstName, lastName = e.LastName, email = e.Email,
+            phoneNumber = e.PhoneNumber, address = e.Address, companyId = e.CompanyId == 0 ? (int?)null : e.CompanyId
+        }), async _ =>
+        {
+            notice = $"{e.Username} was updated.";
+            editing = null;
+            await Load();
+            managing = accounts?.FirstOrDefault(x => x.Id == e.Id);
+        });
+    }
+
+    private static string When(DateTime? utc) => utc is null ? "Unknown" : utc.Value.ToString("yyyy-MM-dd HH:mm") + " UTC";
+
+    private sealed record Account(int Id, string Username, string FirstName, string LastName, string Email, string UserType, string Status, DateTime? CreatedAt, DateTime? LastLoginAt);
+    private sealed record Counts(int ActiveDrivers, int ActiveSponsors, int ActiveAdmins, int Inactive, int DriversWithoutSponsor);
+    private sealed record Details(string FirstName, string LastName, string Email, string PhoneNumber, string Address, int? CompanyId);
+    private sealed record DriverDetails(List<DriverCompany>? Companies);
+    private sealed record DriverCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
+
+    private sealed class NewAccount
+    {
+        public string UserType { get; set; } = "driver";
+        public string Username { get; set; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public int CompanyId { get; set; }
+    }
+
+    private sealed class Edit
+    {
+        public int Id { get; init; }
+        public string Username { get; init; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+        public string Address { get; set; } = "";
+        public int CompanyId { get; set; }
+    }
+}

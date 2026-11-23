@@ -373,60 +373,6 @@
             }
         </div>
 
-        @if (account.UserType == "sponsor")
-        {
-            <section class="tr-card drivers-card @(driversCollapsed ? "drivers-card-collapsed" : "")">
-                <div class="drivers-heading">
-                    <h2>Drivers</h2>
-                    <div class="drivers-heading-actions">
-                    @if (account.CompanyId is not null)
-                    {
-                        <button type="button" class="drivers-filter" title="Filter drivers" aria-label="Filter drivers" @onclick="OpenDriverFilters">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M3 4h18l-7 8v7l-4 2v-9Z" />
-                            </svg>
-                        </button>
-                    }
-                    <button type="button" class="drivers-filter" title="Mass Account Creation" aria-label="Open mass account creation" @onclick="() => showMassAccountCreationModal = true">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 5v14" />
-                            <path d="M5 12h14" />
-                        </svg>
-                    </button>
-                    <a href="applications" class="drivers-leaderboard" title="Applications" aria-label="Open driver applications">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <rect x="3" y="5" width="18" height="14" rx="2" />
-                            <path d="m3 7 9 6 9-6" />
-                        </svg>
-                    </a>
-                    <a href="leaderboard" class="drivers-leaderboard" title="Leaderboard" aria-label="Open driver leaderboard">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="12" cy="8" r="5" />
-                            <path d="m8.5 12-1.5 9 5-3 5 3-1.5-9" />
-                        </svg>
-                    </a>
-                    <button type="button" class="drivers-toggle" @onclick="() => driversCollapsed = !driversCollapsed"
-                            aria-expanded="@(!driversCollapsed)" aria-controls="dashboard-driver-table"
-                            aria-label="@(driversCollapsed ? "Show drivers table" : "Hide drivers table")"
-                            title="@(driversCollapsed ? "Show drivers table" : "Hide drivers table")">
-                        <span aria-hidden="true" class="@(driversCollapsed ? "collapsed" : "")">^</span>
-                    </button>
-                    </div>
-                </div>
-                <div id="dashboard-driver-table" hidden="@driversCollapsed">
-                @if (account.CompanyId is null)
-                {
-                    <p>Join a company to see its associated drivers.</p>
-                }
-                else
-                {
-                    <FrontEnd.Pages.ManagePoints @ref="driverManagement" Embedded="true" PointsChanged="RefreshSponsorBudget" />
-                }
-                </div>
-            </section>
-            <FrontEnd.Shared.DashboardSponsors />
-        }
-
         @if (showMonthlyPointsModal && account.UserType == "sponsor")
         {
             <div class="company-backdrop" @onclick="() => showMonthlyPointsModal = false">
@@ -450,8 +396,6 @@
                 </section>
             </div>
         }
-
-        <MassAccountCreationModal IsOpen="@showMassAccountCreationModal" ActorId="@account.Id" IsAdmin="@(account.UserType == "admin")" OnClose="@CloseMassAccountCreationModal" />
 
         @if (showCompanyModal)
         {
@@ -1110,7 +1054,6 @@
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
     private Account? account;
-    private bool driversCollapsed;
 
 private bool showClassified = false;
 private int selectedSecret = 0;
@@ -1158,14 +1101,6 @@ private void HandleAdminTaskKeyDown(
         AddAdminTask();
 }
 
-    private FrontEnd.Pages.ManagePoints? driverManagement;
-
-    private void OpenDriverFilters()
-    {
-        driversCollapsed = false;
-        driverManagement?.OpenFilters();
-    }
-    private void CloseMassAccountCreationModal() => showMassAccountCreationModal = false;
     private string? loadError;
     private bool isAuthenticated;
     private string? notice;
@@ -1173,7 +1108,6 @@ private void HandleAdminTaskKeyDown(
     private int? selectedCompanyId;
     private bool showCompanyModal;
     private bool showMonthlyPointsModal;
-    private bool showMassAccountCreationModal;
     private long? monthlyPoints;
     private bool savingMonthlyPoints;
     private string? monthlyPointsError;
@@ -1205,19 +1139,6 @@ private void HandleAdminTaskKeyDown(
             loadError = "Couldn't load your account right now. Try again in a moment.";
         }
 
-    }
-
-    private async Task RefreshSponsorBudget()
-    {
-        try
-        {
-            using var client = HttpClientFactory.CreateClient("Backend");
-            account = await client.GetFromJsonAsync<Account>($"users/{account!.Id}");
-        }
-        catch (HttpRequestException)
-        {
-            notice = "Points saved, but the budget couldn't refresh. Reload to see the latest budget.";
-        }
     }
 
     private async Task OpenMonthlyPoints()

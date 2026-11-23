@@ -2,28 +2,41 @@
 @inherits BackendPage
 
 <section class="tr-card drivers-card sponsors-card @(collapsed ? "drivers-card-collapsed" : "")" aria-labelledby="dashboard-sponsors-title">
-    <div class="drivers-heading">
-        <h2 id="dashboard-sponsors-title">Sponsors</h2>
-        <div class="drivers-heading-actions">
-            @if (!noCompany && team is not null)
-            {
-                <button type="button" class="drivers-filter" title="Add sponsor" aria-label="Add sponsor"
-                        aria-haspopup="dialog" aria-expanded="@(showInvite ? "true" : "false")" aria-controls="sponsor-invite"
-                        @onclick="OpenInvite" @onkeydown="HandleInviteKey">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                        <path d="M12 5v14M5 12h14" />
-                    </svg>
-                </button>
-            }
-            <button type="button" class="drivers-toggle" @onclick="() => collapsed = !collapsed"
+    <header class="accounts-panel-heading">
+        <div><h2 id="dashboard-sponsors-title">Sponsors</h2><p>Sponsor accounts connected to your company</p></div>
+        <div class="accounts-actions">
+            <button type="button" class="accounts-collapse-button" @onclick="() => collapsed = !collapsed"
                     aria-expanded="@(!collapsed)" aria-controls="dashboard-sponsor-table"
                     aria-label="@(collapsed ? "Show sponsors table" : "Hide sponsors table")"
                     title="@(collapsed ? "Show sponsors table" : "Hide sponsors table")">
-                <span aria-hidden="true" class="@(collapsed ? "collapsed" : "")">^</span>
+                <span aria-hidden="true" class="@(collapsed ? "collapsed" : "")">⌄</span>
             </button>
+            @if (!collapsed)
+            {
+                <div class="accounts-card-icon-row">
+                    @if (!noCompany && team is not null)
+                    {
+                        <button type="button" class="accounts-filter-button" title="Filter sponsors" aria-label="Filter sponsors" aria-expanded="@filterOpen" @onclick="() => filterOpen = !filterOpen">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9Z" /></svg>
+                        </button>
+                    }
+                    @if (!noCompany && team is not null)
+                    {
+                        <button type="button" class="accounts-filter-button" title="Add sponsor" aria-label="Add sponsor"
+                                aria-haspopup="dialog" aria-expanded="@(showInvite ? "true" : "false")" aria-controls="sponsor-invite"
+                                @onclick="OpenInvite" @onkeydown="HandleInviteKey">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                        </button>
+                    }
+                </div>
+            }
         </div>
-    </div>
+    </header>
     <div id="dashboard-sponsor-table" hidden="@collapsed">
+        @if (filterOpen)
+        {
+            <div class="sponsor-inline-filter"><label for="sponsor-team-filter">Filter sponsors</label><input id="sponsor-team-filter" type="search" placeholder="Name, username, or email" @bind="filterText" /></div>
+        }
         <Alerts Notice="@notice" Error="@(showInvite ? null : error)" />
         @if (noCompany)
         {
@@ -35,7 +48,7 @@
             {
                 <p role="status">Loading sponsors...</p>
             }
-            else if (team is { Count: 0 })
+            else if (team is not null && FilteredTeam.Count == 0)
             {
                 <p class="tr-muted">No sponsors found.</p>
             }
@@ -49,16 +62,24 @@
                                 <th scope="col">Username</th>
                                 <th scope="col">Email</th>
                                 <th scope="col">Status</th>
+                                <th scope="col">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var member in team)
+                            @foreach (var member in FilteredTeam)
                             {
                                 <tr>
                                     <td>@member.FirstName @member.LastName</td>
                                     <td>@member.Username</td>
                                     <td>@member.Email</td>
-                                    <td>@(member.Status == "inactive" ? "Deactivated" : "Active")</td>
+                                    <td><span class="sponsor-status @(member.Status == "active" ? "active" : "inactive")">@(member.Status == "inactive" ? "Deactivated" : "Active")</span></td>
+                                    <td class="sponsor-member-actions">
+                                        @if (member.Id.ToString() != id)
+                                        {
+                                            <button type="button" class="tr-btn-outline" @onclick="() => OpenEdit(member)">Edit</button>
+                                            <button type="button" class="tr-btn-outline remove" disabled="@busy" @onclick="() => OpenRemove(member)">Remove</button>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -98,6 +119,39 @@
     </div>
 }
 
+@if (editingMember is not null && editForm is not null)
+{
+    <div class="sponsor-invite-backdrop" @onclick="CloseEdit">
+        <section class="sponsor-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="sponsor-edit-title" @onclick:stopPropagation="true">
+            <button type="button" class="sponsor-invite-close" aria-label="Close edit sponsor" disabled="@busy" @onclick="CloseEdit">×</button>
+            <h2 id="sponsor-edit-title">Edit sponsor account</h2>
+            <p class="sponsor-modal-username">@editingMember.Username</p>
+            <form class="tr-form" @onsubmit="SaveEdit" @onsubmit:preventDefault="true">
+                <label for="team-edit-first">First name</label><input id="team-edit-first" @bind="editForm.FirstName" required maxlength="100" />
+                <label for="team-edit-last">Last name</label><input id="team-edit-last" @bind="editForm.LastName" required maxlength="100" />
+                <label for="team-edit-email">Email</label><input id="team-edit-email" type="email" @bind="editForm.Email" required maxlength="255" />
+                <label for="team-edit-phone">Phone</label><input id="team-edit-phone" @bind="editForm.PhoneNumber" maxlength="20" />
+                <label for="team-edit-address">Address</label><input id="team-edit-address" @bind="editForm.Address" maxlength="255" />
+                @if (error is not null) { <p role="alert" class="tr-alert-error">@error</p> }
+                <div class="sponsor-invite-actions"><button type="submit" class="tr-btn" disabled="@busy">Save changes</button><button type="button" class="tr-btn-outline" disabled="@busy" @onclick="CloseEdit">Cancel</button></div>
+            </form>
+        </section>
+    </div>
+}
+
+@if (removingMember is not null)
+{
+    <div class="sponsor-invite-backdrop" @onclick="CloseRemove">
+        <section class="sponsor-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="sponsor-remove-title" @onclick:stopPropagation="true">
+            <button type="button" class="sponsor-invite-close" aria-label="Close remove sponsor" disabled="@busy" @onclick="CloseRemove">×</button>
+            <h2 id="sponsor-remove-title">Remove sponsor</h2>
+            <p>Remove <strong>@removingMember.Username</strong> from your company? Their account will remain active, but they will lose access to this company.</p>
+            @if (error is not null) { <p role="alert" class="tr-alert-error">@error</p> }
+            <div class="sponsor-invite-actions"><button type="button" class="tr-btn-outline remove" disabled="@busy" @onclick="RemoveSponsor">@(busy ? "Removing..." : "Remove from company")</button><button type="button" class="tr-btn-outline" disabled="@busy" @onclick="CloseRemove">Cancel</button></div>
+        </section>
+    </div>
+}
+
 <style>
     .sponsor-invite-backdrop {
         position: fixed;
@@ -131,17 +185,39 @@
         cursor: pointer;
     }
     .sponsor-invite-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .sponsors-card .tr-table { width: 100%; }
+    .sponsors-card .accounts-panel-heading { margin-bottom: 16px; }
+    .sponsors-card.drivers-card-collapsed .accounts-panel-heading { margin-bottom: 0; }
+    .sponsor-inline-filter { padding: 12px; margin: 0 0 14px; border: 1px solid #e3e9f0; border-radius: 8px; background: #f8fafc; }
+    .sponsor-inline-filter label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: 700; }
+    .sponsor-inline-filter input { box-sizing: border-box; width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #c8d1dd; border-radius: 6px; font: inherit; }
+    .sponsor-status { display: inline-block; padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .sponsor-status.active { background: #dcfce7; color: #166534; }
+    .sponsor-status.inactive { background: #f1f5f9; color: #475569; }
+    .sponsor-member-actions { display: flex; align-items: center; gap: 8px; }
+    .sponsor-modal-username { margin-top: -14px; color: #687487; }
+    .sponsor-member-actions .remove, .sponsor-invite-actions .remove { color: #a32c2c; border-color: #efcaca; background: #fff8f8; }
 </style>
 
 @code {
     private List<Member>? team;
     private bool noCompany;
     private bool collapsed;
+    private bool filterOpen;
+    private string? filterText;
     private bool showInvite;
+    private Member? editingMember;
+    private SponsorEditForm? editForm;
+    private Member? removingMember;
     private string username = "";
     private string firstName = "";
     private string lastName = "";
     private string email = "";
+
+    private List<Member> FilteredTeam => (team ?? []).Where(member => string.IsNullOrWhiteSpace(filterText)
+        || member.Username.Contains(filterText.Trim(), StringComparison.OrdinalIgnoreCase)
+        || member.Email.Contains(filterText.Trim(), StringComparison.OrdinalIgnoreCase)
+        || ($"{member.FirstName} {member.LastName}").Contains(filterText.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -155,6 +231,35 @@
         notice = null;
         showInvite = true;
         collapsed = false;
+    }
+
+    private void OpenEdit(Member member)
+    {
+        error = notice = null;
+        editingMember = member;
+        editForm = new SponsorEditForm { FirstName = member.FirstName, LastName = member.LastName, Email = member.Email, PhoneNumber = member.PhoneNumber, Address = member.Address };
+        removingMember = null;
+    }
+
+    private void CloseEdit()
+    {
+        if (busy) return;
+        editingMember = null;
+        editForm = null;
+        error = null;
+    }
+
+    private void OpenRemove(Member member)
+    {
+        error = notice = null;
+        removingMember = member;
+        editingMember = null;
+        editForm = null;
+    }
+
+    private void CloseRemove()
+    {
+        if (!busy) { removingMember = null; error = null; }
     }
 
     private void CloseInvite()
@@ -199,5 +304,43 @@
             showInvite = false;
         });
 
-    private sealed record Member(int Id, string Username, string FirstName, string LastName, string Email, string Status);
+    private Task SaveEdit()
+    {
+        if (editingMember is null || editForm is null) return Task.CompletedTask;
+        var member = editingMember;
+        var form = editForm;
+        return Send(c => c.PutAsJsonAsync($"users/{id}/sponsor-team/{member.Id}", new
+        {
+            firstName = form.FirstName, lastName = form.LastName, email = form.Email,
+            phoneNumber = form.PhoneNumber, address = form.Address
+        }), async _ =>
+        {
+            notice = $"{member.Username}'s account was updated.";
+            editingMember = null;
+            editForm = null;
+            await Load();
+        });
+    }
+
+    private Task RemoveSponsor()
+    {
+        if (removingMember is null) return Task.CompletedTask;
+        var member = removingMember;
+        return Send(c => c.DeleteAsync($"users/{id}/sponsor-team/{member.Id}"), async _ =>
+        {
+            notice = $"{member.Username} was removed from your company.";
+            removingMember = null;
+            await Load();
+        });
+    }
+
+    private sealed record Member(int Id, string Username, string FirstName, string LastName, string Email, string PhoneNumber, string Address, string Status);
+    private sealed class SponsorEditForm
+    {
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+        public string Address { get; set; } = "";
+    }
 }

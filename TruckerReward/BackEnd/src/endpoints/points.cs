@@ -163,7 +163,7 @@ public static class PointsEndpoints
         };
         return Results.Ok(await rows
             .Select(r => new PointsDriver(r.User.Id, r.User.Username, r.User.FirstName, r.User.LastName, r.User.Email, r.Points, r.Spent,
-                from == null && to == null ? null : r.Earned))
+                from == null && to == null ? null : r.Earned, r.User.Status))
             .ToListAsync());
     }
 
@@ -175,7 +175,7 @@ public static class PointsEndpoints
         var (driver, historyCompanyId) = changed[0];
         var spent = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId && h.PointsDelta < 0 && h.Carts.Any()).SumAsync(h => -(long)h.PointsDelta);
         var displayedPoints = await db.PointsHistory.Where(h => h.UserId == driverId && h.CompanyId == historyCompanyId).SumAsync(h => (long)h.PointsDelta);
-        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent));
+        return Results.Ok(new PointsDriver(driver.Id, driver.Username, driver.FirstName, driver.LastName, driver.Email, displayedPoints, spent, Status: driver.Status));
     }
 
     private static async Task<IResult> Bulk(int id, BulkPointsRequest req, AppDbContext db, Notifications notifications, TimeProvider clock)
@@ -435,7 +435,7 @@ public record BulkPointsRequest(List<int>? DriverIds, int Points, string? Reason
 public record ChangePointsRequest(int Points, string? Reason, int? CompanyId = null);
 
 // earned is null without a date range
-public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned = null);
+public record PointsDriver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned = null, string Status = "active");
 
 // by is null for orders
 public record PointsEntry(DateTime? At, int Points, string Reason, string? By);

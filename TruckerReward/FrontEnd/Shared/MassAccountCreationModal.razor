@@ -35,6 +35,10 @@
                 <p class="tr-alert-success" role="status">@notice</p>
             }
             <div class="mass-account-actions">
+                @if (!string.IsNullOrWhiteSpace(BackLink))
+                {
+                    <button type="button" class="tr-btn-outline" disabled="@isAdding" @onclick="Close">@BackLabel</button>
+                }
                 <button type="button" class="tr-btn" disabled="@(selectedFile is null || isAdding)" @onclick="AddUsers">@(isAdding ? "Adding..." : "Add Users")</button>
             </div>
         </section>
@@ -62,6 +66,8 @@
     [Parameter] public bool IsAdmin { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnCreated { get; set; }
+    [Parameter] public string? BackLink { get; set; }
+    [Parameter] public string? BackLabel { get; set; }
 
     private const long MaxFileBytes = 1_000_000;
     private IBrowserFile? selectedFile;

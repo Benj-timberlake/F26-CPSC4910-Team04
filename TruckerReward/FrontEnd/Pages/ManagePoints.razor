@@ -24,6 +24,18 @@
 
     <Alerts Notice="@notice" Error="@error" />
 
+    @if (Embedded && filtersOpen)
+    {
+        <form class="embedded-driver-filters" @onsubmit="ApplyFilters" @onsubmit:preventDefault="true">
+            <label>Search<input type="search" placeholder="Name or username" @bind="draftSearch" /></label>
+            <label>Sort by<select @bind="draftSort"><option value="name">Name</option><option value="points">Highest balance</option><option value="spent">Most spent</option><option value="earned">Most earned</option></select></label>
+            <label>From<input type="date" @bind="draftFrom" /></label>
+            <label>To<input type="date" @bind="draftTo" /></label>
+            @if (filterError is not null) { <p role="alert" class="tr-alert-error">@filterError</p> }
+            <button type="submit" class="tr-btn" disabled="@applyingFilters">@(applyingFilters ? "Applying..." : "Apply")</button>
+        </form>
+    }
+
     @if (admin && !Embedded)
     {
         <div class="application-switch" role="tablist" aria-label="Points type">
@@ -109,11 +121,13 @@
                             {
                                 <th scope="col"><input type="checkbox" aria-label="Select all drivers" checked="@(selected.Count == drivers.Count)" @onchange="ToggleAll" /></th>
                             }
-                            <th scope="col">@(Embedded ? "Name" : "Driver")</th>
-                            @if (!Embedded)
+                            <th scope="col">Name</th>
+                            @if (Embedded)
                             {
-                                <th scope="col">Email</th>
+                                <th scope="col">Username</th>
                             }
+                            <th scope="col">Email</th>
+                            @if (Embedded) { <th scope="col">Status</th> }
                             <th scope="col">Points</th>
                             @if (!Embedded)
                             {
@@ -145,9 +159,14 @@
                                         <span>@($" ({d.Username})")</span>
                                     }
                                 </td>
-                                @if (!Embedded)
+                                @if (Embedded)
                                 {
-                                    <td>@d.Email</td>
+                                    <td>@d.Username</td>
+                                }
+                                <td>@d.Email</td>
+                                @if (Embedded)
+                                {
+                                    <td><span class="driver-status @(d.Status == "active" ? "active" : "inactive")">@d.Status</span></td>
                                 }
                                 <td class="balance">@d.Points.ToString("N0")</td>
                                 @if (!Embedded)
@@ -158,7 +177,7 @@
                                         <td class="earned">@d.Earned?.ToString("N0")</td>
                                     }
                                 }
-                                <td>
+                                <td class="driver-actions-cell">
                                     @if (removing == d.Id)
                                     {
                                         <div class="change">
@@ -169,17 +188,23 @@
                                     }
                                     else
                                     {
-                                        <button type="button" class="tr-btn-outline" @onclick="() => Edit(d)">Change points</button>
-                                        @if (!viewing)
-                                        {
-                                            <button type="button" class="tr-btn-outline remove" @onclick="() => StartRemove(d)">Remove</button>
-                                        }
-                                        @if (admin && !viewing)
-                                        {
-                                            <form class="view-as" method="post" action="account/view-as/@d.Id">
-                                                <button type="submit" class="tr-btn-outline">View as</button>
-                                            </form>
-                                        }
+                                        <div class="driver-row-actions">
+                                            @if (Embedded && !admin && !viewing)
+                                            {
+                                                <button type="button" class="tr-btn-outline" @onclick="() => StartDriverProfileEdit(d)">Edit</button>
+                                            }
+                                            <button type="button" class="tr-btn-outline" @onclick="() => Edit(d)">Change points</button>
+                                            @if (!viewing)
+                                            {
+                                                <button type="button" class="tr-btn-outline remove" @onclick="() => StartRemove(d)">Remove</button>
+                                            }
+                                            @if (admin && !viewing)
+                                            {
+                                                <form class="view-as" method="post" action="account/view-as/@d.Id">
+                                                    <button type="submit" class="tr-btn-outline">View as</button>
+                                                </form>
+                                            }
+                                        </div>
                                     }
                                 </td>
                                 @if (Embedded)
@@ -203,7 +228,7 @@
         }
         }
     }
-    @if (filtersOpen)
+    @if (filtersOpen && !Embedded)
     {
         <div class="modal-backdrop" @onkeydown="FilterKeyDown">
             <section class="change-modal driver-filter-modal" role="dialog" aria-modal="true" aria-labelledby="driver-filter-title">
@@ -337,11 +362,44 @@
     </section></div>
 }
 
+@if (driverProfileEditing is not null)
+{
+    <div class="modal-backdrop" @onclick="CloseDriverProfileEdit">
+        <section class="change-modal" role="dialog" aria-modal="true" aria-labelledby="driver-profile-edit-title" @onclick:stopPropagation="true">
+            <h2 id="driver-profile-edit-title">Edit driver account</h2>
+            <p class="tr-muted">@driverProfileEditing.Username</p>
+            <form @onsubmit="SaveDriverProfile" @onsubmit:preventDefault="true">
+                <label for="driver-profile-first">First name</label><input id="driver-profile-first" @bind="driverProfileEditing.FirstName" required maxlength="100" />
+                <label for="driver-profile-last">Last name</label><input id="driver-profile-last" @bind="driverProfileEditing.LastName" required maxlength="100" />
+                <label for="driver-profile-email">Email</label><input id="driver-profile-email" type="email" @bind="driverProfileEditing.Email" required maxlength="255" />
+                <label for="driver-profile-phone">Phone</label><input id="driver-profile-phone" @bind="driverProfileEditing.PhoneNumber" maxlength="20" />
+                <label for="driver-profile-address">Address</label><input id="driver-profile-address" @bind="driverProfileEditing.Address" maxlength="255" />
+                @if (error is not null) { <p role="alert" class="tr-alert-error">@error</p> }
+                <div class="modal-actions"><button type="submit" class="tr-btn" disabled="@busy">Save</button><button type="button" class="tr-btn-outline" disabled="@busy" @onclick="CloseDriverProfileEdit">Cancel</button></div>
+            </form>
+        </section>
+    </div>
+}
+
 <style>
     .application-switch { display: flex; gap: 4px; width: fit-content; padding: 4px; margin: 0 0 20px; border-radius: 10px; background: #edf1f6; }
     .application-tab { padding: 9px 15px; border: 0; border-radius: 7px; color: #596779; background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; }
     .application-tab.selected { color: #2455a4; background: white; box-shadow: 0 1px 3px #18283d20; }
     .dashboard-drivers td.balance { font-size: inherit; font-weight: 400; line-height: inherit; }
+    .driver-actions-cell { text-align: right; }
+    .driver-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; white-space: nowrap; }
+    .driver-view-action { width: 52px; text-align: right; }
+    .driver-view-eye { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: #f2f5f9; color: var(--brand); cursor: pointer; }
+    .driver-view-eye:hover, .driver-view-eye:focus-visible { background: #e4ebf4; }
+    .driver-view-action form { margin: 0; }
+    .driver-status { display: inline-block; padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: capitalize; }
+    .driver-status.active { background: #dcfce7; color: #166534; }
+    .driver-status.inactive { background: #f1f5f9; color: #475569; }
+    .embedded-driver-filters { display: grid; grid-template-columns: minmax(150px, 2fr) repeat(3, minmax(120px, 1fr)) auto; align-items: end; gap: 10px; padding: 14px; margin: 0 0 16px; border: 1px solid #e3e9f0; border-radius: 10px; background: #f8fafc; }
+    .embedded-driver-filters label { display: grid; gap: 5px; color: #536174; font-size: 12px; font-weight: 600; }
+    .embedded-driver-filters input, .embedded-driver-filters select { box-sizing: border-box; width: 100%; min-height: 40px; padding: 7px 9px; border: 1px solid #c8d1dd; border-radius: 6px; background: white; font: inherit; }
+    .embedded-driver-filters p { grid-column: 1 / -1; margin: 0; }
+    @@media (max-width: 900px) { .embedded-driver-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .search {
         align-items: center;
     }
@@ -391,6 +449,12 @@
 
     public void OpenFilters()
     {
+        if (filtersOpen)
+        {
+            filtersOpen = false;
+            StateHasChanged();
+            return;
+        }
         draftSearch = search;
         draftSort = sort;
         draftFrom = from;
@@ -399,6 +463,8 @@
         filtersOpen = true;
         StateHasChanged();
     }
+
+    public Task Refresh() => Load();
 
     private void CloseFilters()
     {
@@ -426,7 +492,7 @@
         await Search();
         filterError = error;
         applyingFilters = false;
-        if (filterError is null) filtersOpen = false;
+        if (filterError is null && !Embedded) filtersOpen = false;
     }
     private List<Driver>? drivers;
     private string? search;
@@ -448,6 +514,7 @@
     private string? sponsorReason;
     private Driver? editingDriver;
     private List<DriverCompany>? editCompanies;
+    private DriverProfileEdit? driverProfileEditing;
     private int? selectedCompanyId;
     private bool companyChoicesLoading;
     private string? companyChoiceError;
@@ -582,6 +649,51 @@
         {
             companyChoicesLoading = false;
         }
+    }
+
+    private async Task StartDriverProfileEdit(Driver d)
+    {
+        error = notice = null;
+        try
+        {
+            using var client = HttpClientFactory.CreateClient("Backend");
+            var details = await client.GetFromJsonAsync<DriverDetails>($"users/{d.Id}");
+            if (details is null)
+            {
+                error = "Couldn't load that driver right now. Try again.";
+                return;
+            }
+            driverProfileEditing = new DriverProfileEdit
+            {
+                Id = d.Id, Username = d.Username, FirstName = details.FirstName, LastName = details.LastName,
+                Email = details.Email, PhoneNumber = details.PhoneNumber, Address = details.Address
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "Couldn't load that driver right now. Try again.";
+        }
+    }
+
+    private void CloseDriverProfileEdit()
+    {
+        if (!busy) driverProfileEditing = null;
+    }
+
+    private Task SaveDriverProfile()
+    {
+        if (driverProfileEditing is null) return Task.CompletedTask;
+        var profile = driverProfileEditing;
+        return Send(c => c.PutAsJsonAsync($"users/{id}/drivers/{profile.Id}", new
+        {
+            firstName = profile.FirstName, lastName = profile.LastName, email = profile.Email,
+            phoneNumber = profile.PhoneNumber, address = profile.Address
+        }), async _ =>
+        {
+            notice = $"{profile.Username}'s account was updated.";
+            driverProfileEditing = null;
+            await Load();
+        });
     }
 
     private void SelectEditCompany(ChangeEventArgs args)
@@ -796,9 +908,19 @@
         _ => $"through {to:MMM d}"
     };
 
-    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned);
-    private sealed record DriverDetails(List<DriverCompany>? Companies);
+    private sealed record Driver(int Id, string Username, string FirstName, string LastName, string Email, long Points, long Spent, long? Earned, string Status = "active");
+    private sealed record DriverDetails(List<DriverCompany>? Companies, string FirstName = "", string LastName = "", string Email = "", string PhoneNumber = "", string Address = "");
     private sealed record DriverCompany(int Id, string Name, bool CurrentCompanyViewed, long Points);
+    private sealed class DriverProfileEdit
+    {
+        public int Id { get; init; }
+        public string Username { get; init; } = "";
+        public string FirstName { get; set; } = "";
+        public string LastName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+        public string Address { get; set; } = "";
+    }
     private sealed record SavedReason(int Id, string Reason);
     private sealed record SponsorPointRow(int Id, string Username, string FirstName, string LastName, string Email, int Points);
 }
