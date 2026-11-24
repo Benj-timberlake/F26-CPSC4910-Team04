@@ -2,6 +2,7 @@
 @inherits Microsoft.AspNetCore.Components.LayoutComponentBase
 
 <div class="mouse-gradient-background app-shell">
+    <ThemeModeToggle TopCorner="true" />
     <AccountBar />
     <main id="main-content" tabindex="-1" class="app-content">
         @if (viewingAsAdmin)

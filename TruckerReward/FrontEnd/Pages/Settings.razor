@@ -1,7 +1,5 @@
 @page "/settings"
 @attribute [Authorize]
-@inject IJSRuntime Js
-
 <PageTitle>Settings</PageTitle>
 
 <div class="tr-page">
@@ -10,16 +8,8 @@
         <section class="tr-card">
             <h2>Appearance</h2>
             <p>Use black and dark grey surfaces with emerald green accents.</p>
-            <label class="theme-switch" for="dark-mode">
-                <input id="dark-mode" type="checkbox" role="switch" checked="@darkMode"
-                       disabled="@(!themeReady)" @onchange="ChangeTheme" aria-describedby="theme-help" />
-                <span>Dark mode</span>
-            </label>
+            <FrontEnd.Shared.ThemeModeToggle />
             <p id="theme-help" class="tr-muted">Your choice is saved in this browser.</p>
-            @if (themeError is not null)
-            {
-                <p role="alert" class="tr-alert-error">@themeError</p>
-            }
         </section>
         <section class="tr-card">
             <h2>Account</h2>
@@ -42,43 +32,3 @@
     </div>
 </div>
 
-<style>
-    .theme-switch { display: flex; align-items: center; gap: 12px; font-weight: 600; margin: 16px 0; }
-    .theme-switch input { width: 40px; height: 22px; accent-color: var(--brand); }
-</style>
-
-@code {
-    private bool darkMode;
-    private bool themeReady;
-    private string? themeError;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-        try
-        {
-            darkMode = await Js.InvokeAsync<bool>("truckerTheme.getDarkMode");
-            themeReady = true;
-        }
-        catch (JSException)
-        {
-            themeError = "Couldn't load appearance settings. Please refresh the page.";
-        }
-        StateHasChanged();
-    }
-
-    private async Task ChangeTheme(ChangeEventArgs e)
-    {
-        var enabled = e.Value is true;
-        try
-        {
-            await Js.InvokeVoidAsync("truckerTheme.setDarkMode", enabled);
-            darkMode = enabled;
-            themeError = null;
-        }
-        catch (JSException)
-        {
-            themeError = "Couldn't change the appearance. Please try again.";
-        }
-    }
-}

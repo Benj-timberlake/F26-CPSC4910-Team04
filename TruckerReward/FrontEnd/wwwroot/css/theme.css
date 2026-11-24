@@ -137,3 +137,320 @@ html[data-theme="dark"] :is(.admin-action-card:hover, .admin-secondary-button:ho
     background: var(--theme-raised) !important;
     border-color: var(--line) !important;
 }
+
+/* Keep page-specific panels on the same dark charcoal and emerald palette. */
+html[data-theme="dark"] {
+    --theme-accent-soft: #12352a;
+    --theme-accent-hover: #6ee7b7;
+    --theme-warning-surface: #3a3015;
+    --theme-warning-text: #f6d782;
+    --theme-danger-surface: #3b2020;
+    --theme-danger-text: #ffaaa3;
+}
+
+html[data-theme="dark"] :is(
+    .account-filter-panel, .sponsor-inline-filter, .sponsor-filter-panel,
+    .add-account-dialog, .manage-dialog, .profile-options, .company-option,
+    .selected-sponsors li, .mass-account-drop-zone, .mass-account-file-name,
+    .company-option-group, .application-panel, .review-dialog, .review-applicant-info,
+    .sponsor-modal, .sponsor-invite-dialog, .driver-filter-modal,
+    .notification-panel, .notification-item, .empty-state, .filter-panel,
+    .change-modal, .change-summary, .account-manage-modal, .account-edit-modal,
+    .report-filter, .report-summary-card, .security-card, .device-card,
+    .goal-card, .achievement-card, .profile-security-link
+) {
+    background-color: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] :is(
+    [class$="-card"], [class$="-dialog"], [class$="-panel"],
+    [class*="-filter-panel"], [class*="-inline-filter"],
+    [class$="-popover"], [class*="drop-zone"]
+) {
+    background-color: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] :is(
+    .account-filter-panel label, .sponsor-inline-filter label,
+    .accounts-panel-heading p, .mass-account-drop-zone, .mass-account-format,
+    .sponsor-modal-username, .account-dialog-description, .filter-description,
+    .company-option-description, .profile-security-actions
+) { color: var(--muted) !important; }
+
+html[data-theme="dark"] :is(
+    .account-filter-panel input, .account-filter-panel select,
+    .sponsor-inline-filter input, .sponsor-inline-filter select,
+    .add-account-dialog input, .add-account-dialog select,
+    .manage-dialog input, .manage-dialog select,
+    .company-option, .selected-company-application,
+    .mass-account-drop-zone, .mass-account-close, .manage-close,
+    .add-account-close, .remove-sponsor
+) {
+    background-color: var(--theme-raised) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] :is(.tr-alert-success, .success, .sponsor-status.active,
+    .current-company-badge, .status-active) {
+    background-color: var(--theme-accent-soft) !important;
+    color: #a7f3d0 !important;
+}
+
+html[data-theme="dark"] :is(.tr-alert-warning, .pending-badge, .status-pending,
+    .view-as-banner) {
+    background-color: var(--theme-warning-surface) !important;
+    color: var(--theme-warning-text) !important;
+    border-color: #806b2b !important;
+}
+
+html[data-theme="dark"] :is(.tr-alert-error, .error, .sponsor-status.inactive,
+    .status-inactive, .pending-remove-button) {
+    color: var(--theme-danger-text) !important;
+}
+
+html[data-theme="dark"] :is(.pending-remove-button, .admin-cancel-button,
+    .cancel-application-button, .cancel-submit-button) {
+    background-color: var(--theme-danger-surface) !important;
+    border-color: #74403d !important;
+}
+
+html[data-theme="dark"] .view-as-banner button {
+    background-color: #4a3b17 !important;
+    color: #ffedb0 !important;
+    border-color: #806b2b !important;
+}
+
+html[data-theme="dark"] .site-banner {
+    background-color: var(--theme-accent-soft) !important;
+    color: #a7f3d0 !important;
+}
+
+html[data-theme="dark"] .site-banner.warning {
+    background-color: var(--theme-warning-surface) !important;
+    color: var(--theme-warning-text) !important;
+}
+
+html[data-theme="dark"] .account-bar .profile-options {
+    background: var(--theme-surface) !important;
+    border-color: var(--line) !important;
+    box-shadow: 0 8px 24px #0008;
+}
+
+html[data-theme="dark"] .account-bar .profile-options :is(a, button) {
+    color: var(--theme-text) !important;
+}
+
+html[data-theme="dark"] .account-bar .profile-options :is(a, button):hover {
+    background: var(--theme-raised) !important;
+    color: var(--brand) !important;
+}
+
+/* Admin account management has several nested panels with their own light colors. */
+html[data-theme="dark"] .admin-accounts-page .accounts-action-button {
+    background: var(--brand) !important;
+    color: #102018 !important;
+    border-color: var(--brand) !important;
+    box-shadow: 0 3px 8px #0005;
+}
+
+html[data-theme="dark"] .admin-accounts-page .accounts-action-button:hover,
+html[data-theme="dark"] .admin-accounts-page .accounts-action-button:focus-visible {
+    background: var(--theme-accent-hover) !important;
+    color: #102018 !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page .counts div {
+    background: var(--theme-raised) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page :is(.manage-action-grid > button,
+    .manage-action-grid form button) {
+    background: var(--theme-raised) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page :is(.manage-action-grid > button:hover,
+    .manage-action-grid form button:hover) {
+    background: #303a32 !important;
+    border-color: #58705e !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page .manage-account-button {
+    background: var(--brand) !important;
+    color: #102018 !important;
+    border-color: var(--brand) !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page .manage-account-button:hover {
+    background: var(--theme-accent-hover) !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page :is(.manage-eyebrow, .add-account-eyebrow) {
+    color: var(--brand) !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page .manage-subtitle {
+    color: var(--muted) !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page :is(.delete-confirm, .manage-action-grid .danger-outline) {
+    background: var(--theme-danger-surface) !important;
+    color: var(--theme-danger-text) !important;
+    border-color: #74403d !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page .danger-button {
+    background: #8d302c !important;
+    color: #fff1f0 !important;
+    border-color: #a6403a !important;
+}
+
+html[data-theme="dark"] .admin-accounts-page .manage-footer {
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] :is(.manage-backdrop, .add-account-backdrop) {
+    background: #000c !important;
+}
+
+/* Sponsor Accounts uses its own blue actions and light modal/filter surfaces. */
+html[data-theme="dark"] .accounts-page .accounts-action-button {
+    background: var(--brand) !important;
+    color: #102018 !important;
+    border-color: var(--brand) !important;
+    box-shadow: 0 3px 8px #0005;
+}
+
+html[data-theme="dark"] .accounts-page .accounts-action-button:hover,
+html[data-theme="dark"] .accounts-page .accounts-action-button:focus-visible {
+    background: var(--theme-accent-hover) !important;
+    color: #102018 !important;
+}
+
+html[data-theme="dark"] .accounts-page :is(.accounts-filter-button, .accounts-collapse-button,
+    .mass-account-creation-button, .driver-view-eye) {
+    background-color: var(--theme-raised) !important;
+    color: var(--brand) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] .accounts-page :is(.accounts-filter-button, .accounts-collapse-button,
+    .mass-account-creation-button, .driver-view-eye):hover {
+    background-color: #303a32 !important;
+    color: var(--theme-accent-hover) !important;
+}
+
+html[data-theme="dark"] .accounts-page .accounts-collapse-button:hover {
+    color: var(--theme-accent-hover) !important;
+}
+
+html[data-theme="dark"] .accounts-page :is(.add-account-copy, .accounts-panel-heading p) {
+    color: var(--muted) !important;
+}
+
+html[data-theme="dark"] .accounts-page :is(.monthly-points-close, .add-account-close) {
+    background: var(--theme-raised) !important;
+    color: var(--brand) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] .accounts-page .monthly-points-dialog {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+    border: 1px solid var(--line) !important;
+}
+
+html[data-theme="dark"] .accounts-page :is(.add-account-backdrop, .monthly-points-backdrop) {
+    background: #000c !important;
+}
+
+html[data-theme="dark"] .sponsors-card .sponsor-invite-dialog {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+    border: 1px solid var(--line) !important;
+}
+
+html[data-theme="dark"] .sponsors-card :is(.sponsor-inline-filter, .sponsor-status.active,
+    .sponsor-status.inactive) {
+    background: var(--theme-raised) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] .sponsors-card .sponsor-status.active {
+    background: var(--theme-accent-soft) !important;
+    color: #a7f3d0 !important;
+}
+
+html[data-theme="dark"] .sponsors-card .sponsor-status.inactive {
+    color: var(--muted) !important;
+}
+
+html[data-theme="dark"] .sponsors-card :is(.sponsor-self-label, .sponsor-modal-username) {
+    color: var(--muted) !important;
+}
+
+/* Replace legacy blue highlights with emerald or charcoal in dark mode. */
+html[data-theme="dark"] :is(.home-nav-icon, .accounts-filter-button, .drivers-filter,
+    .drivers-toggle, .driver-view-eye, .mass-account-creation-button,
+    .monthly-points-close, .company-close-button) {
+    color: var(--brand) !important;
+}
+
+html[data-theme="dark"] :is(.home-nav-icon, .accounts-filter-button, .drivers-filter,
+    .drivers-toggle, .driver-view-eye, .mass-account-creation-button,
+    .monthly-points-close, .company-close-button):hover {
+    background-color: var(--theme-raised) !important;
+}
+
+html[data-theme="dark"] .home-nav-icon {
+    background-color: var(--theme-raised) !important;
+}
+
+html[data-theme="dark"] :is(.admin-confirm-button, .ceo-meeting, .chat-reset-position) {
+    background: var(--brand) !important;
+    color: #102018 !important;
+    border-color: var(--brand) !important;
+}
+
+html[data-theme="dark"] :is(.admin-confirm-button, .ceo-meeting, .chat-reset-position):hover {
+    background: var(--theme-accent-hover) !important;
+    color: #102018 !important;
+}
+
+html[data-theme="dark"] .tr-page:has(.admin-command-center) {
+    background: var(--theme-background) !important;
+    color: var(--theme-text) !important;
+}
+
+html[data-theme="dark"] .admin-task-confirmation {
+    background: var(--theme-surface) !important;
+    color: var(--muted) !important;
+    border-color: var(--line) !important;
+}
+
+html[data-theme="dark"] .notification-list li.unread {
+    border-left-color: var(--brand) !important;
+}
+
+html[data-theme="dark"] :is(.ceo-label, .ceo-profile h3) {
+    color: var(--brand) !important;
+}
+
+html[data-theme="dark"] .ceo-trigger,
+html[data-theme="dark"] .ceo-trigger:hover {
+    color: var(--brand) !important;
+}
+
+html[data-theme="dark"] .ceo-message {
+    background: var(--theme-raised) !important;
+    border-color: var(--line) !important;
+    color: var(--theme-warning-text) !important;
+}

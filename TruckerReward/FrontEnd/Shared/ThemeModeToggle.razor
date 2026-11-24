@@ -1,0 +1,83 @@
+@namespace FrontEnd.Shared
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+<button type="button" class="theme-mode-toggle @(TopCorner ? "theme-mode-toggle-corner" : "")"
+        aria-label="Switch to @(darkMode ? "light" : "dark") mode"
+        title="Switch to @(darkMode ? "light" : "dark") mode"
+        @onclick="ToggleMode">
+    <span class="theme-mode-icon" aria-hidden="true">
+        @if (darkMode)
+        {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></svg>
+        }
+        else
+        {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.9 13A8.5 8.5 0 0 1 11 3.1 8.5 8.5 0 1 0 20.9 13Z" /></svg>
+        }
+    </span>
+    <span>@(darkMode ? "Light mode" : "Dark mode")</span>
+</button>
+
+<style>
+    .theme-mode-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 4px 13px 4px 5px; border: 1px solid #cbd3dd; border-radius: 999px; background: white; color: #24364d; font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; box-shadow: 0 2px 8px #00000012; }
+    .theme-mode-toggle:hover, .theme-mode-toggle:focus-visible { background: #f3f6fa; }
+    .theme-mode-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #d7dee8; border-radius: 50%; }
+    .theme-mode-icon svg { width: 18px; height: 18px; }
+    .theme-mode-toggle-corner { position: fixed; top: 12px; right: 16px; z-index: 1200; }
+    html[data-theme="dark"] .theme-mode-toggle { background: #202520; color: #a7f3d0; border-color: #45554a; }
+    html[data-theme="dark"] .theme-mode-toggle:hover, html[data-theme="dark"] .theme-mode-toggle:focus-visible { background: #2c352e; }
+    html[data-theme="dark"] .theme-mode-icon { border-color: #526357; }
+    @@media (max-width: 720px) { .theme-mode-toggle-corner { top: 8px; right: 8px; } }
+</style>
+
+@code {
+    [Parameter] public bool TopCorner { get; set; }
+    private bool darkMode;
+    private bool initialized;
+    private string? subscriptionId;
+    private DotNetObjectReference<ThemeModeToggle>? dotnetReference;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        try
+        {
+            darkMode = await Js.InvokeAsync<bool>("truckerTheme.getDarkMode");
+            dotnetReference = DotNetObjectReference.Create(this);
+            subscriptionId = await Js.InvokeAsync<string>("truckerTheme.subscribe", dotnetReference);
+            initialized = true;
+            StateHasChanged();
+        }
+        catch (JSException)
+        {
+            initialized = true;
+        }
+    }
+
+    private async Task ToggleMode()
+    {
+        if (!initialized)
+            return;
+        darkMode = !darkMode;
+        await Js.InvokeVoidAsync("truckerTheme.setDarkMode", darkMode);
+    }
+
+    [JSInvokable]
+    public Task OnThemeChanged(bool enabled) => InvokeAsync(() =>
+    {
+        darkMode = enabled;
+        StateHasChanged();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        if (subscriptionId is not null)
+        {
+            try { await Js.InvokeVoidAsync("truckerTheme.unsubscribe", subscriptionId); }
+            catch (JSException) { }
+        }
+        dotnetReference?.Dispose();
+    }
+}
