@@ -16,7 +16,7 @@
     right: 0;
     padding: 20px 24px;
     padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-    background: white;
+    background: var(--theme-surface, white);
     border-top: 1px solid var(--line);
     text-align: right;
     z-index: 10;
